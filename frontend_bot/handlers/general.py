@@ -49,6 +49,8 @@ async def help_handler(message):
 
 @bot.message_handler(func=lambda m: m.text == "🎤 Аудио")
 async def audio_instruction(message):
+    from frontend_bot.services.state_manager import set_state
+    set_state(message.from_user.id, 'audio_transcribe')
     await bot.send_message(
         message.chat.id,
         "Пожалуйста, отправьте аудиофайл (mp3/ogg) для расшифровки."
@@ -57,6 +59,8 @@ async def audio_instruction(message):
 
 @bot.message_handler(func=lambda m: m.text == "📄 Текстовый транскрипт")
 async def text_instruction(message):
+    from frontend_bot.services.state_manager import set_state
+    set_state(message.from_user.id, 'transcribe_txt')
     await bot.send_message(
         message.chat.id,
         "Пожалуйста, отправьте .txt-файл с транскриптом для обработки."

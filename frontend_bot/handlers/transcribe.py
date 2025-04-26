@@ -137,8 +137,8 @@ async def audio_instruction(message: Message):
 
 @bot.message_handler(func=lambda m: m.text == "📄 Текстовый транскрипт")
 async def text_instruction(message: Message):
-    """Включает режим ожидания .txt-файла."""
     set_state(message.from_user.id, 'transcribe_txt')
+    logger.info(f"Пользователь {message.from_user.id} выбрал режим: transcribe_txt")
     await bot.send_message(
         message.chat.id,
         "Пожалуйста, отправьте .txt-файл с транскриптом для обработки."
@@ -662,26 +662,38 @@ async def send_todo_checklist(message: Message):
 @bot.message_handler(content_types=['document'])
 async def handle_text_transcript_file(message: Message):
     """Обрабатывает загруженные .txt-файлы."""
-    if get_state(message.from_user.id) != 'transcribe_txt':
-        return
-    if not message.document or not message.document.file_name.endswith('.txt'):
-        return
-    clear_state(message.from_user.id)
-    user_id = message.from_user.id
-    user_dir = os.path.join(TRANSCRIPTS_DIR, str(user_id))
-    os.makedirs(user_dir, exist_ok=True)
-    file_info = await bot.get_file(message.document.file_id)
-    file_path = os.path.join(user_dir, f"transcript_{uuid4()}.txt")
-    downloaded_file = await bot.download_file(file_info.file_path)
-    with open(file_path, "wb") as f:
-        f.write(downloaded_file)
-    user_transcripts[user_id] = file_path
-    await bot.send_message(
-        message.chat.id,
-        "\u2705 Текстовый файл успешно загружен и сохранён как транскрипт.\n"
-        "Выберите дальнейшее действие:",
-        reply_markup=transcript_format_keyboard()
-    )
+    logger.info(f"Получен документ от {message.from_user.id}: {getattr(message.document, 'file_name', 'NO_FILENAME')}")
+    try:
+        if get_state(message.from_user.id) != 'transcribe_txt':
+            logger.info("State не совпадает, обработка прекращена")
+            return
+        if not message.document or not message.document.file_name.endswith('.txt'):
+            logger.info("Файл не .txt, обработка прекращена")
+            return
+        user_id = message.from_user.id
+        user_dir = os.path.join(TRANSCRIPTS_DIR, str(user_id))
+        os.makedirs(user_dir, exist_ok=True)
+        file_info = await bot.get_file(message.document.file_id)
+        file_path = os.path.join(user_dir, f"transcript_{uuid4()}.txt")
+        downloaded_file = await bot.download_file(file_info.file_path)
+        logger.info(f"Сохраняю файл по пути: {file_path}")
+        async with aiofiles.open(file_path, "wb") as f:
+            await f.write(downloaded_file)
+        user_transcripts[user_id] = file_path
+        logger.info("Файл успешно обработан, отправляю сообщение пользователю")
+        clear_state(user_id)
+        await bot.send_message(
+            message.chat.id,
+            "\u2705 Текстовый файл успешно загружен и сохранён как транскрипт.\n"
+            "Выберите дальнейшее действие:",
+            reply_markup=transcript_format_keyboard()
+        )
+    except Exception as e:
+        logger.exception(f"Ошибка при обработке документа: {e}")
+        await bot.send_message(
+            message.chat.id,
+            "❌ Произошла ошибка при обработке файла. Сообщите поддержку."
+        )
 
 
 @bot.message_handler(func=lambda m: m.text == "ℹ️ О форматах")

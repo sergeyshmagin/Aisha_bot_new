@@ -72,4 +72,9 @@
 ## Контакты и поддержка
 
 - Вопросы и баги — через Issues на GitHub
-- Поддержка и доработка — по запросу
+- Поддержка и доработка — по запросу 
+
+@bot.message_handler(func=lambda m: m.text == "📄 Текстовый транскрипт")
+async def text_instruction(message: Message):
+    print("DEBUG: text_instruction called")
+    ... 

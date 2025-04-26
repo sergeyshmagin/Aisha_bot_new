@@ -5,19 +5,24 @@ from telebot.types import Message
 from frontend_bot.handlers.general import bot
 from frontend_bot.services.state_manager import set_state, get_state, clear_state
 import aiofiles
+from frontend_bot.utils.logger import get_logger
 
 # Временное хранилище фото по user_id
 user_photos = {}
 user_enhance_mode = set()
 user_states = {}
 
+logger = get_logger('photo_animate')
+
 @bot.message_handler(func=lambda m: m.text == "✨ Улучшить фото")
 async def ask_for_photo_enhance(message: Message):
     set_state(message.from_user.id, 'photo_enhance')
+    logger.info(f"Пользователь {message.from_user.id} выбрал режим: photo_enhance")
     await bot.send_message(message.chat.id, "📤 Пришли фото, которое нужно улучшить через GFPGAN.")
 
 @bot.message_handler(content_types=['photo'])
 async def handle_photo(message: Message):
+    logger.info(f"Получено фото от {message.from_user.id}")
     user_id = message.from_user.id
     if get_state(user_id) == 'photo_enhance':
         # Режим улучшения фото
