@@ -1,6 +1,6 @@
+"""Модуль для обработки транскрипций и истории файлов через Telegram-бота."""
 import os
 import aiohttp
-import subprocess
 import shutil
 import tempfile
 import json
@@ -17,8 +17,12 @@ from frontend_bot.keyboards.reply import (
     history_keyboard
 )
 from typing import Dict
-from frontend_bot.services.file_utils import is_audio_file_ffmpeg, is_valid_text_transcript
-from frontend_bot.services.state_manager import set_state, get_state, clear_state
+from frontend_bot.services.file_utils import is_audio_file_ffmpeg
+from frontend_bot.services.state_manager import (
+    set_state, get_state, clear_state
+)
+import aiofiles
+import asyncio
 
 logger = get_logger('transcribe')
 
@@ -41,6 +45,7 @@ user_states = {}
 
 
 def load_history() -> dict:
+    """Загружает историю файлов пользователя из JSON-файла."""
     if not os.path.exists(HISTORY_FILE):
         return {}
     with open(HISTORY_FILE, 'r', encoding='utf-8') as f:
@@ -48,11 +53,13 @@ def load_history() -> dict:
 
 
 def save_history(history: dict) -> None:
+    """Сохраняет историю файлов пользователя в JSON-файл."""
     with open(HISTORY_FILE, 'w', encoding='utf-8') as f:
         json.dump(history, f, ensure_ascii=False, indent=2)
 
 
 def add_history_entry(user_id: str, file: str, file_type: str, result_type: str) -> None:
+    """Добавляет запись в историю пользователя."""
     history = load_history()
     entry = {
         'file': os.path.basename(file),
@@ -70,11 +77,13 @@ def add_history_entry(user_id: str, file: str, file_type: str, result_type: str)
 
 
 def get_user_history(user_id: str, limit: int = 5) -> list:
+    """Возвращает последние записи истории пользователя."""
     history = load_history()
     return history.get(user_id, [])[-limit:]
 
 
 def remove_last_history_entry(user_id: str) -> None:
+    """Удаляет последнюю запись из истории пользователя."""
     history = load_history()
     if user_id in history and history[user_id]:
         history[user_id].pop()
@@ -83,6 +92,7 @@ def remove_last_history_entry(user_id: str) -> None:
 
 
 def protocol_error_keyboard() -> ReplyKeyboardMarkup:
+    """Клавиатура для ошибок при генерации протокола."""
     markup = ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(KeyboardButton("Повторить генерацию протокола"))
     markup.add(KeyboardButton("Назад"))
@@ -91,6 +101,7 @@ def protocol_error_keyboard() -> ReplyKeyboardMarkup:
 
 @bot.message_handler(func=lambda m: m.text == "Повторить")
 async def repeat_audio_instruction(message: Message):
+    """Просит пользователя отправить аудиофайл заново."""
     await bot.send_message(
         message.chat.id,
         "Пожалуйста, отправьте аудиофайл или голосовое сообщение "
@@ -104,6 +115,7 @@ async def repeat_audio_instruction(message: Message):
 
 @bot.message_handler(func=lambda m: m.text == "Главное меню")
 async def back_to_main_menu_from_anywhere(message: Message):
+    """Возвращает пользователя в главное меню."""
     from handlers.general import main_menu_keyboard
     await bot.send_message(
         message.chat.id,
@@ -115,6 +127,7 @@ async def back_to_main_menu_from_anywhere(message: Message):
 
 @bot.message_handler(func=lambda m: m.text == "🎤 Аудио")
 async def audio_instruction(message: Message):
+    """Включает режим ожидания аудиофайла."""
     set_state(message.from_user.id, 'audio_transcribe')
     await bot.send_message(
         message.chat.id,
@@ -124,6 +137,7 @@ async def audio_instruction(message: Message):
 
 @bot.message_handler(func=lambda m: m.text == "📄 Текстовый транскрипт")
 async def text_instruction(message: Message):
+    """Включает режим ожидания .txt-файла."""
     set_state(message.from_user.id, 'transcribe_txt')
     await bot.send_message(
         message.chat.id,
@@ -133,6 +147,7 @@ async def text_instruction(message: Message):
 
 @bot.message_handler(content_types=['voice', 'audio'])
 async def transcribe_audio(message: Message):
+    """Обрабатывает аудиофайлы и голосовые сообщения."""
     if get_state(message.from_user.id) != 'audio_transcribe':
         return
     clear_state(message.from_user.id)
@@ -148,8 +163,8 @@ async def transcribe_audio(message: Message):
 
     file_info = await bot.get_file(file_id)
     downloaded_file = await bot.download_file(file_info.file_path)
-    with open(temp_file, "wb") as f:
-        f.write(downloaded_file)
+    async with aiofiles.open(temp_file, "wb") as f:
+        await f.write(downloaded_file)
 
     # Проверка, что файл действительно является аудиофайлом, поддерживаемым ffmpeg
     if not is_audio_file_ffmpeg(temp_file):
@@ -162,9 +177,21 @@ async def transcribe_audio(message: Message):
         os.remove(temp_file)
         return
 
-    # Конвертируем в mp3 для Whisper
+    # Асинхронная конвертация в mp3 для Whisper
     temp_file_mp3 = temp_file.rsplit('.', 1)[0] + '.mp3'
-    subprocess.run(["ffmpeg", "-y", "-i", temp_file, temp_file_mp3])
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg", "-y", "-i", temp_file, temp_file_mp3,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE
+    )
+    stdout, stderr = await proc.communicate()
+    if proc.returncode != 0:
+        await bot.send_message(
+            message.chat.id,
+            "Ошибка ffmpeg: {}".format(stderr.decode())
+        )
+        os.remove(temp_file)
+        return
 
     file_size = os.path.getsize(temp_file_mp3)
     # Оценка времени ожидания (примерно 1 минута на 5 минут аудио)
@@ -187,8 +214,8 @@ async def transcribe_audio(message: Message):
             )
             transcription = await whisper_transcribe(temp_file_mp3)
             transcript_path = os.path.join(user_dir, f"transcript_{uuid4()}.txt")
-            with open(transcript_path, 'w', encoding='utf-8') as f:
-                f.write(transcription)
+            async with aiofiles.open(transcript_path, 'w', encoding='utf-8') as f:
+                await f.write(transcription)
             user_transcripts[user_id] = transcript_path
             await bot.send_message(
                 message.chat.id,
@@ -219,7 +246,7 @@ async def transcribe_audio(message: Message):
     )
     chunk_dir = os.path.join(STORAGE_DIR, f"chunks_{uuid4()}")
     os.makedirs(chunk_dir, exist_ok=True)
-    chunk_paths = split_audio_by_silence_ffmpeg(temp_file, chunk_dir)
+    chunk_paths = await split_audio_by_silence_ffmpeg(temp_file, chunk_dir)
     os.remove(temp_file)
     os.remove(temp_file_mp3)
 
@@ -230,10 +257,24 @@ async def transcribe_audio(message: Message):
 
     transcribed_text = ""
     for i, part_path in enumerate(chunk_paths):
-        # Конвертируем каждый кусок в mp3
         part_path_mp3 = part_path.rsplit('.', 1)[0] + '.mp3'
-        subprocess.run(["ffmpeg", "-y", "-i", part_path, part_path_mp3])
-        # Проверяем размер каждого куска
+        proc = await asyncio.create_subprocess_exec(
+            "ffmpeg", "-y", "-i", part_path, part_path_mp3,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            await bot.send_message(
+                message.chat.id,
+                (
+                    f"Ошибка ffmpeg при обработке куска {i+1}: "
+                    f"{stderr.decode()}"
+                )
+            )
+            os.remove(part_path)
+            os.remove(part_path_mp3)
+            continue
         if os.path.getsize(part_path_mp3) > 25 * 1024 * 1024:
             await bot.send_message(
                 message.chat.id,
@@ -273,8 +314,8 @@ async def transcribe_audio(message: Message):
         reply_markup=transcript_format_keyboard()
     )
     transcript_path = os.path.join(user_dir, f"transcript_{uuid4()}.txt")
-    with open(transcript_path, 'w', encoding='utf-8') as f:
-        f.write(transcribed_text)
+    async with aiofiles.open(transcript_path, 'w', encoding='utf-8') as f:
+        await f.write(transcribed_text)
     user_transcripts[user_id] = transcript_path
     await bot.send_message(
         message.chat.id,
@@ -286,7 +327,7 @@ async def transcribe_audio(message: Message):
     )
 
 
-def split_audio_by_silence_ffmpeg(
+async def split_audio_by_silence_ffmpeg(
     input_path, output_dir, min_silence_len=0.7, silence_thresh=-30
 ):
     """
@@ -295,17 +336,20 @@ def split_audio_by_silence_ffmpeg(
     silence_thresh — уровень тишины в dB (относительно 0)
     """
     # 1. Получаем длительность файла
-    duration = get_audio_duration(input_path)
+    duration = await get_audio_duration(input_path)
     # 2. Запускаем ffmpeg для поиска пауз
     command = [
         "ffmpeg", "-i", input_path,
         "-af", f"silencedetect=noise={silence_thresh}dB:d={min_silence_len}",
         "-f", "null", "-"
     ]
-    result = subprocess.run(command, stderr=subprocess.PIPE, text=True)
+    proc = await asyncio.create_subprocess_exec(
+        *command, stderr=asyncio.subprocess.PIPE, text=True
+    )
+    _, stderr = await proc.communicate()
     silence_starts = []
     silence_ends = []
-    for line in result.stderr.splitlines():
+    for line in stderr.splitlines():
         if "silence_start" in line:
             silence_starts.append(float(line.split("silence_start: ")[-1]))
         if "silence_end" in line:
@@ -318,34 +362,38 @@ def split_audio_by_silence_ffmpeg(
     for start in silence_starts:
         segments.append((prev_end, start))
         prev_end = start
-    # Добавляем последний кусок
     if prev_end < duration:
         segments.append((prev_end, duration))
-    # Нарезаем аудио
     chunk_paths = []
     for i, (start, end) in enumerate(segments):
         out_path = os.path.join(output_dir, f"chunk_{i+1}.ogg")
-        subprocess.run([
+        proc = await asyncio.create_subprocess_exec(
             "ffmpeg", "-y", "-i", input_path,
             "-ss", str(start), "-to", str(end),
-            "-c", "copy", out_path
-        ])
+            "-c", "copy", out_path,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        await proc.communicate()
         chunk_paths.append(out_path)
     return chunk_paths
 
 
-def get_audio_duration(path):
-    result = subprocess.run(
-        [
-            "ffprobe", "-v", "error", "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1", path
-        ],
-        stdout=subprocess.PIPE, text=True
+async def get_audio_duration(path):
+    """Возвращает длительность аудиофайла (секунды) через ffprobe."""
+    proc = await asyncio.create_subprocess_exec(
+        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1", path,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+        text=True
     )
-    return float(result.stdout.strip())
+    stdout, _ = await proc.communicate()
+    return float(stdout.strip())
 
 
 async def whisper_transcribe(audio_path: str) -> str:
+    """Транскрибирует аудиофайл через OpenAI Whisper API."""
     url = "https://api.openai.com/v1/audio/transcriptions"
     headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
     
@@ -613,6 +661,7 @@ async def send_todo_checklist(message: Message):
 
 @bot.message_handler(content_types=['document'])
 async def handle_text_transcript_file(message: Message):
+    """Обрабатывает загруженные .txt-файлы."""
     if get_state(message.from_user.id) != 'transcribe_txt':
         return
     if not message.document or not message.document.file_name.endswith('.txt'):

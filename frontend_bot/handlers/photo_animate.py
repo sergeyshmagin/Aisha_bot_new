@@ -4,6 +4,7 @@ import os
 from telebot.types import Message
 from frontend_bot.handlers.general import bot
 from frontend_bot.services.state_manager import set_state, get_state, clear_state
+import aiofiles
 
 # Временное хранилище фото по user_id
 user_photos = {}
@@ -25,14 +26,14 @@ async def handle_photo(message: Message):
         file_path = f"storage/{user_id}_photo_enhance.jpg"
         downloaded_file = await bot.download_file(file_info.file_path)
         os.makedirs("storage", exist_ok=True)
-        with open(file_path, "wb") as f:
-            f.write(downloaded_file)
+        async with aiofiles.open(file_path, "wb") as f:
+            await f.write(downloaded_file)
         clear_state(user_id)
         await bot.send_message(message.chat.id, "✨ Улучшаю фото, подожди немного...")
         try:
             enhanced_path = await send_photo_for_enhancement(file_path)
-            with open(enhanced_path, "rb") as f:
-                await bot.send_photo(message.chat.id, f)
+            async with aiofiles.open(enhanced_path, "rb") as f:
+                await bot.send_photo(message.chat.id, await f.read())
         except Exception as e:
             await bot.send_message(message.chat.id, "❌ Ошибка при улучшении фото.")
             raise e
@@ -43,8 +44,8 @@ async def handle_photo(message: Message):
     file_path = f"storage/{user_id}_photo.jpg"
     downloaded_file = await bot.download_file(file_info.file_path)
     os.makedirs("storage", exist_ok=True)
-    with open(file_path, "wb") as f:
-        f.write(downloaded_file)
+    async with aiofiles.open(file_path, "wb") as f:
+        await f.write(downloaded_file)
     user_photos[user_id] = file_path
     await bot.send_message(
         message.chat.id,
