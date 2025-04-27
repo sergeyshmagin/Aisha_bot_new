@@ -16,6 +16,7 @@ from backend_api.app.config import (
     GFPGAN_DEFAULT_ONLY_CENTER_FACE,
     GFPGAN_DEFAULT_EXT,
     GFPGAN_DEFAULT_AUTO,
+    GFPGAN_SCRIPT_PATH,
 )
 from typing import Tuple
 from PIL import Image
@@ -103,10 +104,10 @@ async def gfpgan_enhance(
                 "-v", f"{input_dir}:/app/inputs",
                 "-v", f"{output_dir}:/app/results",
                 GFPGAN_DOCKER_IMAGE,
-                "python3", "inference_gfpgan.py",
+                "python3", GFPGAN_SCRIPT_PATH,
                 "--upscale", str(upscale),
-                "--test_path", "inputs",
-                "--save_root", "results",
+                "-i", "inputs",
+                "-o", "results",
                 "--ext", ext
             ]
             if only_center_face:
