@@ -123,4 +123,6 @@ GFPGAN*.pth
 weights/
 *.pth 
 models/
-dir/
+distr/
+dist/
+distr/GFPGAN/

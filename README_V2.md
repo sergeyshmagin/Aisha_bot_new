@@ -78,3 +78,17 @@
 async def text_instruction(message: Message):
     print("DEBUG: text_instruction called")
     ... 
+
+## Обновление версии GFPGAN docker-образа и пути к скрипту
+
+Версия docker-образа и путь к скрипту GFPGAN задаются в файле `backend_api/app/config.py` или через переменные окружения:
+
+- `GFPGAN_DOCKER_IMAGE` — тег docker-образа (по умолчанию soulteary/docker-gfpgan:v1.4.0)
+- `GFPGAN_SCRIPT_PATH` — путь к скрипту внутри контейнера (по умолчанию /app/inference_gfpgan.py)
+
+### Как обновить версию GFPGAN:
+1. Измени переменную `GFPGAN_DOCKER_IMAGE` на нужный тег (например, soulteary/docker-gfpgan:v1.4.0) в `.env` или в `config.py`.
+2. Если структура образа изменилась — измени `GFPGAN_SCRIPT_PATH` на актуальный путь (см. документацию к образу).
+3. Перезапусти backend.
+
+**Важно:** используйте только существующие теги (например, v1.4.0). Список доступных тегов смотри на https://hub.docker.com/r/soulteary/docker-gfpgan/tags. Если используешь latest, при обновлении образа возможны несовместимости. Рекомендуется фиксировать стабильный тег. 

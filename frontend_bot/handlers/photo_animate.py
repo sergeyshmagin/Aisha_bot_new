@@ -22,9 +22,12 @@ async def ask_for_photo_enhance(message: Message):
 
 @bot.message_handler(content_types=['photo'])
 async def handle_photo(message: Message):
-    logger.info(f"Получено фото от {message.from_user.id}")
+    print(f"DEBUG: handle_photo called for user {message.from_user.id}")
     user_id = message.from_user.id
-    if get_state(user_id) == 'photo_enhance':
+    state = get_state(user_id)
+    print(f"DEBUG: get_state({user_id}) = {state}")
+    logger.info(f"Получено фото от {message.from_user.id}")
+    if state == 'photo_enhance':
         # Режим улучшения фото
         photo = message.photo[-1]
         file_info = await bot.get_file(photo.file_id)
