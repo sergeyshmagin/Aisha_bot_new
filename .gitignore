@@ -126,3 +126,4 @@ models/
 distr/
 dist/
 distr/GFPGAN/
+frontend_bot/services/cookies.json

@@ -106,8 +106,8 @@ async def gfpgan_enhance(
                 GFPGAN_DOCKER_IMAGE,
                 "python3", GFPGAN_SCRIPT_PATH,
                 "--upscale", str(upscale),
-                "--test_path", "inputs",
-                "--save_root", "results",
+                "-i", "inputs",
+                "-o", "results",
                 "--ext", ext
             ]
             if only_center_face:
