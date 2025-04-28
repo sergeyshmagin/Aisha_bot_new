@@ -42,17 +42,14 @@ def is_audio_file_ffmpeg(path: str) -> bool:
         result = subprocess.run(
             [
                 "ffprobe", "-v", "error",
-                "-select_streams", "a:0",
-                "-show_entries", "stream=codec_type",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                path
-            ],
+                "-show_streams",
+                "-of", "default=noprint_wrappers=1"
+            ] + [path],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             timeout=5
         )
-        return b"audio" in result.stdout
+        return b"codec_type=audio" in result.stdout
     except Exception:
         return False
 

@@ -213,15 +213,14 @@ async def transcribe_audio(message: Message):
                 message_id=progress_msg.message_id
             )
             transcription = await whisper_transcribe(temp_file_mp3)
-            transcript_path = os.path.join(user_dir, f"transcript_{uuid4()}.txt")
+            filename = f"transcript_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.txt"
+            transcript_path = os.path.join(user_dir, filename)
             async with aiofiles.open(transcript_path, 'w', encoding='utf-8') as f:
                 await f.write(transcription)
             user_transcripts[user_id] = transcript_path
-            await bot.send_message(
-                message.chat.id,
-                "Выберите формат вывода:",
-                reply_markup=transcript_format_keyboard()
-            )
+            # Отправляем файл транскрипта пользователю
+            with open(transcript_path, 'rb') as f:
+                await bot.send_document(message.chat.id, f, caption="Ваш транскрипт")
             add_history_entry(
                 str(user_id), transcript_path, 'audio', 'transcript'
             )
@@ -313,15 +312,13 @@ async def transcribe_audio(message: Message):
         message_id=progress_msg.message_id,
         reply_markup=transcript_format_keyboard()
     )
-    transcript_path = os.path.join(user_dir, f"transcript_{uuid4()}.txt")
+    transcript_path = os.path.join(user_dir, f"transcript_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.txt")
     async with aiofiles.open(transcript_path, 'w', encoding='utf-8') as f:
         await f.write(transcribed_text)
     user_transcripts[user_id] = transcript_path
-    await bot.send_message(
-        message.chat.id,
-        f"\u2705 Итоговый транскрипт сохранён:"
-        f"\n{transcript_path}"
-    )
+    # Отправляем файл транскрипта пользователю
+    with open(transcript_path, 'rb') as f:
+        await bot.send_document(message.chat.id, f, caption="Ваш транскрипт")
     add_history_entry(
         str(user_id), transcript_path, 'audio', 'transcript'
     )
