@@ -7,7 +7,6 @@ from frontend_bot.keyboards.reply import (
     business_assistant_keyboard, photo_menu_keyboard
 )
 from frontend_bot.keyboards.main_menu_keyboard import main_menu_keyboard
-from frontend_bot.keyboards.audio import audio_menu_keyboard
 from frontend_bot.services.state_manager import set_state
 
 # Загрузка переменных окружения из .env
@@ -53,8 +52,7 @@ async def audio_instruction(message: Message) -> None:
     set_state(message.from_user.id, 'audio_transcribe')
     await bot.send_message(
         message.chat.id,
-        "Пожалуйста, отправьте аудиофайл (mp3/ogg) для расшифровки.",
-        reply_markup=audio_menu_keyboard()
+        "Пожалуйста, отправьте аудиофайл (mp3/ogg) для расшифровки."
     )
 
 
