@@ -16,5 +16,5 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
     keyboard.add(KeyboardButton("🤖 Бизнес-ассистент"))
     keyboard.add(KeyboardButton("🖼 Работа с фото"))
     keyboard.add(KeyboardButton("❓ Помощь"))
-    keyboard.add(KeyboardButton("🤖 GPT-4o"))
+    # keyboard.add(KeyboardButton("🤖 GPT-4o"))
     return keyboard

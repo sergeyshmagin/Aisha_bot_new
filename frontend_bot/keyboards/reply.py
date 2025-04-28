@@ -85,12 +85,24 @@ def business_assistant_keyboard() -> ReplyKeyboardMarkup:
 @lru_cache(maxsize=1)
 def photo_menu_keyboard() -> ReplyKeyboardMarkup:
     """
-    Возвращает клавиатуру для меню 'Работа с фото' (только улучшение).
-
-    Returns:
-        ReplyKeyboardMarkup: Клавиатура для работы с фото.
+    Возвращает клавиатуру для меню 'Работа с фото'.
     """
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(KeyboardButton("✨ Улучшить фото"))
+    keyboard.row(
+        KeyboardButton("✨ Улучшить фото"),
+        KeyboardButton("🧑‍🎨 Аватары")
+    )
+    keyboard.add(KeyboardButton("🖼 Образы"))
     keyboard.add(KeyboardButton("Назад"))
+    return keyboard
+
+
+@lru_cache(maxsize=1)
+def avatar_menu_keyboard() -> ReplyKeyboardMarkup:
+    """Клавиатура для подменю 'Аватары'."""
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard.row(
+        KeyboardButton("🧑‍🎨 Создать аватар"),
+        KeyboardButton("↩️ В меню")
+    )
     return keyboard 
