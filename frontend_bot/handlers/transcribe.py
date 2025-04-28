@@ -221,6 +221,11 @@ async def transcribe_audio(message: Message):
             # Отправляем файл транскрипта пользователю
             with open(transcript_path, 'rb') as f:
                 await bot.send_document(message.chat.id, f, caption="Ваш транскрипт")
+            await bot.send_message(
+                message.chat.id,
+                "Выберите дальнейшее действие:",
+                reply_markup=transcript_format_keyboard()
+            )
             add_history_entry(
                 str(user_id), transcript_path, 'audio', 'transcript'
             )
@@ -319,6 +324,11 @@ async def transcribe_audio(message: Message):
     # Отправляем файл транскрипта пользователю
     with open(transcript_path, 'rb') as f:
         await bot.send_document(message.chat.id, f, caption="Ваш транскрипт")
+    await bot.send_message(
+        message.chat.id,
+        "Выберите дальнейшее действие:",
+        reply_markup=transcript_format_keyboard()
+    )
     add_history_entry(
         str(user_id), transcript_path, 'audio', 'transcript'
     )
