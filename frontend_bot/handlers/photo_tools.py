@@ -8,6 +8,9 @@ from frontend_bot.keyboards.reply import (
 from frontend_bot.keyboards.main_menu_keyboard import main_menu_keyboard
 from frontend_bot.services.avatar_manager import get_avatars_index, clear_avatar_fsm, update_avatar_fsm
 import os
+from frontend_bot.handlers.avatar.state import user_session
+import logging
+import traceback
 
 AVATARS_PER_PAGE = 3
 
@@ -228,37 +231,92 @@ async def universal_back_handler(message: Message):
 
 
 # --- Callback-обработчик для удаления аватара с подтверждением ---
-@bot.callback_query_handler(func=lambda call: call.data.startswith('avatar_delete_'))
-async def handle_avatar_delete(call):
-    avatar_id = call.data.split('_')[-1]
-    markup = InlineKeyboardMarkup()
-    markup.add(
-        InlineKeyboardButton("✅ Да, удалить", callback_data=f"avatar_delete_confirm_{avatar_id}"),
-        InlineKeyboardButton("❌ Отмена", callback_data="avatar_delete_cancel")
-    )
-    await bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
-    await bot.send_message(
-        call.message.chat.id,
-        f"Вы уверены, что хотите удалить этот аватар? Это действие необратимо.",
-        reply_markup=markup
-    )
-    await bot.answer_callback_query(call.id)
-
 @bot.callback_query_handler(func=lambda call: call.data.startswith('avatar_delete_confirm_'))
 async def handle_avatar_delete_confirm(call):
     user_id = call.from_user.id
-    avatar_id = call.data.split('_')[-1]
-    clear_avatar_fsm(user_id, avatar_id)
-    await bot.send_message(call.message.chat.id, "Аватар удалён.")
-    # Обновляем меню
-    avatars = get_avatars_index(user_id)
-    await my_avatars_menu(call.message)
-    await bot.answer_callback_query(call.id)
+    logging.info(f"[DEBUG] handle_avatar_delete_confirm: user_id={user_id}, data={call.data}")
+    try:
+        if user_id not in user_session or not isinstance(user_session[user_id], dict):
+            user_session[user_id] = {}
+        # Удаляем все старые wizard-сообщения
+        for mid in user_session[user_id].get('wizard_message_ids', []):
+            try:
+                await bot.delete_message(call.message.chat.id, mid)
+            except Exception as e:
+                logging.error(f"[DEBUG] Ошибка удаления wizard-сообщения: {e}\n{traceback.format_exc()}")
+        user_session[user_id]['wizard_message_ids'] = []
+        user_session[user_id]['avatar_delete_wizard_active'] = False
+        avatar_id = call.data.split('_')[-1]
+        logging.info(f"[DEBUG] До clear_avatar_fsm: user_id={user_id}, avatar_id={avatar_id}")
+        clear_avatar_fsm(user_id, avatar_id)
+        logging.info(f"[DEBUG] После clear_avatar_fsm: user_id={user_id}, avatar_id={avatar_id}")
+        avatars = get_avatars_index(user_id)
+        logging.info(f"[DEBUG] После удаления, get_avatars_index: {avatars}")
+        await bot.send_message(call.message.chat.id, "Аватар удалён.")
+        await my_avatars_menu(call.message)
+        await bot.answer_callback_query(call.id)
+    except Exception as e:
+        logging.error(f"[DEBUG] Ошибка в handle_avatar_delete_confirm: {e}\n{traceback.format_exc()}")
 
 @bot.callback_query_handler(func=lambda call: call.data == 'avatar_delete_cancel')
 async def handle_avatar_delete_cancel(call):
-    await bot.send_message(call.message.chat.id, "Удаление отменено.")
-    await bot.answer_callback_query(call.id)
+    user_id = call.from_user.id
+    logging.info(f"[DEBUG] handle_avatar_delete_cancel: user_id={user_id}, data={call.data}")
+    try:
+        if user_id not in user_session or not isinstance(user_session[user_id], dict):
+            user_session[user_id] = {}
+        # Удаляем все старые wizard-сообщения
+        for mid in user_session[user_id].get('wizard_message_ids', []):
+            try:
+                await bot.delete_message(call.message.chat.id, mid)
+            except Exception as e:
+                logging.error(f"[DEBUG] Ошибка удаления wizard-сообщения: {e}\n{traceback.format_exc()}")
+        user_session[user_id]['wizard_message_ids'] = []
+        user_session[user_id]['avatar_delete_wizard_active'] = False
+        await bot.send_message(call.message.chat.id, "Удаление отменено.")
+        await bot.answer_callback_query(call.id)
+    except Exception as e:
+        logging.error(f"[DEBUG] Ошибка в handle_avatar_delete_cancel: {e}\n{traceback.format_exc()}")
+
+@bot.callback_query_handler(
+    func=lambda call: call.data.startswith('avatar_delete_')
+    and not call.data.startswith('avatar_delete_confirm_')
+    and call.data != 'avatar_delete_cancel'
+)
+async def handle_avatar_delete(call):
+    user_id = call.from_user.id
+    logging.info(f"[DEBUG] handle_avatar_delete: user_id={user_id}, data={call.data}")
+    try:
+        if user_id not in user_session or not isinstance(user_session[user_id], dict):
+            user_session[user_id] = {}
+        # Проверка: если wizard уже активен, не открываем новый
+        if user_session[user_id].get('avatar_delete_wizard_active'):
+            await bot.answer_callback_query(call.id, "Подтверждение уже открыто.")
+            return
+        user_session[user_id]['avatar_delete_wizard_active'] = True
+        # Удаляем все старые wizard-сообщения
+        for mid in user_session[user_id].get('wizard_message_ids', []):
+            try:
+                await bot.delete_message(call.message.chat.id, mid)
+            except Exception as e:
+                logging.error(f"[DEBUG] Ошибка удаления wizard-сообщения: {e}\n{traceback.format_exc()}")
+        user_session[user_id]['wizard_message_ids'] = []
+        avatar_id = call.data.split('_')[-1]
+        markup = InlineKeyboardMarkup()
+        markup.add(
+            InlineKeyboardButton("✅ Да, удалить", callback_data=f"avatar_delete_confirm_{avatar_id}"),
+            InlineKeyboardButton("❌ Отмена", callback_data="avatar_delete_cancel")
+        )
+        await bot.edit_message_reply_markup(call.message.chat.id, call.message.message_id, reply_markup=None)
+        msg = await bot.send_message(
+            call.message.chat.id,
+            f"Вы уверены, что хотите удалить этот аватар? Это действие необратимо.",
+            reply_markup=markup
+        )
+        user_session[user_id]['wizard_message_ids'] = [msg.message_id]
+        await bot.answer_callback_query(call.id)
+    except Exception as e:
+        logging.error(f"[DEBUG] Ошибка в handle_avatar_delete: {e}\n{traceback.format_exc()}")
 
 # --- Callback-обработчик для переименования аватара ---
 @bot.callback_query_handler(func=lambda call: call.data.startswith('avatar_rename_'))

@@ -43,7 +43,14 @@ from frontend_bot.texts.avatar.texts import (
     PHOTO_REQUIREMENTS_TEXT
 )
 
-from frontend_bot.constants.avatar import AVATAR_MIN_PHOTOS, AVATAR_MAX_PHOTOS
+from frontend_bot.config import (
+    AVATAR_MIN_PHOTOS, AVATAR_MAX_PHOTOS,
+    PROGRESSBAR_EMOJI_FILLED, PROGRESSBAR_EMOJI_CURRENT, PROGRESSBAR_EMOJI_EMPTY,
+    FAL_MODE, FAL_ITERATIONS, FAL_PRIORITY, FAL_CAPTIONING, FAL_TRIGGER_WORD, FAL_LORA_RANK, FAL_FINETUNE_TYPE,
+    FAL_WEBHOOK_URL
+)
+
+from frontend_bot.services.fal_trainer import train_avatar
 
 # Словари для отображения типа и модели
 AVATAR_TYPE_DISPLAY = {
@@ -199,11 +206,11 @@ def get_progressbar(
     bar = []
     for i in range(bar_len):
         if current_idx is not None and i == current_idx:
-            bar.append('🟦')  # текущее фото
+            bar.append(PROGRESSBAR_EMOJI_CURRENT)  # текущее фото
         elif i < current:
-            bar.append('🟩')  # заполнено
+            bar.append(PROGRESSBAR_EMOJI_FILLED)  # заполнено
         else:
-            bar.append('⬜')  # пусто
+            bar.append(PROGRESSBAR_EMOJI_EMPTY)  # пусто
     return f"{''.join(bar)} ({current}/{bar_len})"
 
 user_media_groups = {}  # (user_id, media_group_id) -> [(file_id, photo_bytes), ...]
@@ -521,8 +528,38 @@ async def handle_avatar_style(call):
 async def handle_avatar_confirm_yes(call):
     user_id = call.from_user.id
     avatar_id = get_current_avatar_id(user_id)
-    from frontend_bot.services.avatar_manager import mark_avatar_ready
+    from frontend_bot.services.avatar_manager import load_avatar_fsm
+    mark_avatar_ready = __import__(
+        'frontend_bot.services.avatar_manager', fromlist=['mark_avatar_ready']
+    ).mark_avatar_ready
     mark_avatar_ready(user_id, avatar_id)
+    data = load_avatar_fsm(user_id, avatar_id)
+    photos = [p["path"] if isinstance(p, dict) else p for p in data.get("photos", [])]
+    finetune_comment = f"user_id={user_id};avatar_id={avatar_id}"
+    finetune_id = await train_avatar(
+        user_id,
+        avatar_id,
+        data.get("title", ""),
+        data.get("class_name", ""),
+        photos,
+        finetune_comment=finetune_comment,
+        mode=FAL_MODE,
+        iterations=FAL_ITERATIONS,
+        priority=FAL_PRIORITY,
+        captioning=FAL_CAPTIONING,
+        trigger_word=FAL_TRIGGER_WORD,
+        lora_rank=FAL_LORA_RANK,
+        finetune_type=FAL_FINETUNE_TYPE,
+        webhook_url=FAL_WEBHOOK_URL
+    )
+    if not finetune_id:
+        await bot.send_message(
+            call.message.chat.id,
+            "❌ Ошибка обучения аватара. "
+            "Пожалуйста, попробуйте позже или обратитесь в поддержку."
+        )
+        await bot.answer_callback_query(call.id)
+        return
     final_text = (
         "✨✨ <b>СОЗДАНИЕ АВАТАРА...</b> ✨✨\n\n"
         "Это займёт несколько минут.\n"

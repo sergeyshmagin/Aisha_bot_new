@@ -7,8 +7,9 @@ import io
 import hashlib
 import aiofiles.os
 import logging
+from frontend_bot.config import AVATAR_STORAGE_PATH, PHOTO_MAX_MB, PHOTO_MIN_RES
 
-AVATAR_STORAGE = 'storage/avatars'
+AVATAR_STORAGE = AVATAR_STORAGE_PATH
 
 
 def get_user_dir(user_id: int) -> str:
@@ -260,20 +261,26 @@ async def remove_photo_from_avatar(user_id: int, avatar_id: str, photo_idx: int)
     return False
 
 
-def validate_photo(photo_bytes: bytes, existing_photo_paths: list, min_size=(512, 512), max_mb=20):
+def validate_photo(photo_bytes: bytes, existing_photo_paths: list, min_size=(PHOTO_MIN_RES, PHOTO_MIN_RES), max_mb=PHOTO_MAX_MB):
     """Проверяет размер, формат, разрешение и уникальность фото."""
     # Проверка размера файла
     if len(photo_bytes) > max_mb * 1024 * 1024:
-        return False, "Фото слишком большое (максимум 20 МБ)."
+        return False, (
+            f"Фото слишком большое (максимум {PHOTO_MAX_MB} МБ)."
+        )
     # Проверка формата и разрешения
     try:
         img = Image.open(io.BytesIO(photo_bytes))
         if img.format not in ("JPEG", "PNG"):
-            return False, "Поддерживаются только JPEG и PNG."
+            return False, (
+                "Поддерживаются только JPEG и PNG."
+            )
         if img.size[0] < min_size[0] or img.size[1] < min_size[1]:
-            return False, "Фото слишком маленькое (минимум 512x512 пикселей)."
+            return False, (
+                f"Фото слишком маленькое (минимум {PHOTO_MIN_RES}x{PHOTO_MIN_RES})."
+            )
     except Exception:
-        return False, "Не удалось прочитать изображение."
+        return False, "Не удалось прочитать фото."
     # Проверка уникальности
     photo_hash = hashlib.md5(photo_bytes).hexdigest()
     for path in existing_photo_paths:
