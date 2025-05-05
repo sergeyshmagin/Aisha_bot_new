@@ -123,4 +123,8 @@ GFPGAN*.pth
 weights/
 *.pth 
 models/
-dir/
+distr/
+dist/
+distr/GFPGAN/
+distr/
+frontend_bot/services/cookies.json
