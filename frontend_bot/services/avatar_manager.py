@@ -115,6 +115,14 @@ def update_avatar_fsm(user_id: int, avatar_id: str, **kwargs) -> None:
 
 def clear_avatar_fsm(user_id: int, avatar_id: str) -> None:
     avatar_dir = get_avatar_dir(user_id, avatar_id)
+    # Удаляем превью, если есть
+    preview_path = os.path.join(avatar_dir, 'preview.jpg')
+    if os.path.exists(preview_path):
+        try:
+            os.remove(preview_path)
+            logging.info(f"[AVATAR_MANAGER] Превью удалено: {preview_path}")
+        except Exception as e:
+            logging.error(f"[AVATAR_MANAGER] Ошибка удаления превью {preview_path}: {e}")
     if os.path.exists(avatar_dir):
         for root, dirs, files in os.walk(avatar_dir, topdown=False):
             for name in files:
@@ -134,18 +142,21 @@ def get_avatars_index(user_id: int) -> List[Dict[str, Any]]:
     return []
 
 
-def add_avatar_to_index(user_id: int, avatar_id: str, title: str, style: str, created_at: str) -> None:
+def add_avatar_to_index(user_id: int, avatar_id: str, title: str, style: str, created_at: str, preview_path: str = None) -> None:
     path = get_avatars_index_path(user_id)
     avatars = get_avatars_index(user_id)
     if not title:
         title = "Без имени"
-    avatars.append({
+    avatar_entry = {
         "avatar_id": avatar_id,
         "title": title,
         "style": style,
         "tune_id": None,
         "created_at": created_at
-    })
+    }
+    if preview_path:
+        avatar_entry["preview_path"] = preview_path
+    avatars.append(avatar_entry)
     with open(path, 'w', encoding='utf-8') as f:
         json.dump({"avatars": avatars}, f, ensure_ascii=False, indent=2)
 
@@ -158,6 +169,8 @@ def update_avatar_in_index(user_id: int, avatar_id: str, data: Dict[str, Any]) -
             avatar["title"] = data.get("title")
             avatar["style"] = data.get("style")
             avatar["tune_id"] = data.get("tune_id")
+            if "preview_path" in data:
+                avatar["preview_path"] = data["preview_path"]
     with open(path, 'w', encoding='utf-8') as f:
         json.dump({"avatars": avatars}, f, ensure_ascii=False, indent=2)
 
@@ -190,14 +203,33 @@ def find_avatar_by_tune_id(tune_id: str):
 
 
 def mark_avatar_ready(user_id: int, avatar_id: str):
-    """Помечает аватар как готовый (ready=True) и добавляет его в avatars.json."""
+    """Помечает аватар как готовый (ready=True), генерирует превью и добавляет его в avatars.json."""
     data = load_avatar_fsm(user_id, avatar_id)
     if not data:
         return
     data['ready'] = True
+    # Генерируем превью по первому фото
+    preview_path = None
+    if data.get('photos'):
+        first_photo = data['photos'][0]
+        photo_path = first_photo['path'] if isinstance(first_photo, dict) else first_photo
+        preview_path = os.path.join(get_avatar_dir(user_id, avatar_id), 'preview.jpg')
+        try:
+            generate_avatar_preview(photo_path, preview_path)
+            data['preview_path'] = preview_path
+        except Exception as e:
+            logging.error(f"[AVATAR_MANAGER] Не удалось сгенерировать превью: {e}")
+            data['preview_path'] = None
     save_avatar_fsm(user_id, avatar_id, data)
     # Добавляем в avatars.json
-    add_avatar_to_index(user_id, avatar_id, data.get('title', ''), data.get('style', ''), data.get('created_at', ''))
+    add_avatar_to_index(
+        user_id,
+        avatar_id,
+        data.get('title', ''),
+        data.get('style', ''),
+        data.get('created_at', ''),
+        data.get('preview_path')
+    )
 
 
 async def remove_photo_from_avatar(user_id: int, avatar_id: str, photo_idx: int) -> bool:
@@ -252,3 +284,23 @@ def validate_photo(photo_bytes: bytes, existing_photo_paths: list, min_size=(512
         except Exception:
             continue
     return True, photo_hash
+
+
+def generate_avatar_preview(photo_path: str, preview_path: str, size=(256, 256)) -> str:
+    """
+    Генерирует уменьшенное превью для аватара и сохраняет в preview_path.
+    Возвращает путь к превью.
+    """
+    logger = logging.getLogger(__name__)
+    try:
+        img = Image.open(photo_path)
+        img = img.convert("RGB")
+        img.thumbnail(size)
+        # Создаём директорию, если не существует
+        os.makedirs(os.path.dirname(preview_path), exist_ok=True)
+        img.save(preview_path, "JPEG", quality=90)
+        logger.info(f"[AVATAR_MANAGER] Превью сгенерировано: {preview_path}")
+        return preview_path
+    except Exception as e:
+        logger.error(f"[AVATAR_MANAGER] Ошибка генерации превью: {e}")
+        raise

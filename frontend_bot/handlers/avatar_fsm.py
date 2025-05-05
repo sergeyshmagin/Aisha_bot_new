@@ -16,7 +16,8 @@ from frontend_bot.services.avatar_manager import (
     update_avatar_fsm,
     validate_photo,
     save_avatar_fsm,
-    clear_avatar_fsm
+    clear_avatar_fsm,
+    mark_avatar_ready
 )
 from frontend_bot.services.state_manager import (
     set_state,
@@ -519,6 +520,9 @@ async def handle_avatar_style(call):
 @bot.callback_query_handler(func=lambda call: call.data == "avatar_confirm_yes")
 async def handle_avatar_confirm_yes(call):
     user_id = call.from_user.id
+    avatar_id = get_current_avatar_id(user_id)
+    from frontend_bot.services.avatar_manager import mark_avatar_ready
+    mark_avatar_ready(user_id, avatar_id)
     final_text = (
         "✨✨ <b>СОЗДАНИЕ АВАТАРА...</b> ✨✨\n\n"
         "Это займёт несколько минут.\n"
