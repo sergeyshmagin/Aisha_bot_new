@@ -28,6 +28,7 @@ FAL_CAPTIONING = os.getenv("FAL_CAPTIONING", "true").lower() == "true"
 FAL_TRIGGER_WORD = os.getenv("FAL_TRIGGER_WORD", "TOK")
 FAL_LORA_RANK = int(os.getenv("FAL_LORA_RANK", 32))
 FAL_FINETUNE_TYPE = os.getenv("FAL_FINETUNE_TYPE", "full")
+FAL_TRAINING_TEST_MODE = os.getenv("FAL_TRAINING_TEST_MODE", "false").lower() == "true"
 
 # --- Пути ---
 AVATAR_STORAGE_PATH = os.getenv("AVATAR_STORAGE_PATH", "storage/avatars")

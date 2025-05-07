@@ -8,7 +8,7 @@ from frontend_bot.bot import bot
 from frontend_bot.services.avatar_manager import load_avatar_fsm, clear_avatar_fsm
 from frontend_bot.services.state_manager import get_current_avatar_id, set_state, clear_state
 from frontend_bot.handlers.avatar.utils import reset_avatar_fsm
-from frontend_bot.config import FAL_MODE, FAL_ITERATIONS, FAL_PRIORITY, FAL_CAPTIONING, FAL_TRIGGER_WORD, FAL_LORA_RANK, FAL_FINETUNE_TYPE, FAL_WEBHOOK_URL
+from frontend_bot.config import FAL_MODE, FAL_ITERATIONS, FAL_PRIORITY, FAL_CAPTIONING, FAL_TRIGGER_WORD, FAL_LORA_RANK, FAL_FINETUNE_TYPE, FAL_WEBHOOK_URL, FAL_TRAINING_TEST_MODE
 from frontend_bot.services.fal_trainer import train_avatar
 from frontend_bot.keyboards.reply import my_avatars_keyboard
 from frontend_bot.handlers.avatar.state import user_session, user_gallery
@@ -27,22 +27,26 @@ async def handle_avatar_confirm_yes(call):
     data = load_avatar_fsm(user_id, avatar_id)
     photos = [p["path"] if isinstance(p, dict) else p for p in data.get("photos", [])]
     finetune_comment = f"user_id={user_id};avatar_id={avatar_id}"
-    finetune_id = await train_avatar(
-        user_id,
-        avatar_id,
-        data.get("title", ""),
-        data.get("class_name", ""),
-        photos,
-        finetune_comment=finetune_comment,
-        mode=FAL_MODE,
-        iterations=FAL_ITERATIONS,
-        priority=FAL_PRIORITY,
-        captioning=FAL_CAPTIONING,
-        trigger_word=FAL_TRIGGER_WORD,
-        lora_rank=FAL_LORA_RANK,
-        finetune_type=FAL_FINETUNE_TYPE,
-        webhook_url=FAL_WEBHOOK_URL
-    )
+    if FAL_TRAINING_TEST_MODE:
+        logger.info("FAL_TRAINING_TEST_MODE is ON: обучение не отправляется на fal.ai, используется фиктивный finetune_id.")
+        finetune_id = "test-finetune-id"
+    else:
+        finetune_id = await train_avatar(
+            user_id,
+            avatar_id,
+            data.get("title", ""),
+            data.get("class_name", ""),
+            photos,
+            finetune_comment=finetune_comment,
+            mode=FAL_MODE,
+            iterations=FAL_ITERATIONS,
+            priority=FAL_PRIORITY,
+            captioning=FAL_CAPTIONING,
+            trigger_word=FAL_TRIGGER_WORD,
+            lora_rank=FAL_LORA_RANK,
+            finetune_type=FAL_FINETUNE_TYPE,
+            webhook_url=FAL_WEBHOOK_URL
+        )
     if not finetune_id:
         await bot.send_message(
             call.message.chat.id,
@@ -51,9 +55,13 @@ async def handle_avatar_confirm_yes(call):
         )
         await bot.answer_callback_query(call.id)
         return
+    await bot.send_message(
+        call.message.chat.id,
+        "⏳ Обучение аватара началось! Это займёт примерно 15 минут. Вы получите уведомление, когда аватар будет готов."
+    )
     final_text = (
         "✨✨ <b>СОЗДАНИЕ АВАТАРА...</b> ✨✨\n\n"
-        "Это займёт несколько минут.\n"
+        "Это займёт примерно 15 минут.\n"
         "Когда аватар будет готов, вы получите уведомление прямо здесь.\n\n"
         "Пожалуйста, ожидайте — магия уже началась! 🦋"
     )
