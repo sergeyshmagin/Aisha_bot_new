@@ -22,7 +22,7 @@ FAL_WEBHOOK_URL = os.getenv(
     "FAL_WEBHOOK_URL", "https://your-backend/api/avatar/status_update"
 )
 FAL_MODE = os.getenv("FAL_MODE", "character")
-FAL_ITERATIONS = int(os.getenv("FAL_ITERATIONS", 300))
+FAL_ITERATIONS = int(os.getenv("FAL_ITERATIONS", 500))
 FAL_PRIORITY = os.getenv("FAL_PRIORITY", "quality")
 FAL_CAPTIONING = os.getenv("FAL_CAPTIONING", "true").lower() == "true"
 FAL_TRIGGER_WORD = os.getenv("FAL_TRIGGER_WORD", "TOK")
@@ -40,7 +40,7 @@ THUMBNAIL_PATH = os.getenv(
 )
 
 # --- Лимиты ---
-AVATAR_MIN_PHOTOS = int(os.getenv("AVATAR_MIN_PHOTOS", 8))
+AVATAR_MIN_PHOTOS = int(os.getenv("AVATAR_MIN_PHOTOS", 10))
 AVATAR_MAX_PHOTOS = int(os.getenv("AVATAR_MAX_PHOTOS", 20))
 AVATARS_PER_PAGE = int(os.getenv("AVATARS_PER_PAGE", 3))
 PHOTO_MAX_MB = int(os.getenv("PHOTO_MAX_MB", 20))

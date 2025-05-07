@@ -143,7 +143,16 @@ def get_avatars_index(user_id: int) -> List[Dict[str, Any]]:
     return []
 
 
-def add_avatar_to_index(user_id: int, avatar_id: str, title: str, style: str, created_at: str, preview_path: str = None) -> None:
+def add_avatar_to_index(
+    user_id: int,
+    avatar_id: str,
+    title: str,
+    style: str,
+    created_at: str,
+    preview_path: str = None,
+    status: str = "training",
+    finetune_id: str = None
+) -> None:
     path = get_avatars_index_path(user_id)
     avatars = get_avatars_index(user_id)
     if not title:
@@ -153,7 +162,9 @@ def add_avatar_to_index(user_id: int, avatar_id: str, title: str, style: str, cr
         "title": title,
         "style": style,
         "tune_id": None,
-        "created_at": created_at
+        "created_at": created_at,
+        "status": status,
+        "finetune_id": finetune_id
     }
     if preview_path:
         avatar_entry["preview_path"] = preview_path
@@ -170,6 +181,8 @@ def update_avatar_in_index(user_id: int, avatar_id: str, data: Dict[str, Any]) -
             avatar["title"] = data.get("title")
             avatar["style"] = data.get("style")
             avatar["tune_id"] = data.get("tune_id")
+            avatar["status"] = data.get("status", "training")
+            avatar["finetune_id"] = data.get("finetune_id", None)
             if "preview_path" in data:
                 avatar["preview_path"] = data["preview_path"]
     with open(path, 'w', encoding='utf-8') as f:
@@ -229,7 +242,9 @@ def mark_avatar_ready(user_id: int, avatar_id: str):
         data.get('title', ''),
         data.get('style', ''),
         data.get('created_at', ''),
-        data.get('preview_path')
+        data.get('preview_path'),
+        data.get('status', 'training'),
+        data.get('finetune_id', None)
     )
 
 

@@ -698,6 +698,8 @@ async def show_wizard_gallery(chat_id, user_id, avatar_id, photos, idx, message_
     else:
         caption = (
             f"Фото {idx+1} из {total}\n{progress}\n\n"
+            f"❗️Минимум для старта: <b>{AVATAR_MIN_PHOTOS}</b> фото.\n"
+            f"Осталось загрузить: <b>{AVATAR_MIN_PHOTOS - total}</b> фото.\n\n"
             f"Добавьте ещё фото для лучшего качества."
         )
     keyboard = get_full_gallery_keyboard(idx, total)
