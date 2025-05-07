@@ -19,7 +19,8 @@ ASSISTANT_ID = os.getenv("ASSISTANT_ID", "asst_dFIIdQIDNebZ4Qc5iHCE0Muq")
 
 # --- FAL.AI интеграция ---
 FAL_WEBHOOK_URL = os.getenv(
-    "FAL_WEBHOOK_URL", "https://your-backend/api/avatar/status_update"
+    "FAL_WEBHOOK_URL",
+    "https://aibots.kz/api/avatar/status_update"
 )
 FAL_MODE = os.getenv("FAL_MODE", "character")
 FAL_ITERATIONS = int(os.getenv("FAL_ITERATIONS", 500))
