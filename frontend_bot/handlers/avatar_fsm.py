@@ -51,6 +51,7 @@ from frontend_bot.config import (
 )
 
 from frontend_bot.services.fal_trainer import train_avatar
+from frontend_bot.handlers.avatar import confirm
 
 # Словари для отображения типа и модели
 AVATAR_TYPE_DISPLAY = {
