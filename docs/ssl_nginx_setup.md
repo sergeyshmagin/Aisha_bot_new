@@ -97,4 +97,44 @@ sudo ufw reload
 
 ---
 
+## 8. Автоматический запуск и восстановление nginx
+
+### Включение автозапуска nginx при старте системы
+
+Выполните команду:
+```bash
+sudo systemctl enable nginx
+```
+
+### Автоматический рестарт nginx при сбоях
+
+Создайте или отредактируйте override-конфиг для systemd:
+```bash
+sudo systemctl edit nginx
+```
+В открывшемся редакторе добавьте строки:
+```
+[Service]
+Restart=always
+RestartSec=5
+```
+Сохраните и закройте редактор.
+
+Примените изменения и перезапустите nginx:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart nginx
+```
+
+### Проверка статуса
+
+Проверьте, что nginx работает и настроен на автозапуск:
+```bash
+sudo systemctl status nginx
+```
+
+Если nginx завершится с ошибкой, systemd автоматически попытается его перезапустить.
+
+---
+
 **Если возникнут вопросы — смотрите логи nginx и FastAPI, проверяйте firewall и доступность порта 443.** 
