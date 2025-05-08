@@ -433,8 +433,8 @@ async def send_full_official_transcript(message: Message):
             reply_markup=transcript_format_keyboard()
         )
         return
-    with open(transcript_path, 'r', encoding='utf-8') as f:
-        transcript = f.read()
+    async with aiofiles.open(transcript_path, 'r', encoding='utf-8') as f:
+        transcript = await f.read()
     await bot.send_chat_action(message.chat.id, 'typing')
     await bot.send_message(
         message.chat.id,
@@ -518,8 +518,8 @@ async def send_short_summary(message: Message):
             reply_markup=transcript_format_keyboard()
         )
         return
-    with open(transcript_path, 'r', encoding='utf-8') as f:
-        transcript = f.read()
+    async with aiofiles.open(transcript_path, 'r', encoding='utf-8') as f:
+        transcript = await f.read()
     await bot.send_chat_action(message.chat.id, 'typing')
     await bot.send_message(
         message.chat.id,
@@ -566,8 +566,8 @@ async def send_mom(message: Message):
             reply_markup=transcript_format_keyboard()
         )
         return
-    with open(transcript_path, 'r', encoding='utf-8') as f:
-        transcript = f.read()
+    async with aiofiles.open(transcript_path, 'r', encoding='utf-8') as f:
+        transcript = await f.read()
     await bot.send_chat_action(message.chat.id, 'typing')
     await bot.send_message(
         message.chat.id,
@@ -614,8 +614,8 @@ async def send_todo_checklist(message: Message):
             reply_markup=transcript_format_keyboard()
         )
         return
-    with open(transcript_path, 'r', encoding='utf-8') as f:
-        transcript = f.read()
+    async with aiofiles.open(transcript_path, 'r', encoding='utf-8') as f:
+        transcript = await f.read()
     await bot.send_chat_action(message.chat.id, 'typing')
     await bot.send_message(
         message.chat.id,
@@ -758,8 +758,8 @@ async def send_meeting_protocol(message: Message):
             reply_markup=transcript_format_keyboard()
         )
         return
-    with open(transcript_path, 'r', encoding='utf-8') as f:
-        transcript = f.read()
+    async with aiofiles.open(transcript_path, 'r', encoding='utf-8') as f:
+        transcript = await f.read()
     await bot.send_chat_action(message.chat.id, 'typing')
     await bot.send_message(
         message.chat.id,
