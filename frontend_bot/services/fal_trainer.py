@@ -1,4 +1,3 @@
-import logging
 import os
 import tempfile
 import zipfile
@@ -10,8 +9,9 @@ from frontend_bot.config import (
     FAL_TRIGGER_WORD, FAL_LORA_RANK, FAL_FINETUNE_TYPE,
     FAL_WEBHOOK_URL
 )
+from frontend_bot.utils.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger('fal_trainer')
 
 
 async def train_avatar(
@@ -47,8 +47,9 @@ async def train_avatar(
         logger.info(
             f"[FAL_TRAINER] Старт обучения: user_id={user_id}, "
             f"avatar_id={avatar_id}, name={name}, gender={gender}, "
-            f"photos={len(photo_paths)}, mode={mode}, iterations={iterations}, "
-            f"priority={priority}, captioning={captioning}, trigger_word={trigger_word}, "
+            f"photos={len(photo_paths)}, mode={mode}, "
+            f"iterations={iterations}, priority={priority}, "
+            f"captioning={captioning}, trigger_word={trigger_word}, "
             f"lora_rank={lora_rank}, finetune_type={finetune_type}, "
             f"webhook_url={webhook_url}"
         )

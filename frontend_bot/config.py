@@ -19,15 +19,17 @@ ASSISTANT_ID = os.getenv("ASSISTANT_ID", "asst_dFIIdQIDNebZ4Qc5iHCE0Muq")
 
 # --- FAL.AI интеграция ---
 FAL_WEBHOOK_URL = os.getenv(
-    "FAL_WEBHOOK_URL", f"{BACKEND_URL}/api/avatar/status_update"
+    "FAL_WEBHOOK_URL",
+    "https://aibots.kz/api/avatar/status_update"
 )
 FAL_MODE = os.getenv("FAL_MODE", "character")
-FAL_ITERATIONS = int(os.getenv("FAL_ITERATIONS", 300))
+FAL_ITERATIONS = int(os.getenv("FAL_ITERATIONS", 500))
 FAL_PRIORITY = os.getenv("FAL_PRIORITY", "quality")
 FAL_CAPTIONING = os.getenv("FAL_CAPTIONING", "true").lower() == "true"
 FAL_TRIGGER_WORD = os.getenv("FAL_TRIGGER_WORD", "TOK")
 FAL_LORA_RANK = int(os.getenv("FAL_LORA_RANK", 32))
 FAL_FINETUNE_TYPE = os.getenv("FAL_FINETUNE_TYPE", "full")
+FAL_TRAINING_TEST_MODE = os.getenv("FAL_TRAINING_TEST_MODE", "false").lower() == "true"
 
 # --- Пути ---
 AVATAR_STORAGE_PATH = os.getenv("AVATAR_STORAGE_PATH", "storage/avatars")
@@ -40,7 +42,7 @@ THUMBNAIL_PATH = os.getenv(
 )
 
 # --- Лимиты ---
-AVATAR_MIN_PHOTOS = int(os.getenv("AVATAR_MIN_PHOTOS", 8))
+AVATAR_MIN_PHOTOS = int(os.getenv("AVATAR_MIN_PHOTOS", 10))
 AVATAR_MAX_PHOTOS = int(os.getenv("AVATAR_MAX_PHOTOS", 20))
 AVATARS_PER_PAGE = int(os.getenv("AVATARS_PER_PAGE", 3))
 PHOTO_MAX_MB = int(os.getenv("PHOTO_MAX_MB", 20))
