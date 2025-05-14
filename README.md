@@ -1,75 +1,196 @@
-# Telegram AI Bot — Highload Edition
+# Aisha Bot
 
-## Описание
-
-Асинхронный Telegram-бот для обработки аудио- и фотофайлов с поддержкой транскрипции, улучшения фото (GFPGAN), истории файлов и гибкой архитектурой для высоких нагрузок.
-
-- **Асинхронная обработка** всех файловых операций (`aiofiles`)
-- **Асинхронный запуск внешних процессов** (`ffmpeg`, `ffprobe`) через `asyncio.create_subprocess_exec`
-- **Гибкое хранение состояния пользователя** через state_manager (готово к миграции на Redis)
-- **Масштабируемая архитектура**: легко добавить новые режимы и обработчики
-- **PEP8, docstring, чистый код**
-
-## Требования
-
-- Python 3.9+
-- ffmpeg (установлен в системе)
-- [aiofiles](https://pypi.org/project/aiofiles/)
-- [telebot](https://pypi.org/project/pyTelegramBotAPI/) (или aiogram, если используется)
-- aiohttp
-- dotenv
-- (опционально) Redis для state_manager в будущем
-
-## Быстрый старт
-
-1. Установите зависимости:
-   ```bash
-   pip install -r requirements.txt
-   ```
-2. Установите ffmpeg (Linux: `sudo apt install ffmpeg`, Windows: [скачать](https://ffmpeg.org/download.html))
-3. Создайте `.env` с токеном Telegram и настройками:
-   ```env
-   TELEGRAM_TOKEN=...  # ваш токен
-   OPENAI_API_KEY=...  # для Whisper
-   STORAGE_DIR=storage
-   ```
-4. Запустите бота:
-   ```bash
-   python -m frontend_bot.main
-   ```
+Telegram-бот для создания и управления аватарами с помощью ИИ, транскрибации аудио/видео, улучшения фото и бизнес-ассистента.
 
 ## Основные возможности
+- Транскрибация аудио и генерация текстовых/Word-протоколов
+- Автоматизация MoM, ToDo, summary
+- История файлов, удаление, работа с аватарами
+- Асинхронная архитектура, поддержка highload
 
-- **Транскрипция аудио** (mp3, ogg, wav и др.) через OpenAI Whisper
-- **Обработка текстовых транскриптов (.txt)**
-- **Улучшение фото через GFPGAN** (Docker backend)
-- **История файлов пользователя**
-- **Гибкое меню и режимы работы** (state_manager)
-- **Асинхронная обработка файлов и процессов**
+## Архитектура и best practices
+- Хендлеры — только маршрутизация, бизнес-логика в сервисах
+- Все шаблоны сообщений, caption, ошибки — централизованы в `frontend_bot/texts/` и его подпапках
+- Все клавиатуры — централизованы в keyboards/
+- Все shared-утилиты и прогресс-бары — в shared/
+- Все операции с файлами — только через aiofiles (async)
+- [UPD 2024-07-09] Все sync open заменены на aiofiles.open в async-коде, код приведён к PEP8
+- Внешние процессы — только через asyncio.create_subprocess_exec
+- Поддержка конкурентного доступа (asyncio.Lock, план на Redis)
+- [UPD 2024-07-09] user_transcripts теперь хранится persistent через async JSON store (user_transcripts_store), не теряется между рестартами
+- [UPD 2024-07-09] Все протоколы (MoM, summary, todo, Word) покрыты smoke-тестами, которые проверяют только факт отправки файла/сообщения и что файл не пустой, не завися от конкретного текста
 
-## Архитектурные особенности
+## Тестирование
+- Каждый смысловой блок (summary, mom, todo, word, history, delete) — отдельный файл в tests/handlers/
+- Все общие фикстуры — в conftest.py
+- Все тесты async-compatible, используют pytest-asyncio и async-моки
+- Для моков файловых операций используются только async-compatible моки (AsyncMock, patch, собственные async-контекстные менеджеры), мок aiofiles.open применяется только внутри области теста
+- Smoke-тесты не зависят от конкретного текста, а только от факта отправки файла/сообщения
+- Покрываются все edge-cases, ошибки снабжены user-friendly assert-сообщениями
 
-- Все I/O-операции (чтение/запись файлов) — асинхронные
-- Все вызовы ffmpeg/ffprobe — асинхронные, не блокируют event loop
-- Состояния пользователя (режимы) централизованы через state_manager (dict, готово к Redis)
-- Легко масштабируется на несколько воркеров/серверов
-- Готов к highload: не блокирует event loop даже при массовой обработке
+## Документация
+- [Архитектура](docs/architecture.md)
+- [Лучшие практики](docs/best_practices.md)
+- [Тестирование](docs/testing.md)
+- [Безопасность и асинхронность](docs/async_and_safety.md)
+- [Быстрый старт](docs/quickstart.md)
+- [Конфигурация](docs/configuration.md)
+- [Логирование](docs/logging.md)
+- [Changelog](docs/changelog.md)
+- [FAQ](docs/faq.md)
 
-## Рекомендации для highload
+## Запуск тестов
 
-- Для продакшена используйте Redis для state_manager (заменить реализацию в `services/state_manager.py`)
-- Запускайте несколько воркеров через supervisor/systemd
-- Мониторьте нагрузку на ffmpeg и I/O
-- Используйте отдельный backend для GFPGAN (Docker)
+Для корректного запуска тестов и избежания ошибок импорта (например, `ModuleNotFoundError: No module named 'frontend_bot'`), используйте следующую команду из корня проекта:
 
-## Пример расширения
+```bash
+PYTHONPATH=. pytest --maxfail=1 --disable-warnings -q
+```
 
-Добавить новый режим (например, "Озвучить текст"):
-1. Добавьте кнопку в клавиатуру
-2. В state_manager добавьте новый режим
-3. Реализуйте обработчик для нужного типа файла/текста
+Это добавит корень проекта в PYTHONPATH и обеспечит корректную работу абсолютных импортов.
 
-## Контакты и поддержка
+---
 
-- Вопросы и баги — через Issues на GitHub
-- Поддержка и доработка — по запросу
+Для подробностей и расширения — см. docs/ и комментарии в коде.
+
+## Установка
+
+1. Клонировать репозиторий
+```bash
+git clone https://github.com/yourusername/Aisha_bot_new.git
+cd Aisha_bot_new
+```
+
+2. Создать виртуальное окружение
+```bash
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+venv\Scripts\activate     # Windows
+```
+
+3. Установить зависимости
+```bash
+pip install -r requirements.txt
+```
+
+4. Создать файл .env и заполнить переменные окружения
+```bash
+cp .env.example .env
+# Отредактировать .env
+```
+
+## Запуск
+
+```bash
+# Запуск бота
+python main.py
+
+# Запуск тестов
+pytest tests/
+
+# Запуск с покрытием
+pytest --cov=frontend_bot tests/
+
+# Запуск линтера
+flake8 frontend_bot/
+mypy frontend_bot/
+```
+
+## Тестирование
+
+### Запуск тестов
+
+```bash
+# Все тесты
+pytest
+
+# Тесты конкретного модуля
+pytest tests/handlers/test_menu_transitions.py
+
+# С подробным выводом
+pytest -v
+
+# С покрытием
+pytest --cov=frontend_bot
+
+# Параллельный запуск
+pytest -n auto
+
+# Конкретные маркеры
+pytest -m menu
+pytest -m avatar
+pytest -m transcribe
+pytest -m business
+pytest -m photo
+```
+
+### Маркеры тестов
+
+- `menu`: тесты переходов между меню
+- `avatar`: тесты функционала аватаров
+- `transcribe`: тесты функционала транскрибации
+- `business`: тесты функционала бизнес-ассистента
+- `photo`: тесты функционала улучшения фото
+- `integration`: интеграционные тесты
+- `slow`: медленные тесты
+- `flaky`: нестабильные тесты
+
+### Структура тестов
+
+```
+tests/
+├── handlers/
+│   ├── test_menu_transitions.py
+│   ├── test_transcribe_menu_transitions.py
+│   ├── test_business_assistant_menu_transitions.py
+│   └── test_photo_enhance_menu_transitions.py
+├── services/
+├── utils/
+└── conftest.py
+```
+
+### Требования к покрытию
+
+- Строки кода: ≥80%
+- Ветки: ≥80%
+- Условия: ≥80%
+
+## Разработка
+
+### Линтинг и форматирование
+
+```bash
+# Проверка типов
+mypy frontend_bot/
+
+# Линтер
+flake8 frontend_bot/
+
+# Форматирование
+black frontend_bot/
+isort frontend_bot/
+```
+
+### Pre-commit хуки
+
+```bash
+# Установка
+pre-commit install
+
+# Запуск вручную
+pre-commit run --all-files
+```
+
+## Лицензия
+
+MIT
+
+## Авторы
+
+- [Your Name](https://github.com/yourusername)
+
+## Благодарности
+
+- [OpenAI](https://openai.com/) - за GPT API
+- [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) - за отличную библиотеку
+- [pytest](https://docs.pytest.org/) - за фреймворк тестирования

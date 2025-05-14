@@ -1,4 +1,5 @@
 """Клавиатура главного меню для Telegram-бота Aisha."""
+
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 from functools import lru_cache
 

@@ -2,30 +2,42 @@
 
 import json
 import os
-from threading import Lock
+import asyncio
+import aiofiles
+from frontend_bot.services.file_utils import async_exists
+
 
 AVATAR_PATH = os.path.join(os.path.dirname(__file__), "avatars.json")
-_storage_lock = Lock()
+
+
+_storage_lock = asyncio.Lock()
+
 
 # Загружаем все аватары из файла
-def load_avatars():
-    if not os.path.exists(AVATAR_PATH):
+async def load_avatars():
+    if not await async_exists(AVATAR_PATH):
         return {}
-    with _storage_lock, open(AVATAR_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+    async with _storage_lock:
+        async with aiofiles.open(AVATAR_PATH, "r", encoding="utf-8") as f:
+            content = await f.read()
+            return json.loads(content)
+
 
 # Сохраняем все аватары в файл
-def save_avatars(data):
-    with _storage_lock, open(AVATAR_PATH, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+async def save_avatars(data):
+    async with _storage_lock:
+        async with aiofiles.open(AVATAR_PATH, "w", encoding="utf-8") as f:
+            await f.write(json.dumps(data, ensure_ascii=False, indent=2))
+
 
 # Получить список аватаров пользователя
-def get_user_avatars(user_id):
-    data = load_avatars()
+async def get_user_avatars(user_id):
+    data = await load_avatars()
     return data.get(str(user_id), [])
 
+
 # Установить список аватаров пользователя
-def set_user_avatars(user_id, avatars):
-    data = load_avatars()
+async def set_user_avatars(user_id, avatars):
+    data = await load_avatars()
     data[str(user_id)] = avatars
-    save_avatars(data) 
+    await save_avatars(data)

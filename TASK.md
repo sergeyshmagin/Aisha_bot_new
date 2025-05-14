@@ -1,0 +1,3 @@
+- [x] [2024-07-09] Все sync open заменены на aiofiles.open во всех async-функциях (handlers, services). Код приведён к PEP8, linter-ошибки устранены. 
+- [x] [2024-07-09] user_transcripts переведён на persistent async JSON store (user_transcripts_store), добавлен тест на сохранение/чтение. 
+- [x] [2024-07-09] Все smoke-тесты для протоколов (MoM, summary, todo, Word) проходят, тесты не зависят от текста, а только от факта отправки файла/сообщения. Моки aiofiles.open используются только внутри области теста. 

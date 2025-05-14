@@ -3,6 +3,7 @@
 
 в Telegram-боте Aisha.
 """
+
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 from functools import lru_cache
 
@@ -30,7 +31,7 @@ def back_keyboard() -> ReplyKeyboardMarkup:
         ReplyKeyboardMarkup: Клавиатура с кнопкой Назад.
     """
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(KeyboardButton("Назад"))
+    keyboard.add(KeyboardButton("⬅️ Назад"))
     return keyboard
 
 
@@ -49,7 +50,7 @@ def transcript_format_keyboard() -> ReplyKeyboardMarkup:
     keyboard.add(KeyboardButton("Сформировать ToDo-план с чеклистами"))
     keyboard.add(KeyboardButton("Протокол заседания (Word)"))
     keyboard.add(KeyboardButton("ℹ️ О форматах"))
-    keyboard.add(KeyboardButton("Назад"))
+    keyboard.add(KeyboardButton("⬅️ Назад"))
     return keyboard
 
 
@@ -63,7 +64,7 @@ def history_keyboard() -> ReplyKeyboardMarkup:
     """
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.add(KeyboardButton("🗑 Удалить мой файл"))
-    keyboard.add(KeyboardButton("Назад"))
+    keyboard.add(KeyboardButton("⬅️ Назад"))
     return keyboard
 
 
@@ -122,21 +123,18 @@ def my_avatars_keyboard() -> ReplyKeyboardMarkup:
 def avatar_menu_keyboard() -> ReplyKeyboardMarkup:
     """Клавиатура для подменю 'Аватары'."""
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.row(
-        KeyboardButton("🧑‍🎨 Создать аватар"),
-        KeyboardButton("↩️ В меню")
-    )
+    keyboard.row(KeyboardButton("🧑‍🎨 Создать аватар"), KeyboardButton("↩️ В меню"))
     return keyboard
 
 
 def build_avatars_keyboard(avatars):
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(KeyboardButton('📷 Создать аватар'))
+    keyboard.add(KeyboardButton("📷 Создать аватар"))
     for avatar in avatars:
         if not isinstance(avatar, dict):
             continue
-        title = avatar.get('title')
+        title = avatar.get("title")
         if title:
             keyboard.add(KeyboardButton(str(title)))
-    keyboard.add(KeyboardButton('⬅️ Назад'))
-    return keyboard 
+    keyboard.add(KeyboardButton("⬅️ Назад"))
+    return keyboard

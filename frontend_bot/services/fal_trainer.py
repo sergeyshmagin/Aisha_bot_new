@@ -5,13 +5,18 @@ from typing import List, Optional
 
 import fal_client
 from frontend_bot.config import (
-    FAL_MODE, FAL_ITERATIONS, FAL_PRIORITY, FAL_CAPTIONING,
-    FAL_TRIGGER_WORD, FAL_LORA_RANK, FAL_FINETUNE_TYPE,
-    FAL_WEBHOOK_URL
+    FAL_MODE,
+    FAL_ITERATIONS,
+    FAL_PRIORITY,
+    FAL_CAPTIONING,
+    FAL_TRIGGER_WORD,
+    FAL_LORA_RANK,
+    FAL_FINETUNE_TYPE,
+    FAL_WEBHOOK_URL,
 )
 from frontend_bot.utils.logger import get_logger
 
-logger = get_logger('fal_trainer')
+logger = get_logger("fal_trainer")
 
 
 async def train_avatar(
@@ -28,7 +33,7 @@ async def train_avatar(
     trigger_word: str = None,
     lora_rank: int = None,
     finetune_type: str = None,
-    webhook_url: Optional[str] = None
+    webhook_url: Optional[str] = None,
 ) -> Optional[str]:
     """
     Архивирует фото, загружает на fal.ai и запускает обучение аватара.
@@ -57,66 +62,54 @@ async def train_avatar(
         with tempfile.TemporaryDirectory() as tmpdir:
             zip_path = os.path.join(tmpdir, f"avatar_{avatar_id}.zip")
             try:
-                with zipfile.ZipFile(zip_path, 'w') as zipf:
+                with zipfile.ZipFile(zip_path, "w") as zipf:
                     for p in photo_paths:
                         zipf.write(p, arcname=os.path.basename(p))
-                logger.info(
-                    f"[FAL_TRAINER] Фото заархивированы: {zip_path}"
-                )
+                logger.info(f"[FAL_TRAINER] Фото заархивированы: {zip_path}")
             except Exception as e:
-                logger.error(
-                    f"[FAL_TRAINER] Ошибка архивации фото: {e}"
-                )
+                logger.error(f"[FAL_TRAINER] Ошибка архивации фото: {e}")
                 return None
             # 2. Загружаем архив на fal.ai
             try:
                 data_url = await fal_client.upload_file_async(zip_path)
-                logger.info(
-                    f"[FAL_TRAINER] Архив загружен, data_url={data_url}"
-                )
+                logger.info(f"[FAL_TRAINER] Архив загружен, data_url={data_url}")
             except Exception as e:
-                logger.error(
-                    f"[FAL_TRAINER] Ошибка загрузки архива на fal.ai: {e}"
-                )
+                logger.error(f"[FAL_TRAINER] Ошибка загрузки архива на fal.ai: {e}")
                 return None
             # 3. Формируем параметры
             arguments = {
                 "data_url": data_url,
                 "mode": mode,
-                "finetune_comment": finetune_comment or f"user_{user_id}_avatar_{avatar_id}",
+                "finetune_comment": finetune_comment
+                or f"user_{user_id}_avatar_{avatar_id}",
                 "iterations": iterations,
                 "priority": priority,
                 "captioning": captioning,
                 "trigger_word": trigger_word,
                 "lora_rank": lora_rank,
-                "finetune_type": finetune_type
+                "finetune_type": finetune_type,
             }
-            logger.info(
-                f"[FAL_TRAINER] Аргументы для submit: {arguments}"
-            )
+            logger.info(f"[FAL_TRAINER] Аргументы для submit: {arguments}")
             # 4. Запускаем обучение
             try:
                 handler = await fal_client.submit_async(
                     "fal-ai/flux-pro-trainer",
                     arguments=arguments,
-                    webhook_url=webhook_url
+                    webhook_url=webhook_url,
                 )
                 result = await handler.get()
                 finetune_id = result.get("finetune_id")
                 logger.info(
-                    f"[FAL_TRAINER] Обучение запущено, "
-                    f"finetune_id={finetune_id}"
+                    f"[FAL_TRAINER] Обучение запущено, " f"finetune_id={finetune_id}"
                 )
                 return finetune_id
             except Exception as e:
                 logger.error(
-                    f"[FAL_TRAINER] Ошибка запуска обучения на fal.ai: "
-                    f"{e}"
+                    f"[FAL_TRAINER] Ошибка запуска обучения на fal.ai: " f"{e}"
                 )
                 return None
     except Exception as e:
         logger.critical(
-            f"[FAL_TRAINER] Критическая ошибка в train_avatar: "
-            f"{e}", exc_info=True
+            f"[FAL_TRAINER] Критическая ошибка в train_avatar: " f"{e}", exc_info=True
         )
-        return None 
+        return None

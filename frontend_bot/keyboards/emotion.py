@@ -1,4 +1,5 @@
 """Клавиатура эмоций для Telegram-бота Aisha."""
+
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from functools import lru_cache
 
@@ -13,18 +14,9 @@ def emotion_keyboard() -> InlineKeyboardMarkup:
         InlineKeyboardMarkup: Инлайн-клавиатура эмоций.
     """
     keyboard = [
-        [InlineKeyboardButton(
-            "😊 Улыбка", callback_data="emotion:smile"
-        )],
-        [InlineKeyboardButton(
-            "🥲 Трогательно", callback_data="emotion:soft"
-        )],
-        [InlineKeyboardButton(
-            "🎉 Празднично", callback_data="emotion:celebrate"
-        )],
-        [InlineKeyboardButton(
-            "✨ Улучшить фото",
-            callback_data="gfpgan:enhance"
-        )]
+        [InlineKeyboardButton("😊 Улыбка", callback_data="emotion:smile")],
+        [InlineKeyboardButton("🥲 Трогательно", callback_data="emotion:soft")],
+        [InlineKeyboardButton("🎉 Празднично", callback_data="emotion:celebrate")],
+        [InlineKeyboardButton("✨ Улучшить фото", callback_data="gfpgan:enhance")],
     ]
     return InlineKeyboardMarkup(keyboard)

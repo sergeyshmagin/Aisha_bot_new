@@ -6,11 +6,9 @@ Base = declarative_base()
 
 
 class UserProfile(Base):
-    __tablename__ = 'user_profile'
+    __tablename__ = "user_profile"
 
-    user_id = Column(
-        Integer, primary_key=True, autoincrement=False  # Telegram user_id
-    )
+    user_id = Column(Integer, primary_key=True, autoincrement=False)  # Telegram user_id
     first_name = Column(String(128), nullable=False)
     last_name = Column(String(128), nullable=True)
     username = Column(String(128), nullable=True)

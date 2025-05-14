@@ -1,0 +1,67 @@
+2025-05-12 14:42:39,900 INFO History entry added for user 174171680: {'file': 'transcript_2025-05-12_14-42.txt', 'type': 'audio', 'result': 'transcript', 'date': '2025-05-12 14:42'}
+2025-05-12 14:47:44,068 INFO History entry added for user 174171680: {'file': 'transcript_2025-05-12_14-47.txt', 'type': 'audio', 'result': 'transcript', 'date': '2025-05-12 14:47'}
+2025-05-12 14:51:22,895 INFO History entry added for user 174171680: {'file': 'transcript_2025-05-12_14-51.txt', 'type': 'audio', 'result': 'transcript', 'date': '2025-05-12 14:51'}
+2025-05-12 14:55:22,263 INFO History entry added for user 174171680: {'file': 'transcript_2025-05-12_14-55.txt', 'type': 'audio', 'result': 'transcript', 'date': '2025-05-12 14:55'}
+2025-05-12 15:02:34,557 INFO History entry added for user 174171680: {'file': 'transcript_2025-05-12_15-02.txt', 'type': 'audio', 'result': 'transcript', 'date': '2025-05-12 15:02'}
+2025-05-12 15:16:15,808 INFO History entry added for user 174171680: {'file': 'tmpacpmbrbc.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-12 15:16'}
+2025-05-12 15:21:38,664 INFO History entry added for user 174171680: {'file': 'tmpd2czt4h7.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-12 15:21'}
+2025-05-12 15:32:43,842 INFO History entry added for user 174171680: {'file': 'tmp4ajdhmem.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-12 15:32'}
+2025-05-12 15:37:16,321 INFO History entry added for user 174171680: {'file': 'tmpa69eylfy.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-12 15:37'}
+2025-05-12 15:46:34,432 INFO History entry added for user 174171680: {'file': 'tmplg53fzy8.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-12 15:46'}
+2025-05-12 16:28:14,685 INFO History entry added for user 174171680: {'file': 'tmpclzzrqft.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-12 16:28'}
+2025-05-12 18:33:39,684 INFO History entry added for user 174171680: {'file': 'transcript_2025-05-12_18-33.txt', 'type': 'audio', 'result': 'transcript', 'date': '2025-05-12 18:33'}
+2025-05-12 18:42:04,139 INFO History entry added for user 174171680: {'file': 'transcript_2025-05-12_18-42.txt', 'type': 'audio', 'result': 'transcript', 'date': '2025-05-12 18:42'}
+2025-05-12 18:45:27,423 INFO History entry added for user 174171680: {'file': 'transcript_2025-05-12_18-45.txt', 'type': 'audio', 'result': 'transcript', 'date': '2025-05-12 18:45'}
+2025-05-13 10:40:13,230 INFO History entry added for user 123456: {'file': 'tmpfspbwp97.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 10:40'}
+2025-05-13 10:40:22,425 INFO History entry added for user 123456: {'file': 'tmpyi6_46b6.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 10:40'}
+2025-05-13 10:59:24,339 INFO History entry added for user 123456: {'file': 'tmp7p25geii.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 10:59'}
+2025-05-13 10:59:33,059 INFO History entry added for user 123456: {'file': 'tmpj08qjnnl.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 10:59'}
+2025-05-13 11:19:35,849 INFO History entry added for user 123456: {'file': 'tmpu_wnf5lt.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 11:19'}
+2025-05-13 11:53:15,373 INFO History entry added for user 123456: {'file': 'tmpjc3p1y6e.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 11:53'}
+2025-05-13 12:37:23,295 INFO History entry added for user 123456: {'file': 'tmpja46oapm.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 12:37'}
+2025-05-13 12:37:41,519 INFO History entry added for user 123456: {'file': 'tmpankq45r3.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 12:37'}
+2025-05-13 12:37:52,043 INFO History entry added for user 123456: {'file': 'tmpxzvu_i1h.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 12:37'}
+2025-05-13 12:38:01,649 INFO History entry added for user 123456: {'file': 'tmpwx7pgrvg.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 12:38'}
+2025-05-13 12:38:11,438 INFO History entry added for user 123456: {'file': 'tmp0hl42vns.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 12:38'}
+2025-05-13 12:38:23,404 INFO History entry added for user 123456: {'file': 'tmp77n4ghzx.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 12:38'}
+2025-05-13 12:51:48,235 INFO History entry added for user 123456: {'file': 'tmpsvggxuqd.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 12:51'}
+2025-05-13 12:52:09,860 INFO History entry added for user 123456: {'file': 'tmpb6kyq0_7.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 12:52'}
+2025-05-13 12:52:21,511 INFO History entry added for user 123456: {'file': 'tmpooje9tga.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 12:52'}
+2025-05-13 12:52:33,727 INFO History entry added for user 123456: {'file': 'tmprbxb25e6.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 12:52'}
+2025-05-13 12:52:42,909 INFO History entry added for user 123456: {'file': 'tmp7c1xj3jp.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 12:52'}
+2025-05-13 12:52:52,288 INFO History entry added for user 123456: {'file': 'tmpdvcvu0ca.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 12:52'}
+2025-05-13 13:46:29,259 ERROR Не удалось сохранить history.json: 
+2025-05-13 13:46:29,259 INFO History entry added for user 123456: {'file': 'tmp3sd7s2lq.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 13:46'}
+2025-05-13 13:52:15,095 ERROR Не удалось сохранить history.json: 
+2025-05-13 13:52:15,095 INFO History entry added for user 123456: {'file': 'tmpetlejw16.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 13:52'}
+2025-05-13 13:56:06,860 ERROR Не удалось сохранить history.json: 
+2025-05-13 13:56:06,860 INFO History entry added for user 123456: {'file': 'tmpvuor6koh.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 13:56'}
+2025-05-13 13:58:21,974 ERROR Не удалось сохранить history.json: 
+2025-05-13 13:58:21,974 INFO History entry added for user 123456: {'file': 'tmpvv6xfb06.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 13:58'}
+2025-05-13 14:10:43,418 ERROR Не удалось сохранить history.json: 
+2025-05-13 14:10:43,419 INFO History entry added for user 123456: {'file': 'tmpoo7hzt5p.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 14:10'}
+2025-05-13 14:10:53,625 ERROR Не удалось сохранить history.json: 
+2025-05-13 14:10:53,626 INFO History entry added for user 123456: {'file': 'tmp990k_eic.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 14:10'}
+2025-05-13 14:12:42,327 ERROR Не удалось сохранить history.json: 
+2025-05-13 14:12:42,327 INFO History entry added for user 123456: {'file': 'tmphjyuxgzi.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 14:12'}
+2025-05-13 14:12:52,922 ERROR Не удалось сохранить history.json: 
+2025-05-13 14:12:52,922 INFO History entry added for user 123456: {'file': 'tmpu0y9qr1f.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 14:12'}
+2025-05-13 14:18:21,557 ERROR Не удалось сохранить history.json: 
+2025-05-13 14:18:21,557 INFO History entry added for user 123456: {'file': 'tmpls_576ib.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 14:18'}
+2025-05-13 14:20:57,936 ERROR Не удалось сохранить history.json: 
+2025-05-13 14:20:57,936 INFO History entry added for user 123456: {'file': 'tmp0qyj6ih9.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 14:20'}
+2025-05-13 14:27:01,275 ERROR Не удалось сохранить history.json: 
+2025-05-13 14:27:01,276 INFO History entry added for user 123456: {'file': 'tmpqt7g21ux.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 14:27'}
+2025-05-13 18:02:26,663 ERROR Не удалось сохранить history.json: 
+2025-05-13 18:02:26,663 INFO History entry added for user 123456: {'file': 'tmpxdsmuanh.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 18:02'}
+2025-05-13 18:03:31,849 ERROR Не удалось сохранить history.json: 
+2025-05-13 18:03:31,849 INFO History entry added for user 123456: {'file': 'tmpmtemcu6f.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 18:03'}
+2025-05-13 18:04:12,249 ERROR Не удалось сохранить history.json: 
+2025-05-13 18:04:12,250 INFO History entry added for user 123456: {'file': 'tmp27xa96gn.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 18:04'}
+2025-05-13 18:04:34,452 ERROR Не удалось сохранить history.json: 
+2025-05-13 18:04:34,452 INFO History entry added for user 123456: {'file': 'tmpjk5elts2.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 18:04'}
+2025-05-13 18:06:21,183 ERROR Не удалось сохранить history.json: 
+2025-05-13 18:06:21,183 INFO History entry added for user 123456: {'file': 'tmp4w5u12gm.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 18:06'}
+2025-05-13 18:10:16,564 INFO History entry added for user 174171680: {'file': 'transcript_2025-05-13_18-10.txt', 'type': 'audio', 'result': 'transcript', 'date': '2025-05-13 18:10'}
+2025-05-13 18:16:19,812 ERROR Не удалось сохранить history.json: 
+2025-05-13 18:16:19,812 INFO History entry added for user 123456: {'file': 'tmpm74oszpt.docx', 'type': 'word', 'result': 'protocol', 'date': '2025-05-13 18:16'}

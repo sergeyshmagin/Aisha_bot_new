@@ -8,10 +8,10 @@ BACKEND_URL = os.getenv("BACKEND_URL")  # например, http://localhost:800
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # Директория для хранения логов
-LOG_DIR = os.getenv('LOG_DIR', 'logs')
+LOG_DIR = os.getenv("LOG_DIR", "logs")
 
 # Уровень логирования
-LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # ID ассистента для GPT
 ASSISTANT_ID = "asst_dFIIdQIDNebZ4Qc5iHCE0Muq"

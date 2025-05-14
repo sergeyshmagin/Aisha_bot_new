@@ -3,6 +3,7 @@
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 from frontend_bot.services.gallery_data import GALLERY_STYLES
 
+
 def gallery_inline_keyboard():
     keyboard = InlineKeyboardMarkup()
     keyboard.row(
@@ -19,10 +20,17 @@ def gallery_inline_keyboard():
     )
     return keyboard
 
+
 def styles_inline_keyboard(selected_style=None):
     keyboard = InlineKeyboardMarkup(row_width=2)
     for style in GALLERY_STYLES:
-        text = f"✅ {style['emoji']} {style['name']}" if style['name'] == selected_style else f"{style['emoji']} {style['name']}"
-        keyboard.insert(InlineKeyboardButton(text, callback_data=f"style_{style['name']}"))
+        text = (
+            f"✅ {style['emoji']} {style['name']}"
+            if style["name"] == selected_style
+            else f"{style['emoji']} {style['name']}"
+        )
+        keyboard.insert(
+            InlineKeyboardButton(text, callback_data=f"style_{style['name']}")
+        )
     keyboard.add(InlineKeyboardButton("↩️ Скрыть стили", callback_data="style_hide"))
-    return keyboard 
+    return keyboard

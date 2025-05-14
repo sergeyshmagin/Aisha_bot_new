@@ -8,10 +8,10 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # Директория для хранения логов
-LOG_DIR = os.getenv('LOG_DIR', 'logs')
+LOG_DIR = os.getenv("LOG_DIR", "logs")
 
 # Уровень логирования
-LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # ID ассистента для GPT
 ASSISTANT_ID = os.getenv("ASSISTANT_ID", "asst_dFIIdQIDNebZ4Qc5iHCE0Muq")
@@ -19,8 +19,7 @@ ASSISTANT_ID = os.getenv("ASSISTANT_ID", "asst_dFIIdQIDNebZ4Qc5iHCE0Muq")
 
 # --- FAL.AI интеграция ---
 FAL_WEBHOOK_URL = os.getenv(
-    "FAL_WEBHOOK_URL",
-    "https://aibots.kz/api/avatar/status_update"
+    "FAL_WEBHOOK_URL", "https://aibots.kz/api/avatar/status_update"
 )
 FAL_MODE = os.getenv("FAL_MODE", "character")
 FAL_ITERATIONS = int(os.getenv("FAL_ITERATIONS", 500))
@@ -33,13 +32,9 @@ FAL_TRAINING_TEST_MODE = os.getenv("FAL_TRAINING_TEST_MODE", "false").lower() ==
 
 # --- Пути ---
 AVATAR_STORAGE_PATH = os.getenv("AVATAR_STORAGE_PATH", "storage/avatars")
-GALLERY_PATH = os.getenv(
-    "GALLERY_PATH", AVATAR_STORAGE_PATH + "/gallery"
-)
+GALLERY_PATH = os.getenv("GALLERY_PATH", AVATAR_STORAGE_PATH + "/gallery")
 TRANSCRIPTS_PATH = os.getenv("TRANSCRIPTS_PATH", "storage/transcripts")
-THUMBNAIL_PATH = os.getenv(
-    "THUMBNAIL_PATH", AVATAR_STORAGE_PATH + "/thumbnails"
-)
+THUMBNAIL_PATH = os.getenv("THUMBNAIL_PATH", AVATAR_STORAGE_PATH + "/thumbnails")
 
 # --- Лимиты ---
 AVATAR_MIN_PHOTOS = int(os.getenv("AVATAR_MIN_PHOTOS", 10))

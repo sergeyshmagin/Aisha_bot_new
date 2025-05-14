@@ -1,4 +1,5 @@
 """Клавиатура для меню работы с аудио в Telegram-боте Aisha."""
+
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 from functools import lru_cache
 
@@ -14,5 +15,5 @@ def audio_menu_keyboard() -> ReplyKeyboardMarkup:
     keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
     keyboard.add(KeyboardButton("Распознать запись встречи"))
     keyboard.add(KeyboardButton("Обработать текстовый транскрипт"))
-    keyboard.add(KeyboardButton("Назад"))
-    return keyboard 
+    keyboard.add(KeyboardButton("⬅️ Назад"))
+    return keyboard
