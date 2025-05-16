@@ -83,5 +83,5 @@ CACHE_ENABLED = os.getenv("CACHE_ENABLED", "true").lower() == "true"
 CACHE_TTL = int(os.getenv("CACHE_TTL", 3600))  # 1 час
 CACHE_MAX_SIZE = int(os.getenv("CACHE_MAX_SIZE", 1000))  # Максимальное количество элементов в кэше
 
-TRANSCRIBE_DIR = Path(os.getenv("TRANSCRIBE_DIR", STORAGE_DIR / "transcribe"))
+TRANSCRIBE_DIR = os.getenv("TRANSCRIBE_DIR", "transcribe")
 HISTORY_DIR = Path(os.getenv("HISTORY_DIR", STORAGE_DIR / "history"))

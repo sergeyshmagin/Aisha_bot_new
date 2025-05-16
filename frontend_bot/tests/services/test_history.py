@@ -89,4 +89,32 @@ async def test_clear_user_history(temp_dir):
     await save_history("123", test_history, temp_dir)
     await clear_user_history("123", temp_dir)
     history = await load_history("123", temp_dir)
-    assert history == [] 
+    assert history == []
+
+@pytest.mark.asyncio
+async def test_load_history_broken_json(tmp_path):
+    """Тест: если файл истории битый, возвращается пустой список."""
+    user_id = "broken"
+    history_path = await get_history_file_path(user_id, tmp_path)
+    await ensure_history_dirs(tmp_path)
+    # Записываем битый JSON
+    async with aiofiles.open(history_path, "w", encoding="utf-8") as f:
+        await f.write("{broken json}")
+    history = await load_history(user_id, tmp_path)
+    assert history == []
+
+@pytest.mark.asyncio
+async def test_save_history_raises_on_error(monkeypatch, tmp_path):
+    """Тест: save_history выбрасывает исключение при ошибке записи."""
+    user_id = "fail"
+    test_history = [{"file_name": "a", "file_path": "/a"}]
+    # Подменяем write_file, чтобы выбрасывал ошибку
+    from frontend_bot.shared import file_operations
+    orig_write_file = file_operations.AsyncFileManager.write_file
+    async def fail_write(*args, **kwargs):
+        raise IOError("fail write")
+    file_operations.AsyncFileManager.write_file = fail_write
+    with pytest.raises(IOError):
+        await save_history(user_id, test_history, tmp_path)
+    # Возвращаем оригинал
+    file_operations.AsyncFileManager.write_file = orig_write_file 

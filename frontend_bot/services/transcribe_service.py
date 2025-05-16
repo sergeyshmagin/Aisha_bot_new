@@ -36,33 +36,34 @@ async def ensure_transcribe_dirs(storage_dir: Path = STORAGE_DIR) -> None:
 async def save_transcribe_file(user_id: str, file_data: bytes, file_name: str, storage_dir: Path) -> Path:
     """Сохраняет файл для транскрибации."""
     await ensure_transcribe_dirs(storage_dir)
-    file_path = storage_dir / "transcribe" / str(user_id) / file_name
+    user_dir = storage_dir / TRANSCRIBE_DIR / str(user_id)
+    if not await AsyncFileManager.exists(user_dir):
+        await AsyncFileManager.ensure_dir(user_dir)
+    file_path = user_dir / file_name
     async with aiofiles.open(file_path, "wb") as f:
         await f.write(file_data)
     await add_history_entry(user_id, file_name, str(file_path), storage_dir)
     return file_path
 
-async def get_user_transcribe_files(user_id: str, storage_dir: Path = STORAGE_DIR) -> list[Path]:
+async def get_user_transcribe_files(user_id: str, storage_dir: Path) -> list[Path]:
     """Получает список файлов пользователя."""
     transcribe_dir = storage_dir / TRANSCRIBE_DIR
     user_dir = transcribe_dir / str(user_id)
     if not await AsyncFileManager.exists(user_dir):
         return []
-    
     files = await AsyncFileManager.list_dir(user_dir)
     return [user_dir / f for f in files]
 
-async def delete_transcribe_file(user_id: str, file_name: str, storage_dir: Path = STORAGE_DIR) -> bool:
+async def delete_transcribe_file(user_id: str, file_name: str, storage_dir: Path) -> bool:
     """Удаляет файл пользователя."""
     transcribe_dir = storage_dir / TRANSCRIBE_DIR
     file_path = transcribe_dir / str(user_id) / file_name
     if not await AsyncFileManager.exists(file_path):
         return False
-    
     await AsyncFileManager.safe_remove(file_path)
     return True
 
-async def cleanup_user_transcribe_files(user_id: str, storage_dir: Path = STORAGE_DIR) -> None:
+async def cleanup_user_transcribe_files(user_id: str, storage_dir: Path) -> None:
     """Очищает все файлы пользователя."""
     transcribe_dir = storage_dir / TRANSCRIBE_DIR
     user_dir = transcribe_dir / str(user_id)
