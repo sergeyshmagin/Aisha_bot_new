@@ -6,6 +6,7 @@ import os
 import aiofiles
 import io
 from telebot.types import Message
+from telebot.async_telebot import AsyncTeleBot
 from frontend_bot.handlers.general import bot
 from frontend_bot.services.gpt_assistant import format_transcript_with_gpt
 from frontend_bot.keyboards.reply import transcript_format_keyboard
@@ -21,7 +22,7 @@ from frontend_bot.GPT_Prompts.transcribe.prompts import (
     FULL_TRANSCRIPT_PROMPT,
 )
 from datetime import datetime
-from frontend_bot.services import user_transcripts_store
+from frontend_bot.services import transcript_cache
 from frontend_bot.services.transcript_utils import get_user_transcript_or_error, send_document_with_caption, send_transcript_error
 
 generate_word_protocol = generate_protocol_word
@@ -146,64 +147,61 @@ async def send_mom(message: Message) -> None:
         message: Сообщение от пользователя
     """
     logger.info(f"[HANDLER] send_mom, message.text={message.text!r}")
-    transcript = await get_user_transcript_or_error(bot, message, logger)
-    if not transcript:
-        return
     
     try:
-        f_ctx = aiofiles.open(transcript, "r", encoding="utf-8")
-        if hasattr(f_ctx, "__await__"):
-            f_ctx = await f_ctx
-        async with f_ctx as f:
-            transcript = await f.read()
-
-        if not transcript.strip():
-            await bot.send_chat_action(message.chat.id, "typing")
-            await bot.send_message(
-                message.chat.id,
-                "Транскрипт пустой. Пожалуйста, отправьте аудиофайл или текстовый файл ещё раз.",
-                reply_markup=transcript_format_keyboard(),
-            )
+        # Получаем транскрипт
+        transcript = await get_user_transcript_or_error(bot, message, logger)
+        if not transcript:
             return
-        
+            
         await bot.send_chat_action(message.chat.id, "typing")
         await bot.send_message(
             message.chat.id, "🤖 Формирую MoM (Minutes of Meeting) с помощью GPT..."
         )
+            
+        # Форматируем транскрипт через GPT
+        mom_text = await format_transcript_with_gpt(
+            transcript, custom_prompt=MOM_PROMPT, temperature=0.2, top_p=0.6
+        )
+        if not mom_text:
+            await bot.send_message(
+                message.chat.id,
+                "Не удалось сформировать протокол встречи. Пожалуйста, попробуйте позже.",
+                reply_markup=transcript_format_keyboard(),
+            )
+            return
+            
+        # Создаем временный файл
+        temp_file = f"mom_{message.from_user.id}_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.txt"
+        temp_path = os.path.join("storage", "temp", temp_file)
+        os.makedirs(os.path.dirname(temp_path), exist_ok=True)
         
+        # Сохраняем MoM во временный файл
+        async with aiofiles.open(temp_path, "w", encoding="utf-8") as f:
+            await f.write(mom_text)
+            
+        # Отправляем файл
+        async with aiofiles.open(temp_path, "rb") as f:
+            await bot.send_document(
+                message.chat.id,
+                (temp_file, f),
+                caption="📋 Протокол встречи (MoM)",
+                reply_markup=transcript_format_keyboard(),
+            )
+            
+        # Удаляем временный файл
         try:
-            mom_text = await format_transcript_with_gpt(
-                transcript, custom_prompt=MOM_PROMPT, temperature=0.2, top_p=0.6
-            )
-        except Exception as exc:
-            logger.exception(f"Ошибка при формировании MoM: {exc}")
-            await bot.send_chat_action(message.chat.id, "typing")
-            await bot.send_message(
-                message.chat.id,
-                "Что-то пошло не так при формировании MoM. Пожалуйста, попробуйте ещё раз.",
-                reply_markup=transcript_format_keyboard(),
-            )
-            return
-
-        if not mom_text.strip():
-            logger.error("GPT вернул пустой MoM!")
-            await bot.send_message(
-                message.chat.id,
-                "Что-то пошло не так при формировании MoM. Пожалуйста, попробуйте ещё раз.",
-                reply_markup=transcript_format_keyboard(),
-            )
-            return
-
-        filename = f"mom_{message.from_user.id}_{datetime.now().strftime('%Y-%m-%d_%H-%M')}.txt"
-        data = mom_text.encode("utf-8")
-        logger.info(f"[DEBUG] Sending file: {filename}, size: {len(data)} bytes")
-        
-        await send_document_with_caption(bot, message.chat.id, filename, data, "📝 MoM (Minutes of Meeting)", transcript_format_keyboard())
-        
-    except Exception as exc:
-        logger.exception(f"Ошибка при формировании MoM: {exc}")
-        await bot.send_chat_action(message.chat.id, "typing")
-        await send_transcript_error(bot, message, "Что-то пошло не так при формировании MoM. Пожалуйста, попробуйте ещё раз.", transcript_format_keyboard())
+            os.remove(temp_path)
+        except Exception as e:
+            logger.error(f"Ошибка при удалении временного файла: {e}")
+            
+    except Exception as e:
+        logger.exception(f"Ошибка при формировании MoM: {e}")
+        await bot.send_message(
+            message.chat.id,
+            "Произошла ошибка при формировании протокола встречи. Пожалуйста, попробуйте позже.",
+            reply_markup=transcript_format_keyboard(),
+        )
 
 
 @bot.message_handler(func=lambda m: m.text == "Сформировать ToDo-план с чеклистами")
