@@ -2,26 +2,22 @@
 # Перенести сюда handle_avatar_photo_upload, flush_single_photo_buffer,
 # flush_media_group
 # Импортировать необходимые зависимости и утилиты из avatar_manager,
-# state_manager, utils, config и т.д.
+# state_utils, utils, config и т.д.
 
 # ... переносить по аналогии ...
 
 import asyncio
 import logging
 from telebot.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-from frontend_bot.bot import bot
+from frontend_bot.bot_instance import bot
 from frontend_bot.services.avatar_manager import (
     load_avatar_fsm,
     add_photo_to_avatar,
-    validate_photo,
     save_avatar_fsm,
+    validate_photo,
 )
-from frontend_bot.services.state_manager import (
-    get_state,
-    get_current_avatar_id,
-    set_state,
-)
-from frontend_bot.shared.utils import delete_last_error_message
+from frontend_bot.services.state_utils import set_state, get_state, clear_state
+from frontend_bot.shared.utils import delete_last_error_message, send_photo_validation_error
 from frontend_bot.handlers.avatar.gallery import show_wizard_gallery
 from frontend_bot.config import AVATAR_MAX_PHOTOS
 from frontend_bot.handlers.avatar.state import (
@@ -33,10 +29,12 @@ from frontend_bot.handlers.avatar.state import (
     user_single_photo_timer,
     user_locks,
     user_media_group_msg_ids,
+    get_gallery_key,
+    get_media_group_key,
 )
+from frontend_bot.services.avatar_manager import get_current_avatar_id
 
 logger = logging.getLogger(__name__)
-
 
 @bot.message_handler(content_types=["photo"])
 async def handle_avatar_photo_upload(message: Message) -> None:
@@ -165,26 +163,7 @@ async def flush_single_photo_buffer(user_id, chat_id, avatar_id):
                         await bot.delete_message(chat_id, msg_id)
                     except Exception:
                         pass
-                    from io import BytesIO
-
-                    text = None
-                    if "Такое фото уже загружено" in result:
-                        text = (
-                            "⚠️ Фото не принято: Такое фото уже загружено.\n"
-                            "📸 Совет: используйте чёткие фото без фильтров."
-                        )
-                    else:
-                        text = (
-                            f"⚠️ Фото не принято: {result}\n"
-                            "📸 Совет: используйте чёткие фото без фильтров."
-                        )
-                    markup = InlineKeyboardMarkup()
-                    markup.add(
-                        InlineKeyboardButton("Понятно", callback_data="delete_error")
-                    )
-                    await bot.send_photo(
-                        chat_id, BytesIO(photo_bytes), caption=text, reply_markup=markup
-                    )
+                    await send_photo_validation_error(bot, chat_id, photo_bytes, result)
                     user_session[user_id]["last_error_msg"] = None
                     continue
                 await delete_last_error_message(bot, user_session, user_id, chat_id)
@@ -274,26 +253,7 @@ async def flush_media_group(user_id, media_group_id, chat_id, avatar_id):
                         await bot.delete_message(chat_id, msg_id)
                     except Exception:
                         pass
-                    from io import BytesIO
-
-                    text = None
-                    if "Такое фото уже загружено" in result:
-                        text = (
-                            "⚠️ Фото не принято: Такое фото уже загружено.\n"
-                            "📸 Совет: используйте чёткие фото без фильтров."
-                        )
-                    else:
-                        text = (
-                            f"⚠️ Фото не принято: {result}\n"
-                            "📸 Совет: используйте чёткие фото без фильтров."
-                        )
-                    markup = InlineKeyboardMarkup()
-                    markup.add(
-                        InlineKeyboardButton("Понятно", callback_data="delete_error")
-                    )
-                    await bot.send_photo(
-                        chat_id, BytesIO(photo_bytes), caption=text, reply_markup=markup
-                    )
+                    await send_photo_validation_error(bot, chat_id, photo_bytes, result)
                     user_session[user_id]["last_error_msg"] = None
                     continue
                 await delete_last_error_message(bot, user_session, user_id, chat_id)

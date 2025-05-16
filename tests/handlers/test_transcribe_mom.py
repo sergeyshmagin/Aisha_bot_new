@@ -31,30 +31,32 @@ from frontend_bot.services import user_transcripts_store
     "frontend_bot.services.file_utils.async_exists",
     new_callable=AsyncMock,
 )
-@patch(
-    "frontend_bot.services.gpt_assistant.format_transcript_with_gpt",
-    new_callable=AsyncMock,
-)
-@patch("aiofiles.open", new_callable=AsyncMock)
 async def test_send_mom_success(
-    mock_aiofiles_open: AsyncMock,
-    mock_format_transcript_with_gpt: AsyncMock,
     mock_async_exists: AsyncMock,
     mock_send_message: AsyncMock,
     mock_send_chat_action: AsyncMock,
     mock_send_document: AsyncMock,
     mock_load: AsyncMock,
     mock_save: AsyncMock,
+    mock_openai_client: AsyncMock,
     fake_user_id: int,
     fake_txt_file: str,
+    mock_aiofiles_open,
 ):
     """
     Проверяет успешную отправку MoM (Minutes of Meeting) как .txt-файла с
     корректным именем, содержимым и caption.
     """
     await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
     mock_async_exists.return_value = True
-    mock_format_transcript_with_gpt.return_value = "MoM для теста"
+    
+    # Настраиваем мок клиента GPT
+    mock_message = AsyncMock()
+    mock_message.content = [AsyncMock()]
+    mock_message.content[0].text.value = "MoM для теста"
+    mock_openai_client.beta.threads.messages.list.return_value = AsyncMock(data=[mock_message])
+    mock_openai_client.beta.threads.runs.retrieve.return_value = AsyncMock(status="completed")
 
     class AsyncFile:
         async def __aenter__(self):
@@ -113,28 +115,24 @@ async def test_send_mom_success(
     "frontend_bot.services.file_utils.async_exists",
     new_callable=AsyncMock,
 )
-@patch(
-    "frontend_bot.services.gpt_assistant.format_transcript_with_gpt",
-    new_callable=AsyncMock,
-)
-@patch("aiofiles.open", new_callable=AsyncMock)
 async def test_send_mom_no_file(
-    mock_aiofiles_open: AsyncMock,
-    mock_format_transcript_with_gpt: AsyncMock,
     mock_async_exists: AsyncMock,
     mock_send_message: AsyncMock,
     mock_send_chat_action: AsyncMock,
     mock_send_document: AsyncMock,
     mock_load: AsyncMock,
     mock_save: AsyncMock,
+    mock_openai_client: AsyncMock,
     fake_user_id: int,
     fake_txt_file: str,
+    mock_aiofiles_open,
 ):
     """
     Проверяет, что если файла транскрипта нет, бот отправляет корректное
     сообщение об ошибке.
     """
     await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    mock_aiofiles_open.set_content(fake_txt_file, "")
     mock_async_exists.return_value = False
     message = type(
         "Msg",
@@ -168,29 +166,25 @@ async def test_send_mom_no_file(
     "frontend_bot.services.file_utils.async_exists",
     new_callable=AsyncMock,
 )
-@patch(
-    "frontend_bot.services.gpt_assistant.format_transcript_with_gpt",
-    new_callable=AsyncMock,
-)
-@patch("aiofiles.open", new_callable=AsyncMock)
 async def test_send_mom_gpt_error(
-    mock_aiofiles_open: AsyncMock,
-    mock_format_transcript_with_gpt: AsyncMock,
     mock_async_exists: AsyncMock,
     mock_send_message: AsyncMock,
     mock_send_chat_action: AsyncMock,
     mock_send_document: AsyncMock,
     mock_load: AsyncMock,
     mock_save: AsyncMock,
+    mock_openai_client: AsyncMock,
     fake_user_id: int,
     fake_txt_file: str,
+    mock_aiofiles_open,
 ):
     """
     Проверяет, что при ошибке GPT бот отправляет корректное сообщение об ошибке.
     """
     await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
     mock_async_exists.return_value = True
-    mock_format_transcript_with_gpt.side_effect = Exception("GPT error")
+    mock_openai_client.beta.threads.runs.retrieve.side_effect = Exception("GPT error")
 
     class AsyncFile:
         async def __aenter__(self):
@@ -235,28 +229,24 @@ async def test_send_mom_gpt_error(
     "frontend_bot.services.file_utils.async_exists",
     new_callable=AsyncMock,
 )
-@patch(
-    "frontend_bot.services.gpt_assistant.format_transcript_with_gpt",
-    new_callable=AsyncMock,
-)
-@patch("aiofiles.open", new_callable=AsyncMock)
 async def test_send_mom_empty_transcript(
-    mock_aiofiles_open: AsyncMock,
-    mock_format_transcript_with_gpt: AsyncMock,
     mock_async_exists: AsyncMock,
     mock_send_message: AsyncMock,
     mock_send_chat_action: AsyncMock,
     mock_send_document: AsyncMock,
     mock_load: AsyncMock,
     mock_save: AsyncMock,
+    mock_openai_client: AsyncMock,
     fake_user_id: int,
     fake_txt_file: str,
+    mock_aiofiles_open,
 ):
     """
     Проверяет обработку случая, когда транскрипт пустой (файл есть, но пустой) для MoM.
     Ожидается user-friendly сообщение об ошибке.
     """
     await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    mock_aiofiles_open.set_content(fake_txt_file, "")
     mock_async_exists.return_value = True
 
     class AsyncFile:
@@ -270,7 +260,6 @@ async def test_send_mom_empty_transcript(
             return ""
 
     mock_aiofiles_open.return_value = AsyncFile()
-    mock_format_transcript_with_gpt.return_value = ""
     message = type(
         "Msg",
         (),
@@ -303,28 +292,24 @@ async def test_send_mom_empty_transcript(
     "frontend_bot.services.file_utils.async_exists",
     new_callable=AsyncMock,
 )
-@patch(
-    "frontend_bot.services.gpt_assistant.format_transcript_with_gpt",
-    new_callable=AsyncMock,
-)
-@patch("aiofiles.open", new_callable=AsyncMock)
 async def test_send_mom_empty_gpt(
-    mock_aiofiles_open: AsyncMock,
-    mock_format_transcript_with_gpt: AsyncMock,
     mock_async_exists: AsyncMock,
     mock_send_message: AsyncMock,
     mock_send_chat_action: AsyncMock,
     mock_send_document: AsyncMock,
     mock_load: AsyncMock,
     mock_save: AsyncMock,
+    mock_openai_client: AsyncMock,
     fake_user_id: int,
     fake_txt_file: str,
+    mock_aiofiles_open,
 ):
     """
     Проверяет обработку случая, когда GPT возвращает пустую строку для MoM.
     Ожидается user-friendly сообщение об ошибке.
     """
     await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
     mock_async_exists.return_value = True
 
     class AsyncFile:
@@ -338,7 +323,14 @@ async def test_send_mom_empty_gpt(
             return "Test transcript content"
 
     mock_aiofiles_open.return_value = AsyncFile()
-    mock_format_transcript_with_gpt.return_value = ""
+    
+    # Настраиваем мок клиента GPT для возврата пустого ответа
+    mock_message = AsyncMock()
+    mock_message.content = [AsyncMock()]
+    mock_message.content[0].text.value = ""
+    mock_openai_client.beta.threads.messages.list.return_value = AsyncMock(data=[mock_message])
+    mock_openai_client.beta.threads.runs.retrieve.return_value = AsyncMock(status="completed")
+    
     message = type(
         "Msg",
         (),

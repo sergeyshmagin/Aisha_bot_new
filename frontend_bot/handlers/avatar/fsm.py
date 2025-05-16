@@ -1,4 +1,6 @@
-# Glue-код FSM для аватаров
+"""
+Модуль FSM для создания аватаров.
+"""
 
 # ... импортировать обработчики явно по мере декомпозиции ...
 
@@ -6,37 +8,26 @@ import logging
 import asyncio
 from uuid import uuid4
 from telebot.types import Message
-from frontend_bot.bot import bot
+from frontend_bot.bot_instance import bot
 from frontend_bot.services.avatar_manager import (
     init_avatar_fsm,
     load_avatar_fsm,
-)
-from frontend_bot.services.state_manager import (
-    set_state,
-    get_state,
-    set_current_avatar_id,
     get_current_avatar_id,
-    clear_state,
+    set_current_avatar_id,
 )
+from frontend_bot.services.state_utils import set_state, get_state, clear_state
 from frontend_bot.texts.avatar.texts import PHOTO_REQUIREMENTS_TEXT
 from frontend_bot.keyboards.common import avatar_type_keyboard
 from frontend_bot.texts.common import PROMPT_TYPE_MENU
-from frontend_bot.shared.utils import clear_old_wizard_messages
+from frontend_bot.shared.utils import clear_old_wizard_messages, send_and_track
 from frontend_bot.config import AVATAR_MIN_PHOTOS, AVATAR_MAX_PHOTOS
-
-# from frontend_bot.handlers.avatar.state import user_session, user_gallery  # TODO: заменить на реальный импорт
-
-# Временно для совместимости:
-user_session = {}
-user_gallery = {}
+from frontend_bot.handlers.avatar.state import user_session, user_gallery
 
 logger = logging.getLogger(__name__)
 
-
-async def send_and_track(user_id, chat_id, *args, **kwargs):
-    msg = await bot.send_message(chat_id, *args, **kwargs)
-    user_session[user_id]["wizard_message_ids"].append(msg.message_id)
-    return msg
+def get_gallery_key(user_id: int, avatar_id: str) -> str:
+    """Получает ключ для галереи."""
+    return f"{user_id}:{avatar_id}"
 
 
 async def start_avatar_wizard(message: Message):
@@ -52,13 +43,15 @@ async def start_avatar_wizard(message: Message):
         "uploaded_photo_msgs": [],
         "last_error_msg": None,
         "last_info_msg_id": None,
+        "edit_mode": "create",
     }
-    user_gallery[(user_id, avatar_id)] = {"index": 0, "last_switch": 0}
+    gallery_key = get_gallery_key(user_id, avatar_id)
+    user_gallery[gallery_key] = {"index": 0, "last_switch": 0}
     await init_avatar_fsm(user_id, avatar_id, class_name="")
     await set_state(user_id, "avatar_photo_upload")
     set_current_avatar_id(user_id, avatar_id)
     requirements = PHOTO_REQUIREMENTS_TEXT
-    await send_and_track(user_id, message.chat.id, requirements, parse_mode="HTML")
+    await send_and_track(bot, user_session, user_id, message.chat.id, requirements, parse_mode="HTML")
     state = await get_state(user_id)
     logger.info(
         f"[DEBUG] После запуска визарда: user_id={user_id}, "
@@ -70,7 +63,7 @@ async def start_avatar_wizard(message: Message):
 def reset_avatar_fsm(user_id):
     user_session.pop(user_id, None)
     for key in list(user_gallery.keys()):
-        if key[0] == user_id:
+        if key.startswith(f"{user_id}:"):
             user_gallery.pop(key, None)
     asyncio.create_task(clear_state(user_id))
     set_current_avatar_id(user_id, None)
@@ -81,8 +74,7 @@ async def show_type_menu(chat_id, user_id):
         bot, user_session, chat_id, user_id, keep_msg_id=None
     )
     msg = await send_and_track(
-        user_id,
-        chat_id,
+        bot, user_session, user_id, chat_id,
         PROMPT_TYPE_MENU,
         reply_markup=avatar_type_keyboard,
     )

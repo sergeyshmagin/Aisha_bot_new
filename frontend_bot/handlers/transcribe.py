@@ -11,11 +11,7 @@ from frontend_bot.utils.logger import get_logger
 from frontend_bot.keyboards.reply import (
     transcript_format_keyboard,
 )
-from frontend_bot.services.state_manager import (
-    set_state,
-    get_state,
-    clear_state,
-)
+from frontend_bot.services.state_utils import set_state, get_state, clear_state
 from frontend_bot.services.file_utils import (
     async_remove,
     async_makedirs,
@@ -27,7 +23,7 @@ from frontend_bot.GPT_Prompts.transcribe.prompts import (
 )
 import asyncio
 from frontend_bot.services.word_generator import generate_protocol_word
-from frontend_bot.services.history import add_history_entry
+from frontend_bot.services.history import add_history_entry, STORAGE_DIR
 from frontend_bot.services import user_transcripts_store
 from datetime import datetime
 
@@ -164,7 +160,7 @@ async def send_meeting_protocol(message: Message):
                 reply_markup=transcript_format_keyboard(),
             )
         await async_remove(temp_filename)
-        await add_history_entry(str(user_id), temp_filename, "word", "protocol")
+        await add_history_entry(str(user_id), temp_filename, "word")
     except Exception:
         logger.exception("Ошибка при формировании протокола")
         await bot.send_message(
@@ -179,3 +175,15 @@ async def send_meeting_protocol(message: Message):
 async def retry_meeting_protocol(message: Message):
     # Просто повторяем вызов генерации протокола
     await send_meeting_protocol(message)
+
+
+async def handle_transcribe_file(message: Message, file_data: bytes, file_name: str) -> None:
+    """Обрабатывает файл для транскрибации."""
+    user_id = str(message.from_user.id)
+    file_path = await save_transcribe_file(user_id, file_data, file_name, STORAGE_DIR)
+    await add_history_entry(user_id, file_name, str(file_path), STORAGE_DIR)
+    await bot.send_message(
+        message.chat.id,
+        f"Файл {file_name} сохранен и добавлен в историю.",
+        reply_markup=transcribe_keyboard()
+    )

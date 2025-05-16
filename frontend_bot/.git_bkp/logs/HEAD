@@ -1,9 +1,0 @@
-0000000000000000000000000000000000000000 e63f3a250a363165c08f828f5cf9194de1b0b5dd Шмагин Сергей <sergey.shmagin@gmail.com> 1745414757 +0500	commit (initial): Initial commit
-e63f3a250a363165c08f828f5cf9194de1b0b5dd 0000000000000000000000000000000000000000 Шмагин Сергей <sergey.shmagin@gmail.com> 1745414910 +0500	Branch: renamed refs/heads/master to refs/heads/main
-0000000000000000000000000000000000000000 e63f3a250a363165c08f828f5cf9194de1b0b5dd Шмагин Сергей <sergey.shmagin@gmail.com> 1745414910 +0500	Branch: renamed refs/heads/master to refs/heads/main
-e63f3a250a363165c08f828f5cf9194de1b0b5dd 47f33f6bf4e6d6418dadaba5a5d3e707f5961366 Шмагин Сергей <sergey.shmagin@gmail.com> 1745474673 +0500	commit: audio transcription feature added
-47f33f6bf4e6d6418dadaba5a5d3e707f5961366 f58250c7a0cfeee8966712b3dabe329c65045d27 Шмагин Сергей <sergey.shmagin@gmail.com> 1745502351 +0500	commit: transcription finished
-f58250c7a0cfeee8966712b3dabe329c65045d27 29221705f6da23a1cb9052c328299916d1444cbe Шмагин Сергей <sergey.shmagin@gmail.com> 1745557191 +0500	commit: transcript checks added on audio and text files before upload
-29221705f6da23a1cb9052c328299916d1444cbe 29221705f6da23a1cb9052c328299916d1444cbe Шмагин Сергей <sergey.shmagin@gmail.com> 1745559721 +0500	checkout: moving from main to feature/photo_restoration
-29221705f6da23a1cb9052c328299916d1444cbe a90ecce3311ebc4ca469e12b8e48a4fa4f3582f4 Шмагин Сергей <sergey.shmagin@gmail.com> 1745576702 +0500	commit: added photo menu
-a90ecce3311ebc4ca469e12b8e48a4fa4f3582f4 5b7467067f55910908874a8286e47343def54272 Шмагин Сергей <sergey.shmagin@gmail.com> 1745586475 +0500	commit: v1

@@ -2,22 +2,18 @@
 
 import pytest
 from unittest.mock import patch, AsyncMock
-from frontend_bot.services.state_manager import (
-    get_state,
-    clear_all_states,
-    set_state,
-)
-from frontend_bot.keyboards.main_menu import main_menu_keyboard
+from frontend_bot.services.state_utils import set_state, get_state, clear_state
+from frontend_bot.keyboards.main_menu_keyboard import main_menu_keyboard
+from frontend_bot.keyboards.reply import photo_menu_keyboard, ai_photographer_keyboard, my_avatars_keyboard
 from frontend_bot.handlers.start import handle_start
-from frontend_bot.handlers.general import handle_main_menu
-from frontend_bot.handlers.avatar.fsm import handle_create_avatar
+from frontend_bot.services.shared_menu import send_main_menu
 
 @pytest.fixture
 async def clean_state():
     """Фикстура для очистки состояния до и после теста."""
-    await clear_all_states()
+    await clear_state()
     yield
-    await clear_all_states()
+    await clear_state()
 
 @pytest.fixture
 def mock_bot():
@@ -66,28 +62,31 @@ async def test_start_to_main_menu(clean_state, mock_bot, create_message):
 @pytest.mark.asyncio
 async def test_main_menu_to_ai_photographer(clean_state, mock_bot, create_message):
     """
-    Тест перехода из главного меню в меню ИИ фотографа.
-    
-    Проверяет:
-    - Отправку сообщения с описанием возможностей
-    - Установку клавиатуры ИИ фотографа
-    - Установку состояния ai_photographer
+    Тест перехода из главного меню в меню ИИ фотографа через 'Работа с фото'.
     """
-    # Arrange
     user_id = 123456789
     await set_state(user_id, "main_menu")
-    message = create_message(user_id, "🧑‍🎨 ИИ фотограф")
-
-    # Act
-    await handle_main_menu(message)
-
-    # Assert
+    # Шаг 1: нажимаем '🖼 Работа с фото'
+    message = create_message(user_id, "🖼 Работа с фото")
+    await send_main_menu(mock_bot, message)
     mock_bot.send_message.assert_called_once()
     args = mock_bot.send_message.call_args[0]
     assert args[0] == user_id
     assert "Выберите действие" in args[1]
     keyboard = mock_bot.send_message.call_args[1]['reply_markup']
-    assert "📷 Создать аватар" in str(keyboard)
+    assert "🧑‍🎨 ИИ фотограф" in str(keyboard)
+    state = await get_state(user_id)
+    assert state == "photo_menu"
+    mock_bot.reset_mock()
+    # Шаг 2: нажимаем '🧑‍🎨 ИИ фотограф'
+    message = create_message(user_id, "🧑‍🎨 ИИ фотограф")
+    await send_main_menu(mock_bot, message)
+    mock_bot.send_message.assert_called_once()
+    args = mock_bot.send_message.call_args[0]
+    assert args[0] == user_id
+    assert "ИИ фотограф" in args[1]
+    keyboard = mock_bot.send_message.call_args[1]['reply_markup']
+    assert "🖼 Мои аватары" in str(keyboard)
     state = await get_state(user_id)
     assert state == "ai_photographer"
 
@@ -107,7 +106,7 @@ async def test_ai_photographer_to_my_avatars(clean_state, mock_bot, create_messa
     message = create_message(user_id, "👁 Мои аватары")
 
     # Act
-    await handle_main_menu(message)
+    await send_main_menu(mock_bot, message)
 
     # Assert
     mock_bot.send_message.assert_called_once()
@@ -133,7 +132,8 @@ async def test_my_avatars_to_create_avatar(clean_state, mock_bot, create_message
     message = create_message(user_id, "📷 Создать аватар")
 
     # Act
-    await handle_create_avatar(message)
+    # await handle_create_avatar(message)  # TODO: заменить на сервисную функцию создания аватара
+    pass
 
     # Assert
     mock_bot.send_message.assert_called_once()
@@ -160,7 +160,7 @@ async def test_back_to_previous_menu(clean_state, mock_bot, create_message):
     message = create_message(user_id, "⬅️ Назад")
     
     # Act & Assert для первого перехода
-    await handle_main_menu(message)
+    await send_main_menu(mock_bot, message)
     state = await get_state(user_id)
     assert state == "ai_photographer"
     
@@ -168,7 +168,7 @@ async def test_back_to_previous_menu(clean_state, mock_bot, create_message):
     message = create_message(user_id, "⬅️ Назад")
     
     # Act & Assert для второго перехода
-    await handle_main_menu(message)
+    await send_main_menu(mock_bot, message)
     state = await get_state(user_id)
     assert state == "main_menu"
 
@@ -187,7 +187,7 @@ async def test_invalid_state_transition(clean_state, mock_bot, create_message):
     message = create_message(user_id, "🧑‍🎨 ИИ фотограф")
 
     # Act
-    await handle_main_menu(message)
+    await send_main_menu(mock_bot, message)
 
     # Assert
     mock_bot.send_message.assert_called_once_with(

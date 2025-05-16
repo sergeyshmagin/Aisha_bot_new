@@ -6,9 +6,27 @@
 
 from telebot.types import ReplyKeyboardMarkup, KeyboardButton
 from functools import lru_cache
+from typing import List, Optional, Tuple
 
 
-@lru_cache(maxsize=1)
+def create_keyboard_with_back(buttons: Tuple[str, ...], row_width: int = 1) -> ReplyKeyboardMarkup:
+    """
+    Создает клавиатуру с кнопками и кнопкой "Назад".
+    
+    Args:
+        buttons: Кортеж текстов кнопок
+        row_width: Количество кнопок в ряду
+        
+    Returns:
+        ReplyKeyboardMarkup: Клавиатура с кнопками
+    """
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=row_width)
+    for button in buttons:
+        keyboard.add(KeyboardButton(button))
+    keyboard.add(KeyboardButton("⬅️ Назад"))
+    return keyboard
+
+
 def error_keyboard() -> ReplyKeyboardMarkup:
     """
     Возвращает клавиатуру для ошибок с кнопками Повторить и Главное меню.
@@ -16,13 +34,9 @@ def error_keyboard() -> ReplyKeyboardMarkup:
     Returns:
         ReplyKeyboardMarkup: Клавиатура ошибок.
     """
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(KeyboardButton("Повторить"))
-    keyboard.add(KeyboardButton("Главное меню"))
-    return keyboard
+    return create_keyboard_with_back(("Повторить", "Главное меню"))
 
 
-@lru_cache(maxsize=1)
 def back_keyboard() -> ReplyKeyboardMarkup:
     """
     Возвращает клавиатуру с кнопкой Назад.
@@ -30,12 +44,9 @@ def back_keyboard() -> ReplyKeyboardMarkup:
     Returns:
         ReplyKeyboardMarkup: Клавиатура с кнопкой Назад.
     """
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(KeyboardButton("⬅️ Назад"))
-    return keyboard
+    return create_keyboard_with_back(())
 
 
-@lru_cache(maxsize=1)
 def transcript_format_keyboard() -> ReplyKeyboardMarkup:
     """
     Возвращает клавиатуру выбора формата транскрипта.
@@ -43,18 +54,17 @@ def transcript_format_keyboard() -> ReplyKeyboardMarkup:
     Returns:
         ReplyKeyboardMarkup: Клавиатура выбора формата транскрипта.
     """
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(KeyboardButton("Полный официальный транскрипт"))
-    keyboard.add(KeyboardButton("Сводка на 1 страницу"))
-    keyboard.add(KeyboardButton("Сформировать MoM"))
-    keyboard.add(KeyboardButton("Сформировать ToDo-план с чеклистами"))
-    keyboard.add(KeyboardButton("Протокол заседания (Word)"))
-    keyboard.add(KeyboardButton("ℹ️ О форматах"))
-    keyboard.add(KeyboardButton("⬅️ Назад"))
-    return keyboard
+    buttons = (
+        "Полный официальный транскрипт",
+        "Сводка на 1 страницу",
+        "Сформировать MoM",
+        "Сформировать ToDo-план с чеклистами",
+        "Протокол заседания (Word)",
+        "ℹ️ О форматах"
+    )
+    return create_keyboard_with_back(buttons)
 
 
-@lru_cache(maxsize=1)
 def history_keyboard() -> ReplyKeyboardMarkup:
     """
     Возвращает клавиатуру для истории файлов пользователя.
@@ -62,13 +72,9 @@ def history_keyboard() -> ReplyKeyboardMarkup:
     Returns:
         ReplyKeyboardMarkup: Клавиатура истории файлов.
     """
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(KeyboardButton("🗑 Удалить мой файл"))
-    keyboard.add(KeyboardButton("⬅️ Назад"))
-    return keyboard
+    return create_keyboard_with_back(("🗑 Удалить мой файл",))
 
 
-@lru_cache(maxsize=1)
 def business_assistant_keyboard() -> ReplyKeyboardMarkup:
     """
     Возвращает клавиатуру для меню 'Бизнес-ассистент'.
@@ -76,65 +82,96 @@ def business_assistant_keyboard() -> ReplyKeyboardMarkup:
     Returns:
         ReplyKeyboardMarkup: Клавиатура бизнес-ассистента.
     """
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(KeyboardButton("🎤 Аудио"))
-    keyboard.add(KeyboardButton("📄 Текстовый транскрипт"))
-    keyboard.add(KeyboardButton("⬅️ Назад"))
-    return keyboard
+    return create_keyboard_with_back(("🎤 Аудио", "📄 Текстовый транскрипт"))
 
 
-@lru_cache(maxsize=1)
 def photo_menu_keyboard() -> ReplyKeyboardMarkup:
     """
     Клавиатура для меню 'Работа с фото'.
     """
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(KeyboardButton("✨ Улучшить фото"))
-    keyboard.add(KeyboardButton("🧑‍🎨 ИИ фотограф"))
-    keyboard.add(KeyboardButton("⬅️ Назад"))
-    return keyboard
+    return create_keyboard_with_back(("✨ Улучшить фото", "🧑‍🎨 ИИ фотограф"))
 
 
-@lru_cache(maxsize=1)
 def ai_photographer_keyboard() -> ReplyKeyboardMarkup:
     """
     Клавиатура для меню 'ИИ фотограф'.
     """
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(KeyboardButton("🖼 Мои аватары"))
-    keyboard.add(KeyboardButton("🖼 Образы"))
-    keyboard.add(KeyboardButton("⬅️ Назад"))
-    return keyboard
+    return create_keyboard_with_back(("🖼 Мои аватары", "🖼 Образы"))
 
 
-@lru_cache(maxsize=1)
 def my_avatars_keyboard() -> ReplyKeyboardMarkup:
     """
     Клавиатура для меню 'Мои аватары'.
     """
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(KeyboardButton("📷 Создать аватар"))
-    keyboard.add(KeyboardButton("👁 Просмотреть аватары"))
-    keyboard.add(KeyboardButton("⬅️ Назад"))
-    return keyboard
+    return create_keyboard_with_back(("📷 Создать аватар", "👁 Просмотреть аватары"))
 
 
-@lru_cache(maxsize=1)
 def avatar_menu_keyboard() -> ReplyKeyboardMarkup:
     """Клавиатура для подменю 'Аватары'."""
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
+    keyboard = ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     keyboard.row(KeyboardButton("🧑‍🎨 Создать аватар"), KeyboardButton("↩️ В меню"))
     return keyboard
 
 
 def build_avatars_keyboard(avatars):
-    keyboard = ReplyKeyboardMarkup(resize_keyboard=True)
-    keyboard.add(KeyboardButton("📷 Создать аватар"))
+    buttons = ["📷 Создать аватар"]
     for avatar in avatars:
         if not isinstance(avatar, dict):
             continue
         title = avatar.get("title")
         if title:
-            keyboard.add(KeyboardButton(str(title)))
-    keyboard.add(KeyboardButton("⬅️ Назад"))
+            buttons.append(str(title))
+    return create_keyboard_with_back(tuple(buttons))
+
+
+def avatar_photo_keyboard():
+    """Клавиатура для загрузки фото аватара."""
+    return create_keyboard_with_back(("Далее", "Отмена"))
+
+
+def avatar_gender_keyboard():
+    """Клавиатура для выбора пола аватара."""
+    keyboard = ReplyKeyboardMarkup(
+        row_width=2,
+        resize_keyboard=True,
+        one_time_keyboard=False
+    )
+    keyboard.add(
+        KeyboardButton("Мужской"),
+        KeyboardButton("Женский")
+    )
+    keyboard.add(KeyboardButton("Отмена"))
     return keyboard
+
+
+def avatar_name_keyboard():
+    """Клавиатура для ввода имени аватара."""
+    return create_keyboard_with_back(("Отмена",))
+
+
+def avatar_confirm_keyboard():
+    """Клавиатура для подтверждения создания аватара."""
+    keyboard = ReplyKeyboardMarkup(
+        row_width=2,
+        resize_keyboard=True,
+        one_time_keyboard=False
+    )
+    keyboard.add(
+        KeyboardButton("Подтвердить"),
+        KeyboardButton("Отмена")
+    )
+    return keyboard
+
+
+def photo_enhance_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Клавиатура для сценария улучшения фото.
+    """
+    return create_keyboard_with_back(("✨ Улучшить фото",))
+
+
+def transcribe_keyboard() -> ReplyKeyboardMarkup:
+    """
+    Клавиатура для сценария транскрибации.
+    """
+    return create_keyboard_with_back(("Транскрибировать",))

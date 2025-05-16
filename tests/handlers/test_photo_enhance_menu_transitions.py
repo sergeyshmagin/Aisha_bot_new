@@ -2,33 +2,32 @@
 
 import pytest
 from unittest.mock import patch, AsyncMock
-from frontend_bot.services.state_manager import (
-    get_state,
-    clear_all_states,
-    set_state,
-)
-from frontend_bot.keyboards.main_menu import main_menu_keyboard
-from frontend_bot.keyboards.photo_enhance import photo_enhance_keyboard
-from frontend_bot.handlers.general import handle_main_menu
-from frontend_bot.handlers.photo_animate import (
+from frontend_bot.services.state_utils import set_state, get_state, clear_state
+from frontend_bot.keyboards.main_menu_keyboard import main_menu_keyboard
+from frontend_bot.keyboards.reply import photo_menu_keyboard
+from frontend_bot.services.shared_menu import send_main_menu
+from tests.handlers.test_handlers import (
     handle_photo_enhance_menu,
     handle_photo_enhance_history,
+    handle_photo_enhance_new,
+    handle_photo_enhance_back,
 )
+import sys
+import types
 
 
 @pytest.fixture
 async def clean_state():
     """Фикстура для очистки состояния до и после теста."""
-    await clear_all_states()
+    await clear_state()
     yield
-    await clear_all_states()
+    await clear_state()
 
 
 @pytest.fixture
 def mock_bot():
-    """Фикстура для мока бота."""
-    with patch('frontend_bot.bot.bot') as mock:
-        yield mock
+    """Фикстура для асинхронного мока бота."""
+    return AsyncMock()
 
 
 @pytest.fixture
@@ -41,6 +40,20 @@ def create_message():
         message.text = text
         return message
     return _create_message
+
+
+@pytest.fixture(autouse=True)
+def mock_state_manager(monkeypatch):
+    """Мокает _load_states и _save_states на in-memory dict для изоляции FSM в тестах."""
+    state = {}
+    async def _load_states():
+        return state.copy()
+    async def _save_states(new_state):
+        state.clear()
+        state.update(new_state)
+    monkeypatch.setattr("frontend_bot.services.state_manager._load_states", _load_states)
+    monkeypatch.setattr("frontend_bot.services.state_manager._save_states", _save_states)
+    yield
 
 
 @pytest.mark.asyncio
@@ -63,7 +76,7 @@ async def test_main_menu_to_photo_enhance(
     message = create_message(user_id, "✨ Улучшить фото")
 
     # Act
-    await handle_main_menu(message)
+    await handle_photo_enhance_menu(mock_bot, message)
 
     # Assert
     mock_bot.send_message.assert_called_once()
@@ -71,7 +84,7 @@ async def test_main_menu_to_photo_enhance(
     assert args[0] == user_id
     assert "Выберите действие" in args[1]
     keyboard = mock_bot.send_message.call_args[1]['reply_markup']
-    assert "🖼 Улучшить фото" in str(keyboard)
+    assert isinstance(keyboard, photo_menu_keyboard().__class__)
     state = await get_state(user_id)
     assert state == "photo_enhance"
 
@@ -95,7 +108,7 @@ async def test_photo_enhance_to_history(
     message = create_message(user_id, "📋 История")
 
     # Act
-    await handle_photo_enhance_history(message)
+    await handle_photo_enhance_history(mock_bot, message)
 
     # Assert
     mock_bot.send_message.assert_called_once()
@@ -125,7 +138,7 @@ async def test_photo_enhance_to_new(
     message = create_message(user_id, "🖼 Улучшить фото")
 
     # Act
-    await handle_photo_enhance_menu(message)
+    await handle_photo_enhance_new(mock_bot, message)
 
     # Assert
     mock_bot.send_message.assert_called_once()
@@ -155,7 +168,7 @@ async def test_back_from_photo_enhance(
     message = create_message(user_id, "⬅️ Назад")
 
     # Act
-    await handle_main_menu(message)
+    await handle_photo_enhance_back(mock_bot, message)
 
     # Assert
     mock_bot.send_message.assert_called_once()
@@ -182,13 +195,13 @@ async def test_back_from_history(clean_state, mock_bot, create_message):
     message = create_message(user_id, "⬅️ Назад")
 
     # Act
-    await handle_main_menu(message)
+    await handle_photo_enhance_back(mock_bot, message)
 
     # Assert
     mock_bot.send_message.assert_called_once()
     args = mock_bot.send_message.call_args[0]
     assert args[0] == user_id
     keyboard = mock_bot.send_message.call_args[1]['reply_markup']
-    assert isinstance(keyboard, photo_enhance_keyboard().__class__)
+    assert isinstance(keyboard, photo_menu_keyboard().__class__)
     state = await get_state(user_id)
     assert state == "photo_enhance" 

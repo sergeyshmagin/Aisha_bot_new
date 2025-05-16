@@ -3,7 +3,7 @@
 # handle_gallery_prev, handle_gallery_next, handle_gallery_delete,
 # handle_gallery_add, handle_gallery_continue, handle_show_photos
 # Импортировать необходимые зависимости и утилиты из avatar_manager,
-# state_manager, utils, config и т.д.
+# state_utils, utils, config и т.д.
 
 import logging
 from telebot.types import (
@@ -14,7 +14,7 @@ from telebot.types import (
 from frontend_bot.config import AVATAR_MIN_PHOTOS
 from frontend_bot.shared.progress import get_progressbar
 from frontend_bot.handlers.avatar.state import user_session, user_gallery
-from frontend_bot.bot import bot
+from frontend_bot.bot_instance import bot
 import aiofiles
 from io import BytesIO
 import time
@@ -32,12 +32,12 @@ from frontend_bot.services.avatar_manager import (
     update_avatar_in_index,
     remove_avatar_from_index,
     update_avatar_fsm,
-)
-from frontend_bot.services.state_manager import (
     get_current_avatar_id,
-    set_state,
-    fsm_states,
+    set_current_avatar_id,
+    clear_avatar_fsm,
+    get_avatars_index_path,
 )
+from frontend_bot.services.state_utils import set_state, get_state, clear_state
 from frontend_bot.utils.validators import validate_user_avatar
 from frontend_bot.keyboards.common import get_gallery_keyboard
 from frontend_bot.handlers.avatar.fsm import show_type_menu, start_avatar_wizard
@@ -48,8 +48,13 @@ from frontend_bot.keyboards.reply import (
 )
 import os
 from datetime import datetime
+import json
 
 logger = logging.getLogger(__name__)
+
+def get_gallery_key(user_id: int, avatar_id: str) -> str:
+    """Получает ключ для галереи."""
+    return f"{user_id}:{avatar_id}"
 
 # Клавиатура галереи
 
@@ -107,8 +112,9 @@ async def show_wizard_gallery(
         await bot.send_message(chat_id, ERROR_NO_PHOTOS)
         return
     idx = max(0, min(idx, len(photos) - 1))
-    user_gallery.setdefault((user_id, avatar_id), {"index": 0, "last_switch": 0})
-    user_gallery[(user_id, avatar_id)]["index"] = idx
+    gallery_key = get_gallery_key(user_id, avatar_id)
+    user_gallery.setdefault(gallery_key, {"index": 0, "last_switch": 0})
+    user_gallery[gallery_key]["index"] = idx
     photo = photos[idx]
     if isinstance(photo, dict):
         file_id = photo.get("file_id")
@@ -156,35 +162,9 @@ async def show_wizard_gallery(
             logger.info(
                 "[show_wizard_gallery] return: edit_message_media"
             )
+            return
         except Exception as e:
-            logger.exception(f"[show_wizard_gallery] Exception: {e}")
-            if file_id:
-                msg = await bot.send_photo(
-                    chat_id,
-                    file_id,
-                    caption=caption,
-                    reply_markup=keyboard,
-                    parse_mode="HTML",
-                )
-            else:
-                async with aiofiles.open(photo_path, "rb") as img:
-                    img_bytes = await img.read()
-                    img_stream = BytesIO(img_bytes)
-                    msg = await bot.send_photo(
-                        chat_id,
-                        img_stream,
-                        caption=caption,
-                        reply_markup=keyboard,
-                        parse_mode="HTML",
-                    )
-            await clear_old_wizard_messages(
-                bot, user_session, chat_id, user_id, keep_msg_id=msg.message_id
-            )
-            user_session[user_id]["wizard_message_ids"] = [msg.message_id]
-            user_session[user_id]["last_wizard_state"] = (caption, keyboard)
-            logger.info(
-                "[show_wizard_gallery] return: send_photo after exception"
-            )
+            logger.error(f"[show_wizard_gallery] Error editing message: {e}")
     else:
         if file_id:
             msg = await bot.send_photo(
@@ -244,17 +224,18 @@ async def handle_gallery_prev(call) -> None:
             "last_error_msg": None,
             "last_info_msg_id": None,
         }
-    idx = user_gallery.get((user_id, avatar_id), {}).get("index", 0)
+    gallery_key = get_gallery_key(user_id, avatar_id)
+    idx = user_gallery.get(gallery_key, {}).get("index", 0)
     if not (0 <= idx < len(photos)):
         await bot.send_message(call.message.chat.id, ERROR_INDEX)
         await bot.answer_callback_query(call.id)
         return
     now = time.monotonic()
-    last = user_gallery[(user_id, avatar_id)]["last_switch"]
+    last = user_gallery[gallery_key]["last_switch"]
     if now - last < 0.7:
         await bot.answer_callback_query(call.id, "Слишком быстро!")
         return
-    user_gallery[(user_id, avatar_id)]["last_switch"] = now
+    user_gallery[gallery_key]["last_switch"] = now
     if idx <= 0:
         idx = len(photos) - 1
     else:
@@ -293,17 +274,18 @@ async def handle_gallery_next(call) -> None:
             "last_error_msg": None,
             "last_info_msg_id": None,
         }
-    idx = user_gallery.get((user_id, avatar_id), {}).get("index", 0)
+    gallery_key = get_gallery_key(user_id, avatar_id)
+    idx = user_gallery.get(gallery_key, {}).get("index", 0)
     if not (0 <= idx < len(photos)):
         await bot.send_message(call.message.chat.id, ERROR_INDEX)
         await bot.answer_callback_query(call.id)
         return
     now = time.monotonic()
-    last = user_gallery[(user_id, avatar_id)]["last_switch"]
+    last = user_gallery[gallery_key]["last_switch"]
     if now - last < 0.7:
         await bot.answer_callback_query(call.id, "Слишком быстро!")
         return
-    user_gallery[(user_id, avatar_id)]["last_switch"] = now
+    user_gallery[gallery_key]["last_switch"] = now
     if idx >= len(photos) - 1:
         idx = 0
     else:
@@ -340,7 +322,8 @@ async def handle_gallery_delete(call) -> None:
             "last_error_msg": None,
             "last_info_msg_id": None,
         }
-    idx = user_gallery.get((user_id, avatar_id), {}).get("index", 0)
+    gallery_key = get_gallery_key(user_id, avatar_id)
+    idx = user_gallery.get(gallery_key, {}).get("index", 0)
     logger.info(f"[handle_gallery_delete] idx={idx}, photos={photos}")
     if not photos or not (0 <= idx < len(photos)):
         await bot.send_message(call.message.chat.id, ERROR_INDEX)
@@ -364,7 +347,7 @@ async def handle_gallery_delete(call) -> None:
         await asyncio.sleep(0.5)
         return
     new_idx = min(idx, len(photos) - 1)
-    user_gallery[(user_id, avatar_id)]["index"] = new_idx
+    user_gallery[gallery_key]["index"] = new_idx
     logger.info(f"[handle_gallery_delete] show_wizard_gallery new_idx={new_idx}")
     await show_wizard_gallery(
         call.message.chat.id,
@@ -460,12 +443,23 @@ async def send_avatar_card(chat_id, user_id, avatars, idx=0):
     preview_path = avatar.get("preview_path")
     # Формируем текст карточки
     dt = datetime.fromisoformat(created_at) if created_at and created_at != "-" else None
-    date_str = dt.strftime("%d.%m.%Y %H:%M") if dt else "-"
+    date_str = dt.strftime("%d.%m.%Y") if dt else "-"
     status_str = "⏳ Обучается" if status == "pending" else status
     main_str = "⭐ Основной" if is_main else ""
+    # Корректно отображаем пол на русском
+    gender = avatar.get("gender")
+    if gender in ("male", "man"):
+        gender_str = "Мужчина"
+    elif gender in ("female", "woman"):
+        gender_str = "Женщина"
+    elif gender:
+        gender_str = str(gender)
+    else:
+        gender_str = "-"
     text = (
         f"<b>{title}</b>\n"
         f"🗓 {date_str}\n"
+        f"🚻 Пол: {gender_str}\n"
         f"⚡ Статус: {status_str}\n"
         f"{main_str}\n"
         f"({idx+1} из {len(avatars)})"
@@ -614,23 +608,20 @@ async def handle_avatar_card_main(call):
                 "Нет доступных аватаров"
             )
             return
-        
-        # Находим текущий индекс
+        # Явно сбрасываем is_main у всех, кроме выбранного
+        for a in avatars:
+            a["is_main"] = (a["avatar_id"] == avatar_id)
+        # Сохраняем avatars.json централизованно
+        path = get_avatars_index_path(user_id)
+        async with aiofiles.open(path, "w", encoding="utf-8") as f:
+            await f.write(json.dumps({"avatars": avatars}, ensure_ascii=False, indent=2))
+        # Находим индекс выбранного аватара
         current_idx = 0
         for i, a in enumerate(avatars):
             if a["avatar_id"] == avatar_id:
                 current_idx = i
                 break
-        
-        # Обновляем статус основного аватара
-        await update_avatar_in_index(
-            user_id,
-            avatar_id,
-            {"is_main": True}
-        )
-        
         # Обновляем карточку
-        avatars = await get_avatars_index(user_id)
         await send_avatar_card(
             call.message.chat.id,
             user_id,
@@ -662,21 +653,18 @@ async def handle_avatar_card_main(call):
 async def handle_avatar_card_edit(call):
     """Обработчик кнопки "Редактировать" в карточке аватара."""
     user_id = call.from_user.id
-    try:
-        avatar_id = call.data.split("_")[-1]
-        # Переводим пользователя в режим редактирования имени
-        await set_state(user_id, "avatar_enter_name")
-        await bot.send_message(
-            call.message.chat.id,
-            "Введите новое имя для аватара:"
-        )
-        await bot.answer_callback_query(call.id)
-    except Exception as e:
-        logger.exception(
-            "Error in handle_avatar_card_edit: %s",
-            e
-        )
-        await bot.answer_callback_query(call.id, "Произошла ошибка")
+    avatar_id = call.data.split("_")[-1]
+    from frontend_bot.services.avatar_manager import set_current_avatar_id
+    set_current_avatar_id(user_id, avatar_id)
+    from frontend_bot.handlers.avatar.state import user_session
+    user_session.setdefault(user_id, {})
+    user_session[user_id]["edit_mode"] = "edit"
+    await set_state(user_id, "avatar_enter_name")
+    await bot.send_message(
+        call.message.chat.id,
+        "Введите новое имя для аватара:"
+    )
+    await bot.answer_callback_query(call.id)
 
 
 @bot.callback_query_handler(
@@ -694,17 +682,14 @@ async def handle_avatar_card_delete(call):
                 "Нет доступных аватаров"
             )
             return
-        
         # Находим текущий индекс перед удалением
         current_idx = 0
         for i, a in enumerate(avatars):
             if a["avatar_id"] == avatar_id:
                 current_idx = i
                 break
-        
-        # Удаляем аватар
-        await remove_avatar_from_index(user_id, avatar_id)
-        
+        # Удаляем аватар полностью (и файлы, и запись)
+        await clear_avatar_fsm(user_id, avatar_id)
         # Обновляем список и показываем следующий аватар
         avatars = await get_avatars_index(user_id)
         if avatars:
@@ -765,109 +750,3 @@ async def handle_avatar_card_menu(call):
             e
         )
         await bot.answer_callback_query(call.id, "Произошла ошибка")
-
-
-@bot.message_handler(func=lambda m: m.text == "⬅️ Назад" and fsm_states.get(m.from_user.id) == "avatar_enter_name")
-async def handle_avatar_name_back(message):
-    """Обработчик кнопки "Назад" при вводе имени аватара."""
-    user_id = message.from_user.id
-    # Возвращаемся к просмотру аватаров
-    avatars = await get_avatars_index(user_id)
-    if not avatars:
-        await bot.send_message(
-            message.chat.id,
-            "У вас нет аватаров.",
-            reply_markup=my_avatars_keyboard()
-        )
-        return
-    # Показываем карточку первого (или основного) аватара
-    idx = 0
-    for i, a in enumerate(avatars):
-        if a.get("is_main"):
-            idx = i
-            break
-    await send_avatar_card(message.chat.id, user_id, avatars, idx)
-
-
-@bot.message_handler(func=lambda m: fsm_states.get(m.from_user.id) == "avatar_enter_name")
-async def handle_avatar_name_input(message):
-    """Обработчик ввода имени аватара (как для создания, так и для редактирования)."""
-    user_id = message.from_user.id
-    try:
-        if message.text in ["⬅️ Назад", "Отмена"]:
-            # Возвращаемся к просмотру аватаров
-            avatars = await get_avatars_index(user_id)
-            if not avatars:
-                await bot.send_message(
-                    message.chat.id,
-                    "У вас нет аватаров.",
-                    reply_markup=my_avatars_keyboard()
-                )
-                return
-            # Показываем карточку первого (или основного) аватара
-            idx = 0
-            for i, a in enumerate(avatars):
-                if a.get("is_main"):
-                    idx = i
-                    break
-            await send_avatar_card(message.chat.id, user_id, avatars, idx)
-            return
-
-        name = message.text.strip()
-        if not name:
-            await bot.send_message(
-                message.chat.id,
-                "Имя не может быть пустым. Введите имя для аватара:"
-            )
-            return
-
-        avatar_id = get_current_avatar_id(user_id)
-        if not avatar_id:
-            await bot.send_message(
-                message.chat.id,
-                "Ошибка: не найден аватар."
-            )
-            return
-
-        # Обновляем имя аватара
-        await update_avatar_fsm(user_id, avatar_id, title=name)
-        await update_avatar_in_index(user_id, avatar_id, {"title": name})
-
-        # Получаем обновленный список аватаров
-        avatars = await get_avatars_index(user_id)
-        if not avatars:
-            await bot.send_message(
-                message.chat.id,
-                "Ошибка при обновлении аватара.",
-                reply_markup=my_avatars_keyboard()
-            )
-            return
-
-        # Находим индекс текущего аватара
-        current_idx = 0
-        for i, a in enumerate(avatars):
-            if a["avatar_id"] == avatar_id:
-                current_idx = i
-                break
-
-        # Показываем обновленную карточку
-        await send_avatar_card(
-            message.chat.id,
-            user_id,
-            avatars,
-            current_idx
-        )
-        await bot.send_message(
-            message.chat.id,
-            "✅ Имя аватара успешно обновлено!"
-        )
-
-    except Exception as e:
-        logger.exception(
-            "Error in handle_avatar_name_input: %s",
-            e
-        )
-        await bot.send_message(
-            message.chat.id,
-            "Произошла ошибка при обновлении имени аватара."
-        )

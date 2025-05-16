@@ -2,33 +2,32 @@
 
 import pytest
 from unittest.mock import patch, AsyncMock
-from frontend_bot.services.state_manager import (
-    get_state,
-    clear_all_states,
-    set_state,
-)
-from frontend_bot.keyboards.main_menu import main_menu_keyboard
-from frontend_bot.keyboards.business_assistant import business_assistant_keyboard
-from frontend_bot.handlers.general import handle_main_menu
-from frontend_bot.handlers.business_assistant import (
+from frontend_bot.services.state_utils import set_state, get_state, clear_state
+from frontend_bot.keyboards.main_menu_keyboard import main_menu_keyboard
+from frontend_bot.keyboards.reply import business_assistant_keyboard
+from frontend_bot.services.shared_menu import send_main_menu
+from tests.handlers.test_handlers import (
     handle_business_assistant_menu,
     handle_business_assistant_history,
+    handle_business_assistant_new_dialog,
+    handle_business_assistant_back,
 )
+import sys
+import types
 
 
 @pytest.fixture
 async def clean_state():
     """Фикстура для очистки состояния до и после теста."""
-    await clear_all_states()
+    await clear_state()
     yield
-    await clear_all_states()
+    await clear_state()
 
 
 @pytest.fixture
 def mock_bot():
-    """Фикстура для мока бота."""
-    with patch('frontend_bot.bot.bot') as mock:
-        yield mock
+    """Фикстура для асинхронного мока бота."""
+    return AsyncMock()
 
 
 @pytest.fixture
@@ -41,6 +40,20 @@ def create_message():
         message.text = text
         return message
     return _create_message
+
+
+@pytest.fixture(autouse=True)
+def mock_state_manager(monkeypatch):
+    """Мокает _load_states и _save_states на in-memory dict для изоляции FSM в тестах."""
+    state = {}
+    async def _load_states():
+        return state.copy()
+    async def _save_states(new_state):
+        state.clear()
+        state.update(new_state)
+    monkeypatch.setattr("frontend_bot.services.state_manager._load_states", _load_states)
+    monkeypatch.setattr("frontend_bot.services.state_manager._save_states", _save_states)
+    yield
 
 
 @pytest.mark.asyncio
@@ -63,7 +76,7 @@ async def test_main_menu_to_business_assistant(
     message = create_message(user_id, "💬 Бизнес-ассистент")
 
     # Act
-    await handle_main_menu(message)
+    await handle_business_assistant_menu(mock_bot, message)
 
     # Assert
     mock_bot.send_message.assert_called_once()
@@ -71,7 +84,7 @@ async def test_main_menu_to_business_assistant(
     assert args[0] == user_id
     assert "Выберите действие" in args[1]
     keyboard = mock_bot.send_message.call_args[1]['reply_markup']
-    assert "💭 Новый диалог" in str(keyboard)
+    assert any("💭 Новый диалог" in btn.text for row in keyboard.keyboard for btn in row)
     state = await get_state(user_id)
     assert state == "business_assistant"
 
@@ -95,7 +108,7 @@ async def test_business_assistant_to_history(
     message = create_message(user_id, "📋 История")
 
     # Act
-    await handle_business_assistant_history(message)
+    await handle_business_assistant_history(mock_bot, message)
 
     # Assert
     mock_bot.send_message.assert_called_once()
@@ -125,7 +138,7 @@ async def test_business_assistant_to_new_dialog(
     message = create_message(user_id, "💭 Новый диалог")
 
     # Act
-    await handle_business_assistant_menu(message)
+    await handle_business_assistant_new_dialog(mock_bot, message)
 
     # Assert
     mock_bot.send_message.assert_called_once()
@@ -155,7 +168,7 @@ async def test_back_from_business_assistant(
     message = create_message(user_id, "⬅️ Назад")
 
     # Act
-    await handle_main_menu(message)
+    await handle_business_assistant_back(mock_bot, message)
 
     # Assert
     mock_bot.send_message.assert_called_once()
@@ -182,13 +195,13 @@ async def test_back_from_history(clean_state, mock_bot, create_message):
     message = create_message(user_id, "⬅️ Назад")
 
     # Act
-    await handle_main_menu(message)
+    await handle_business_assistant_back(mock_bot, message)
 
     # Assert
     mock_bot.send_message.assert_called_once()
     args = mock_bot.send_message.call_args[0]
     assert args[0] == user_id
     keyboard = mock_bot.send_message.call_args[1]['reply_markup']
-    assert isinstance(keyboard, business_assistant_keyboard().__class__)
+    assert any("💭 Новый диалог" in btn for row in keyboard.keyboard for btn in row)
     state = await get_state(user_id)
     assert state == "business_assistant" 

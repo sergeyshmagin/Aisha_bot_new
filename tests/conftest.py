@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import patch, AsyncMock
-from frontend_bot.services.state_manager import clear_all_states
+from frontend_bot.services.state_utils import clear_state
 
 
 @pytest.fixture
@@ -18,9 +18,9 @@ async def clean_state():
         # После теста состояние будет очищено автоматически
     ```
     """
-    await clear_all_states()
+    await clear_state()
     yield
-    await clear_all_states()
+    await clear_state()
 
 
 @pytest.fixture
@@ -37,7 +37,7 @@ def mock_bot():
         assert args[0] == user_id
     ```
     """
-    with patch('frontend_bot.bot.bot') as mock:
+    with patch('frontend_bot.bot.bot', new_callable=AsyncMock) as mock:
         yield mock
 
 

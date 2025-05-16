@@ -156,3 +156,11 @@ def set_user_transcripts_json(mock_aiofiles_open):
     Всегда задаёт '{}' для user_transcripts.json, чтобы избежать ошибок декодирования JSON.
     """
     mock_aiofiles_open.set_content("storage/user_transcripts.json", "{}")
+
+
+@pytest.fixture(autouse=True)
+def mock_openai_client(monkeypatch):
+    """Фикстура для мока клиента OpenAI."""
+    mock_client = AsyncMock()
+    monkeypatch.setattr("frontend_bot.services.gpt_assistant.client", mock_client)
+    return mock_client

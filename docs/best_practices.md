@@ -34,6 +34,27 @@ async with aiofiles.open(path, "rb") as f:
     data = await f.read()
 ```
 
+## 2.1. Строгое правило по await
+
+- **Все вызовы асинхронных функций (coroutine) должны сопровождаться await.**
+- Запрещено вызывать async-функции без await — это приводит к ошибкам выполнения, предупреждениям RuntimeWarning и потере задач.
+- При code review обязательно проверять, что все вызовы async-функций (например, is_audio_file_ffmpeg, aiofiles.open, convert_to_mp3 и др.) имеют await.
+- Исключение: если coroutine передаётся как объект (например, в asyncio.create_task), но не вызывается напрямую.
+
+**Пример (правильно):**
+```python
+is_audio = await is_audio_file_ffmpeg(temp_file)
+```
+**Пример (ошибка!):**
+```python
+is_audio = is_audio_file_ffmpeg(temp_file)  # ОШИБКА: нет await
+```
+
+**Чеклист для code review:**
+- [ ] Нет вызовов async-функций без await
+- [ ] Нет RuntimeWarning: coroutine was never awaited
+- [ ] Все асинхронные операции (файлы, процессы, HTTP) вызываются с await
+
 ## 3. Docstring и аннотации типов
 
 - Все публичные функции и классы должны иметь docstring с кратким описанием назначения, параметров и возвращаемого значения.
@@ -121,20 +142,105 @@ async def test_async_remove():
 - Все ошибки должны быть снабжены user-friendly сообщением (assert с пояснением).
 - Использовать только async-compatible моки и фикстуры (AsyncMock, patch).
 - Все фикстуры (user_transcripts, fake_user_id, fake_txt_file) — в conftest.py.
-- Пример структуры теста:
+
+### Фикстуры для тестирования аватаров
+
+```python
+@pytest.fixture
+def mock_bot():
+    """Фикстура для мока бота."""
+    with patch("frontend_bot.handlers.handlers.bot") as mock:
+        mock.send_message = AsyncMock()
+        mock.get_file = AsyncMock()
+        mock.download_file = AsyncMock()
+        yield mock
+
+@pytest.fixture
+def mock_avatar_workflow():
+    """Фикстура для мока avatar_workflow."""
+    with patch("frontend_bot.handlers.handlers.handle_photo_upload") as mock_upload, \
+         patch("frontend_bot.handlers.handlers.handle_gender_selection") as mock_gender, \
+         patch("frontend_bot.handlers.handlers.handle_name_input") as mock_name, \
+         patch("frontend_bot.handlers.handlers.finalize_avatar") as mock_finalize, \
+         patch("frontend_bot.handlers.handlers.load_avatar_fsm") as mock_load, \
+         patch("frontend_bot.handlers.handlers.cleanup_state") as mock_cleanup:
+        
+        mock_upload.return_value = AsyncMock()
+        mock_gender.return_value = AsyncMock()
+        mock_name.return_value = AsyncMock()
+        mock_finalize.return_value = AsyncMock()
+        mock_load.return_value = {"photos": []}
+        mock_cleanup.return_value = AsyncMock()
+        
+        yield {
+            "upload": mock_upload,
+            "gender": mock_gender,
+            "name": mock_name,
+            "finalize": mock_finalize,
+            "load": mock_load,
+            "cleanup": mock_cleanup,
+        }
+```
+
+### Пример структуры теста для аватаров
 
 ```python
 @pytest.mark.asyncio
-@patch("frontend_bot.handlers.transcribe_protocol.bot.send_message", new_callable=AsyncMock)
-async def test_some_case(mock_send_message, fake_user_id):
-    ...
-    assert "ожидаемый текст" in args[1], (
-        "❌ User-friendly сообщение об ошибке"
-    )
+async def test_handle_avatar_photo_success(mock_bot, mock_avatar_workflow, mock_state_manager):
+    """Тест успешной загрузки фото."""
+    message, photo_bytes = create_test_photo_message()
+    mock_bot.download_file.return_value = photo_bytes
+    
+    await handle_avatar_photo(message)
+    
+    mock_avatar_workflow["upload"].assert_called_once()
+    mock_bot.send_message.assert_called_once()
+    assert "Фото успешно загружено" in mock_bot.send_message.call_args[0][1]
 ```
-- Не дублировать тесты между файлами, каждый блок — свой файл.
-- Для моков Telebot и GPT — только async-совместимые моки.
-- Состояние очищается через autouse-фикстуру.
+
+### Важные моменты при тестировании аватаров
+
+1. Всегда проверять вызов cleanup_state при ошибках:
+```python
+@pytest.mark.asyncio
+async def test_handle_avatar_photo_validation_error(mock_bot, mock_avatar_workflow, mock_state_manager):
+    """Тест ошибки валидации фото."""
+    message, photo_bytes = create_test_photo_message()
+    mock_bot.download_file.return_value = photo_bytes
+    mock_avatar_workflow["upload"].side_effect = PhotoValidationError("Test error")
+    
+    await handle_avatar_photo(message)
+    
+    mock_avatar_workflow["cleanup"].assert_called_once_with(123)
+```
+
+2. Проверять корректность переходов между состояниями:
+```python
+@pytest.mark.asyncio
+async def test_handle_avatar_photo_next_success(mock_bot, mock_avatar_workflow, mock_state_manager):
+    """Тест успешного перехода к следующему шагу."""
+    message = next(create_test_text_message("Далее"))
+    mock_avatar_workflow["load"].return_value = {"photos": ["photo"] * AVATAR_MIN_PHOTOS}
+    
+    await handle_avatar_photo_next(message)
+    
+    mock_bot.send_message.assert_called_once()
+    assert "Выберите пол для аватара" in mock_bot.send_message.call_args[0][1]
+    mock_state_manager["set"].assert_called_once_with(123, "avatar_gender")
+```
+
+3. Проверять валидацию входных данных:
+```python
+@pytest.mark.asyncio
+async def test_handle_avatar_gender_validation_error(mock_bot, mock_avatar_workflow, mock_state_manager):
+    """Тест ошибки валидации при выборе пола."""
+    message = next(create_test_text_message("Неверный пол", "avatar_gender"))
+    mock_avatar_workflow["gender"].side_effect = ValidationError("Test error")
+    
+    await handle_avatar_gender(message)
+    
+    mock_avatar_workflow["cleanup"].assert_called_once_with(123)
+```
 
 ## 8. Smoke-тесты для протоколов (MoM, summary, todo, Word)
 
@@ -229,7 +335,7 @@ with patch("aiofiles.open", return_value=AsyncFile()):
 import pytest
 from unittest.mock import patch, AsyncMock
 from frontend_bot.handlers.start import handle_start
-from frontend_bot.services.state_manager import get_state, clear_all_states
+from frontend_bot.services.state_utils import get_state, clear_all_states
 
 @pytest.fixture
 def create_message():
@@ -330,3 +436,221 @@ async def test_start_to_main_menu(clean_state, mock_bot, create_message):
 
 2. Обновлять документацию при изменении тестов
 3. Указывать причины пропуска тестов (skip/xfail) 
+
+## Тестирование асинхронных функций и моков
+
+### 1. Правила мокирования асинхронных функций
+
+- Всегда использовать `AsyncMock` для мокирования асинхронных функций:
+```python
+from unittest.mock import AsyncMock, patch
+
+@pytest.mark.asyncio
+async def test_async_function():
+    mock_func = AsyncMock(return_value="result")
+    result = await mock_func()
+    assert result == "result"
+```
+
+### 2. Проверка сигнатур функций
+
+- Перед написанием теста всегда проверять сигнатуру тестируемой функции:
+```python
+# Правильно:
+async def send_main_menu(bot: AsyncTeleBot, message: Message) -> None:
+    ...
+
+# В тесте:
+await send_main_menu(mock_bot, message)  # Передаём все аргументы
+```
+
+### 3. Фикстуры для общих моков
+
+- Выносить часто используемые моки в фикстуры:
+```python
+@pytest.fixture
+def mock_bot():
+    with patch('frontend_bot.bot.bot', new_callable=AsyncMock) as mock:
+        yield mock
+
+@pytest.fixture
+def mock_message():
+    return Message(
+        message_id=1,
+        date=datetime.now(),
+        chat=Chat(id=123, type='private'),
+        text='/start'
+    )
+```
+
+### 4. Проверка вызовов асинхронных функций
+
+- Использовать `assert_called_once_with()` для проверки аргументов:
+```python
+mock_bot.send_message.assert_called_once_with(
+    chat_id=user_id,
+    text="Ожидаемый текст",
+    reply_markup=ANY
+)
+```
+
+### 5. Обработка исключений
+
+- Тестировать исключения через `pytest.raises`:
+```python
+with pytest.raises(ValueError, match="Ожидаемое сообщение об ошибке"):
+    await function_that_raises()
+```
+
+### 6. Асинхронные контекстные менеджеры
+
+- Для мокирования асинхронных контекстных менеджеров:
+```python
+class AsyncContextManagerMock:
+    async def __aenter__(self):
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        pass
+
+@pytest.mark.asyncio
+async def test_async_context():
+    with patch('aiofiles.open', return_value=AsyncContextManagerMock()):
+        await async_function()
+```
+
+### 7. Проверка состояния
+
+- После каждого теста проверять, что состояние очищено:
+```python
+@pytest.mark.asyncio
+async def test_state_management(clean_state):
+    # Arrange
+    await set_state(user_id, "some_state")
+    
+    # Act
+    await handle_something()
+    
+    # Assert
+    assert await get_state(user_id) is None
+```
+
+### 8. Изоляция тестов
+
+- Каждый тест должен быть полностью изолирован:
+  - Свои моки
+  - Своё состояние
+  - Свои фикстуры
+  - Не зависеть от порядка выполнения
+
+### 9. Документирование тестов
+
+- Каждый тест должен иметь понятное описание:
+```python
+@pytest.mark.asyncio
+async def test_send_main_menu_returns_to_main_menu():
+    """
+    Проверяет, что функция send_main_menu:
+    1. Отправляет сообщение с главным меню
+    2. Устанавливает правильную клавиатуру
+    3. Очищает предыдущее состояние
+    """
+    # ... код теста ...
+```
+
+### 10. Проверка асинхронных операций
+
+- Всегда проверять, что асинхронные операции завершились:
+```python
+@pytest.mark.asyncio
+async def test_async_operation():
+    # Arrange
+    mock_operation = AsyncMock()
+    
+    # Act
+    await mock_operation()
+    
+    # Assert
+    assert mock_operation.call_count == 1
+    assert mock_operation.await_count == 1
+```
+
+## Централизованный bot и регистрация хендлеров
+
+- Объект `bot` должен создаваться только в одном месте (например, в `frontend_bot/bot_instance.py`).
+- Во всех хендлерах импортируйте bot только из этого файла:
+  ```python
+  from frontend_bot.bot_instance import bot
+  ```
+- Не создавайте bot локально в каждом модуле — это приведёт к тому, что хендлеры будут регистрироваться на разные экземпляры и не будут работать.
+- Все хендлеры должны импортироваться в точке входа (например, в `main.py`), чтобы гарантировать их регистрацию.
+- Запускать polling только на этом экземпляре bot.
+- **Дублирование экземпляра бота (например, через bot.py) запрещено!**
+- Файл `frontend_bot/bot.py` удалён и не должен использоваться для инициализации или запуска.
+- Такой подход предотвращает циклические импорты и обеспечивает корректную маршрутизацию всех сообщений.
+
+## Пример архитектуры запуска
+
+- `frontend_bot/bot_instance.py` — только создание bot.
+- `frontend_bot/main.py` — импорт bot, импорт всех хендлеров, запуск polling.
+- Все хендлеры используют только импорт bot из bot_instance. 
+
+## DRY для работы с транскриптами
+- Все проверки наличия, чтения и ошибок транскрипта выносить в утилиту (например, `get_user_transcript_or_error` в `services/transcript_utils.py`).
+- Не дублировать эти блоки в каждом хендлере — используйте общую функцию.
+- Это упрощает сопровождение и снижает риск ошибок при изменениях. 
+
+## 9. Отправка файлов и сообщений об ошибке
+
+- Для отправки файлов и сообщений об ошибке используйте shared-утилиты (`send_document_with_caption`, `send_transcript_error` в `services/transcript_utils.py`).
+- Не дублируйте вызовы bot.send_document и bot.send_message в каждом хендлере. 
+
+## 1.1. Централизация промтов для GPT
+
+- Все промты для GPT (транскрибация, резюме, MoM, ToDo, протоколы и др.) должны храниться только в отдельном модуле, например, `frontend_bot/GPT_Prompts/transcribe/prompts.py`.
+- В хендлерах и сервисах запрещено дублировать или захардкоживать промты — только импортировать из централизованного файла.
+- Это облегчает поддержку, локализацию и переиспользование промтов.
+
+**Пример:**
+```python
+# frontend_bot/GPT_Prompts/transcribe/prompts.py
+FULL_TRANSCRIPT_PROMPT = "..."
+
+# frontend_bot/handlers/transcribe_protocol.py
+from frontend_bot.GPT_Prompts.transcribe.prompts import FULL_TRANSCRIPT_PROMPT
+```
+
+## Документирование и правила ведения задач
+
+- Все задачи, планы и чек-листы ведём только в корневом TASK.md.
+- Архитектура и best practices — только в docs/architecture.md, docs/best_practices.md.
+- Не допускается дублирование задач и регламентов в других файлах.
+- Все новые правила и процессы — отдельный подраздел в best_practices.md.
+- Любое изменение в архитектуре или процессах — фиксировать в соответствующем md-файле.
+- В README.md — только краткое описание и ссылки на docs/. 
+
+### Валидация фото (размер, формат, дубликаты)
+- Всегда используйте только `validate_photo` из `frontend_bot/services/avatar_manager.py` для проверки фото.
+- Не допускается дублирование логики валидации в других модулях.
+- Все параметры (размер, формат, лимиты) — только из config.
+- При добавлении новых хендлеров/сервисов — импортировать и вызывать только эту функцию. 
+
+## Функциональный стиль вместо классов-сервисов
+
+- Все сервисы реализуются как отдельные функции с явной передачей зависимостей (storage_dir и др.), без хранения состояния в классах.
+- Исключение — state/caching-менеджеры, где оправдано хранение состояния (например, StateManager).
+- Каждый сервис-файл должен содержать только функции, необходимые для бизнес-логики, без классов-обёрток.
+- Все функции должны иметь аннотации типов и docstring.
+- Для асинхронных операций использовать только async-совместимые библиотеки (aiofiles, AsyncFileManager и др.).
+- Все значения (пути, лимиты, константы) — только через config.py или переменные окружения.
+- Валидация и обработка ошибок — через отдельные функции, логирование через logger.exception.
+- Тесты пишутся сразу для каждой функции (pytest, pytest-asyncio), каждый тест работает с чистым temp_dir.
+- Для тестов не использовать глобальные/реальные директории — только временные каталоги через tmp_path/fixtures.
+- Все переходы между состояниями FSM и возвраты в меню покрываются тестами (минимум ручными), кейсы описываются в best_practices.md.
+- При рефакторинге классов-сервисов в функции:
+    - Удалять класс, переносить методы в функции с явной передачей зависимостей.
+    - Обновлять все импорты и вызовы в коде и тестах.
+    - Проверять, что тесты проходят (pytest -v).
+- Все архитектурные решения и best practices фиксируются в docs/. 
+
+- При очистке истории пользователя (clear_user_history) обязательно вызывать и delete_user_transcripts(user_id, storage_dir), чтобы удалять все файлы пользователя из transcripts/{user_id}/ и все chunk-папки (chunks_*). Это предотвращает накопление мусора и утечку данных. 

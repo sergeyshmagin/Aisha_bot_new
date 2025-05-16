@@ -34,13 +34,13 @@ GALLERY_IMAGES = [
     {
         "style": "Женский",
         "name": "Солнечное утро",
-        "image_path": GALLERY_PATH + "/woman_morning.jpg",
+        "image_path": str(GALLERY_PATH / "woman_morning.jpg"),
         "description": "Стиль: Женский\nОбраз: Солнечное утро",
     },
     {
         "style": "Женский",
         "name": "Вечерний шик",
-        "image_path": GALLERY_PATH + "/woman_evening.jpg",
+        "image_path": str(GALLERY_PATH / "woman_evening.jpg"),
         "description": "Стиль: Женский\nОбраз: Вечерний шик",
     },
     # ... другие образы

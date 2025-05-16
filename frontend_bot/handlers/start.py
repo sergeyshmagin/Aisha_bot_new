@@ -3,7 +3,7 @@ from telebot.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
 # from telebot import TeleBot  # не используется, удаляю
 
 # Импортируй свой бот, если он создаётся в другом месте
-from frontend_bot.bot import (
+from frontend_bot.bot_instance import (
     bot,  # путь может отличаться, скорректируй при необходимости
 )
 

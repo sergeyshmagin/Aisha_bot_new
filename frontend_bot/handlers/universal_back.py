@@ -1,69 +1,123 @@
 import logging
-from frontend_bot.handlers.general import bot
-from frontend_bot.services.state_manager import get_state, set_state
+from frontend_bot.bot_instance import bot
+from frontend_bot.services.state_utils import get_state, set_state
 from frontend_bot.keyboards.main_menu_keyboard import main_menu_keyboard
 from frontend_bot.keyboards.reply import (
     photo_menu_keyboard,
     ai_photographer_keyboard,
     my_avatars_keyboard,
+    photo_enhance_keyboard,
+    transcribe_keyboard,
 )
 from frontend_bot.services.avatar_manager import get_avatars_index
+from frontend_bot.services.avatar_workflow import cleanup_state
 
 logger = logging.getLogger(__name__)
 
 
 @bot.message_handler(func=lambda m: m.text == "⬅️ Назад")
-async def universal_back_handler(message):
-    logger.info(f"[HANDLER] universal_back_handler, message.text={message.text!r}")
-    user_id = message.from_user.id
-    state = await get_state(user_id)
-    logger.info(f"[UNIVERSAL_BACK] user_id={user_id}, state={state}")
-    if state in [
-        "avatar_photo_upload",
-        "avatar_title",
-        "avatar_confirm",
-        "avatar_gallery_review",
-    ]:
-        avatars = await get_avatars_index(user_id)
-        if avatars:
-            await set_state(user_id, "my_avatars")
-            await bot.send_message(
-                message.chat.id,
-                "Меню аватаров:",
-                reply_markup=my_avatars_keyboard(),
-            )
+async def handle_back(message):
+    """Обработчик возврата в предыдущее меню."""
+    logger.info(f"handle_back: message.text={message.text!r}, user_id={message.from_user.id}")
+    try:
+        user_id = message.from_user.id
+        current_state = await get_state(user_id)
+        
+        if current_state == "photo_enhance":
+            await handle_photo_enhance_back(message)
+        elif current_state == "transcribe":
+            await handle_transcribe_back(message)
         else:
-            await set_state(user_id, "ai_photographer")
+            await set_state(user_id, "main_menu")
             await bot.send_message(
                 message.chat.id,
-                "🧑‍🎨 ИИ фотограф\n\nСоздавайте аватары и образы с помощью ИИ.",
-                reply_markup=ai_photographer_keyboard(),
+                "Выберите действие:",
+                reply_markup=main_menu_keyboard()
             )
-    elif state == "my_avatars":
-        await set_state(user_id, "ai_photographer")
+            
+    except Exception as e:
+        logger.error(f"Error in handle_back: {e}")
         await bot.send_message(
             message.chat.id,
-            "🧑‍🎨 ИИ фотограф\n\nСоздавайте аватары и образы с помощью ИИ.",
-            reply_markup=ai_photographer_keyboard(),
+            "Произошла ошибка. Пожалуйста, попробуйте еще раз.",
+            reply_markup=main_menu_keyboard()
         )
-    elif state == "ai_photographer":
-        await set_state(user_id, "photo_menu")
+        await set_state(user_id, "main_menu")
+
+@bot.message_handler(func=lambda message: message.text == "Отмена")
+async def handle_cancel(message):
+    """Обработчик отмены текущего действия."""
+    logger.info(f"handle_cancel: message.text={message.text!r}, user_id={message.from_user.id}")
+    try:
+        user_id = message.from_user.id
+        current_state = await get_state(user_id)
+        
+        # Обработка отмены для аватара
+        if current_state.startswith("avatar_"):
+            await cleanup_state(user_id)
+            await bot.send_message(
+                message.chat.id,
+                "Создание аватара отменено.",
+                reply_markup=main_menu_keyboard()
+            )
+            return
+            
+        # Обработка отмены для других состояний
+        if current_state == "photo_enhance":
+            await handle_photo_enhance_back(message)
+        elif current_state == "transcribe":
+            await handle_transcribe_back(message)
+        else:
+            await set_state(user_id, "main_menu")
+            await bot.send_message(
+                message.chat.id,
+                "Действие отменено.",
+                reply_markup=main_menu_keyboard()
+            )
+            
+    except Exception as e:
+        logger.error(f"Error in handle_cancel: {e}")
         await bot.send_message(
             message.chat.id,
-            "🖼 Работа с фото\n\nУлучшайте фото или создавайте ИИ-аватары.",
-            reply_markup=photo_menu_keyboard(),
+            "Произошла ошибка при отмене действия. Пожалуйста, попробуйте еще раз.",
+            reply_markup=main_menu_keyboard()
         )
-    elif state == "photo_menu":
+        await set_state(user_id, "main_menu")
+
+async def handle_photo_enhance_back(message):
+    """Обработчик возврата в меню улучшения фото."""
+    try:
+        user_id = message.from_user.id
         await set_state(user_id, "main_menu")
         await bot.send_message(
             message.chat.id,
-            "Главное меню. Выберите действие:",
-            reply_markup=main_menu_keyboard(),
+            "Выберите действие:",
+            reply_markup=photo_enhance_keyboard()
         )
-    else:
+    except Exception as e:
+        logger.error(f"Error in handle_photo_enhance_back: {e}")
+        await bot.send_message(
+            message.chat.id,
+            "Произошла ошибка. Пожалуйста, попробуйте еще раз.",
+            reply_markup=main_menu_keyboard()
+        )
+        await set_state(user_id, "main_menu")
+
+async def handle_transcribe_back(message):
+    """Обработчик возврата в меню транскрибации."""
+    try:
+        user_id = message.from_user.id
         await set_state(user_id, "main_menu")
         await bot.send_message(
             message.chat.id,
-            "Главное меню. Выберите действие:",
-            reply_markup=main_menu_keyboard(),
+            "Выберите действие:",
+            reply_markup=transcribe_keyboard()
         )
+    except Exception as e:
+        logger.error(f"Error in handle_transcribe_back: {e}")
+        await bot.send_message(
+            message.chat.id,
+            "Произошла ошибка. Пожалуйста, попробуйте еще раз.",
+            reply_markup=main_menu_keyboard()
+        )
+        await set_state(user_id, "main_menu")

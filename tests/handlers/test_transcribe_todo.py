@@ -38,30 +38,27 @@ async def test_send_todo_success(
     содержимым и caption.
     """
     await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
     mock_async_exists.return_value = True
     mock_gpt.return_value = "ToDo для теста"
-
     class AsyncFile:
         async def __aenter__(self):
             return self
-
         async def __aexit__(self, exc_type, exc, tb):
             pass
-
         async def read(self):
             return "not empty"
-
-    with patch("aiofiles.open", return_value=AsyncFile()):
-        message = type(
-            "Msg",
-            (),
-            {
-                "from_user": type("U", (), {"id": fake_user_id})(),
-                "chat": type("C", (), {"id": 1})(),
-                "text": "Сформировать ToDo",
-            },
-        )()
-        await transcribe_protocol.send_todo_checklist(message)
+    mock_aiofiles_open.return_value = AsyncFile()
+    message = type(
+        "Msg",
+        (),
+        {
+            "from_user": type("U", (), {"id": fake_user_id})(),
+            "chat": type("C", (), {"id": 1})(),
+            "text": "Сформировать ToDo",
+        },
+    )()
+    await transcribe_protocol.send_todo_checklist(message)
     assert mock_send_document.called, "send_document не был вызван"
     args, kwargs = mock_send_document.call_args
     filename, fileobj = args[1]
@@ -105,6 +102,7 @@ async def test_send_todo_no_file(
     сообщение об ошибке.
     """
     await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    mock_aiofiles_open.set_content(fake_txt_file, "")
     mock_async_exists.return_value = False
     message = type(
         "Msg",
@@ -153,6 +151,7 @@ async def test_send_todo_gpt_error(
     Проверяет, что при ошибке GPT бот отправляет корректное сообщение об ошибке.
     """
     await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
     mock_async_exists.return_value = True
     mock_gpt.side_effect = Exception("GPT error")
 
@@ -215,6 +214,7 @@ async def test_send_todo_empty_transcript(
     для ToDo. Ожидается user-friendly сообщение об ошибке.
     """
     await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    mock_aiofiles_open.set_content(fake_txt_file, "")
     mock_async_exists.return_value = True
 
     class AsyncFile:
@@ -277,6 +277,7 @@ async def test_send_todo_empty_gpt(
     Ожидается user-friendly сообщение об ошибке.
     """
     await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    mock_aiofiles_open.set_content(fake_txt_file, "")
     mock_async_exists.return_value = True
 
     class AsyncFile:

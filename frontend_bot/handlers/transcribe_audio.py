@@ -6,7 +6,7 @@ import os
 from telebot.types import Message
 from frontend_bot.handlers.general import bot
 from frontend_bot.services.transcribe_service import process_audio
-from frontend_bot.services.state_manager import set_state, get_state, clear_state
+from frontend_bot.services.state_utils import set_state, get_state, clear_state
 from frontend_bot.keyboards.reply import transcript_format_keyboard
 from frontend_bot.services.file_utils import async_makedirs
 from frontend_bot.services.shared_menu import send_main_menu

@@ -36,39 +36,35 @@ async def test_send_meeting_protocol_success(
     mock_send_message,
     fake_user_id,
     fake_txt_file,
+    mock_aiofiles_open,
 ):
     """
     Проверяет успешную отправку Word-протокола: файл отправляется с правильным именем, содержимым и caption.
     """
-    import aiofiles
-    from unittest.mock import patch
-
     await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
     mock_async_exists.return_value = True
     mock_gpt.return_value = "Текст протокола для теста"
     mock_generate_word.return_value = "temp_protocol.docx"
-
     class AsyncFile:
         async def __aenter__(self): return self
         async def __aexit__(self, exc_type, exc, tb): pass
         async def read(self): return "Test transcript content"
-
     class AsyncDocxFile:
         async def __aenter__(self): return self
         async def __aexit__(self, exc_type, exc, tb): pass
         async def read(self): return b"DOCX DATA"
-
-    with patch("aiofiles.open", side_effect=[AsyncFile(), AsyncDocxFile()]):
-        message = type(
-            "Msg",
-            (),
-            {
-                "from_user": type("U", (), {"id": fake_user_id})(),
-                "chat": type("C", (), {"id": 1})(),
-                "text": "Протокол заседания (Word)",
-            },
-        )()
-        await transcribe_protocol.send_meeting_protocol(message)
+    mock_aiofiles_open.side_effect = [AsyncFile(), AsyncDocxFile()]
+    message = type(
+        "Msg",
+        (),
+        {
+            "from_user": type("U", (), {"id": fake_user_id})(),
+            "chat": type("C", (), {"id": 1})(),
+            "text": "Протокол заседания (Word)",
+        },
+    )()
+    await transcribe_protocol.send_meeting_protocol(message)
     assert mock_send_document.called, "send_document не был вызван"
     args, kwargs = mock_send_document.call_args
     filename, fileobj = args[1]
@@ -113,14 +109,21 @@ async def test_send_meeting_protocol_no_file(
     mock_send_message,
     fake_user_id,
     fake_txt_file,
+    mock_aiofiles_open,
 ):
     """
     Проверяет, что если файла транскрипта нет, бот отправляет корректное
     сообщение об ошибке.
     """
     await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    mock_aiofiles_open.set_content(fake_txt_file, "")
     mock_async_exists.return_value = False
     mock_gpt.return_value = ""
+    class AsyncFile:
+        async def __aenter__(self): return self
+        async def __aexit__(self, exc_type, exc, tb): pass
+        async def read(self): return ""
+    mock_aiofiles_open.return_value = AsyncFile()
     message = type(
         "Msg",
         (),
@@ -130,16 +133,7 @@ async def test_send_meeting_protocol_no_file(
             "text": "Протокол заседания (Word)",
         },
     )()
-    from unittest.mock import patch
-    class AsyncFile:
-        async def __aenter__(self):
-            return self
-        async def __aexit__(self, exc_type, exc, tb):
-            pass
-        async def read(self):
-            return ""
-    with patch("aiofiles.open", return_value=AsyncFile()):
-        await transcribe_protocol.send_meeting_protocol(message)
+    await transcribe_protocol.send_meeting_protocol(message)
     mock_send_message.assert_called()
     mock_send_document.assert_not_called()
 
@@ -185,6 +179,7 @@ async def test_send_meeting_protocol_gpt_empty(
     сообщение об ошибке (Word).
     """
     await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
     mock_async_exists.return_value = True
     mock_gpt.return_value = "   "
 
@@ -253,6 +248,7 @@ async def test_send_meeting_protocol_exception(
     корректное сообщение об ошибке.
     """
     await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
     mock_async_exists.return_value = True
     mock_gpt.side_effect = Exception("GPT error")
 
@@ -321,6 +317,7 @@ async def test_send_meeting_protocol_empty_transcript(
     для Word-протокола. Ожидается user-friendly сообщение об ошибке.
     """
     await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    mock_aiofiles_open.set_content(fake_txt_file, "")
     mock_async_exists.return_value = True
 
     class AsyncFile:

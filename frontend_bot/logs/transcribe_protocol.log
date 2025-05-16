@@ -6898,3 +6898,229 @@ TypeError: 'coroutine' object does not support the asynchronous context manager 
 2025-05-13 18:27:06,501 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'D:\\Dev\\work\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
 2025-05-13 18:27:06,502 INFO [DEBUG] transcript_path for user 174171680: storage\transcripts\174171680\transcript_4a23ac11-70a2-4ade-af04-2bd7adca1b4e.txt
 2025-05-13 18:27:25,821 INFO [DEBUG] Sending file: summary_174171680_2025-05-13_18-27.txt, size: 2905 bytes
+2025-05-14 13:36:04,305 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-14 13:36:13,448 INFO [DEBUG] Sending file: mom_123456_2025-05-14_13-36.txt, size: 84 bytes
+2025-05-14 13:36:13,473 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-14 13:36:23,612 INFO [DEBUG] Sending file: mom_123456_2025-05-14_13-36.txt, size: 84 bytes
+2025-05-14 13:36:23,647 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-14 13:36:32,617 INFO [DEBUG] Sending file: mom_123456_2025-05-14_13-36.txt, size: 84 bytes
+2025-05-14 13:36:32,644 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-14 13:36:32,664 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-14 13:36:40,820 INFO [DEBUG] Sending file: mom_123456_2025-05-14_13-36.txt, size: 84 bytes
+2025-05-14 13:36:40,843 INFO [HANDLER] send_full_official_transcript, message.text='Полный официальный транскрипт'
+2025-05-14 13:36:40,845 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:36:40,846 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-1\test_full_official_transcript_0\test_transcript.txt
+2025-05-14 13:36:48,881 INFO [DEBUG] Sending full transcript, length: 46
+2025-05-14 13:36:48,904 INFO [HANDLER] send_short_summary, message.text='Сводка на 1 страницу'
+2025-05-14 13:36:48,906 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:36:48,908 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-1\test_short_summary_success0\test_transcript.txt
+2025-05-14 13:37:00,957 INFO [DEBUG] Sending file: summary_123456_2025-05-14_13-37.txt, size: 84 bytes
+2025-05-14 13:37:00,984 INFO [HANDLER] send_short_summary, message.text='Сводка на 1 страницу'
+2025-05-14 13:37:00,985 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:37:00,985 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-1\test_short_summary_empty_trans0\test_transcript.txt
+2025-05-14 13:37:00,987 INFO [DEBUG] Отправляю сообщение: transcript пустой
+2025-05-14 13:37:01,017 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-14 13:37:01,018 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:37:01,019 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-1\test_send_todo_success0\test_transcript.txt
+2025-05-14 13:37:01,020 INFO [DEBUG] Sending file: todo_123456_2025-05-14_13-37.txt, size: 22 bytes
+2025-05-14 13:37:01,040 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-14 13:37:01,041 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:37:01,042 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-1\test_send_todo_no_file0\test_transcript.txt
+2025-05-14 13:37:01,131 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-14 13:37:01,132 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:37:01,133 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-1\test_send_todo_gpt_error0\test_transcript.txt
+2025-05-14 13:37:01,154 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-14 13:37:01,156 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:37:01,157 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-1\test_send_todo_empty_transcrip0\test_transcript.txt
+2025-05-14 13:37:01,174 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-14 13:37:01,175 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:37:01,176 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-1\test_send_todo_empty_gpt0\test_transcript.txt
+2025-05-14 13:37:01,195 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-14 13:37:01,197 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:37:01,197 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-1\test_send_meeting_protocol_suc0\test_transcript.txt
+2025-05-14 13:37:01,199 INFO GPT protocol_text: Текст протокола для теста...
+2025-05-14 13:37:01,246 INFO [DEBUG] Sending file: protocol_123456_2025-05-14_13-37.docx, size: 9 bytes
+2025-05-14 13:37:01,273 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-14 13:37:01,274 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:37:01,274 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-1\test_send_meeting_protocol_no_0\test_transcript.txt
+2025-05-14 13:37:01,292 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-14 13:37:01,293 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:37:01,294 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-1\test_send_meeting_protocol_gpt0\test_transcript.txt
+2025-05-14 13:37:01,310 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-14 13:37:01,311 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:37:01,312 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-1\test_send_meeting_protocol_exc0\test_transcript.txt
+2025-05-14 13:37:01,329 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-14 13:37:01,330 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:37:01,331 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-1\test_send_meeting_protocol_emp0\test_transcript.txt
+2025-05-14 13:38:11,980 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-14 13:38:21,526 INFO [DEBUG] Sending file: mom_123456_2025-05-14_13-38.txt, size: 84 bytes
+2025-05-14 13:38:21,543 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-14 13:38:33,111 INFO [DEBUG] Sending file: mom_123456_2025-05-14_13-38.txt, size: 84 bytes
+2025-05-14 13:38:33,138 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-14 13:38:50,866 INFO [DEBUG] Sending file: mom_123456_2025-05-14_13-38.txt, size: 84 bytes
+2025-05-14 13:38:50,891 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-14 13:38:50,909 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-14 13:39:08,682 INFO [DEBUG] Sending file: mom_123456_2025-05-14_13-39.txt, size: 84 bytes
+2025-05-14 13:39:08,710 INFO [HANDLER] send_full_official_transcript, message.text='Полный официальный транскрипт'
+2025-05-14 13:39:08,711 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:39:08,711 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-2\test_full_official_transcript_0\test_transcript.txt
+2025-05-14 13:39:14,877 INFO [DEBUG] Sending full transcript, length: 46
+2025-05-14 13:39:14,900 INFO [HANDLER] send_short_summary, message.text='Сводка на 1 страницу'
+2025-05-14 13:39:14,901 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:39:14,901 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-2\test_short_summary_success0\test_transcript.txt
+2025-05-14 13:39:27,334 INFO [DEBUG] Sending file: summary_123456_2025-05-14_13-39.txt, size: 84 bytes
+2025-05-14 13:39:27,359 INFO [HANDLER] send_short_summary, message.text='Сводка на 1 страницу'
+2025-05-14 13:39:27,359 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:39:27,360 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-2\test_short_summary_empty_trans0\test_transcript.txt
+2025-05-14 13:39:27,361 INFO [DEBUG] Отправляю сообщение: transcript пустой
+2025-05-14 13:39:27,389 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-14 13:39:27,390 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:39:27,390 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-2\test_send_todo_success0\test_transcript.txt
+2025-05-14 13:39:27,392 INFO [DEBUG] Sending file: todo_123456_2025-05-14_13-39.txt, size: 22 bytes
+2025-05-14 13:39:27,409 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-14 13:39:27,409 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:39:27,410 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-2\test_send_todo_no_file0\test_transcript.txt
+2025-05-14 13:39:27,424 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-14 13:39:27,425 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:39:27,425 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-2\test_send_todo_gpt_error0\test_transcript.txt
+2025-05-14 13:39:27,440 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-14 13:39:27,441 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:39:27,441 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-2\test_send_todo_empty_transcrip0\test_transcript.txt
+2025-05-14 13:39:27,458 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-14 13:39:27,459 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:39:27,459 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-2\test_send_todo_empty_gpt0\test_transcript.txt
+2025-05-14 13:39:27,478 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-14 13:39:27,478 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:39:27,478 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-2\test_send_meeting_protocol_suc0\test_transcript.txt
+2025-05-14 13:39:27,479 INFO GPT protocol_text: Текст протокола для теста...
+2025-05-14 13:39:27,516 INFO [DEBUG] Sending file: protocol_123456_2025-05-14_13-39.docx, size: 9 bytes
+2025-05-14 13:39:27,539 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-14 13:39:27,540 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:39:27,540 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-2\test_send_meeting_protocol_no_0\test_transcript.txt
+2025-05-14 13:39:27,555 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-14 13:39:27,556 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:39:27,556 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-2\test_send_meeting_protocol_gpt0\test_transcript.txt
+2025-05-14 13:39:27,571 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-14 13:39:27,572 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:39:27,572 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-2\test_send_meeting_protocol_exc0\test_transcript.txt
+2025-05-14 13:39:27,595 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-14 13:39:27,596 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 13:39:27,596 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-2\test_send_meeting_protocol_emp0\test_transcript.txt
+2025-05-14 14:54:52,679 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-14 14:55:02,120 INFO [DEBUG] Sending file: mom_123456_2025-05-14_14-55.txt, size: 84 bytes
+2025-05-14 14:55:02,147 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-14 14:55:13,808 INFO [DEBUG] Sending file: mom_123456_2025-05-14_14-55.txt, size: 84 bytes
+2025-05-14 14:55:13,836 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-14 14:55:22,383 INFO [DEBUG] Sending file: mom_123456_2025-05-14_14-55.txt, size: 84 bytes
+2025-05-14 14:55:22,407 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-14 14:55:22,435 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-14 14:55:27,996 INFO [DEBUG] Sending file: mom_123456_2025-05-14_14-55.txt, size: 84 bytes
+2025-05-14 14:55:28,027 INFO [HANDLER] send_full_official_transcript, message.text='Полный официальный транскрипт'
+2025-05-14 14:55:28,027 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 14:55:28,028 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-3\test_full_official_transcript_0\test_transcript.txt
+2025-05-14 14:55:36,863 INFO [DEBUG] Sending full transcript, length: 46
+2025-05-14 14:55:36,883 INFO [HANDLER] send_short_summary, message.text='Сводка на 1 страницу'
+2025-05-14 14:55:36,883 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 14:55:36,884 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-3\test_short_summary_success0\test_transcript.txt
+2025-05-14 14:55:47,631 INFO [DEBUG] Sending file: summary_123456_2025-05-14_14-55.txt, size: 84 bytes
+2025-05-14 14:55:47,654 INFO [HANDLER] send_short_summary, message.text='Сводка на 1 страницу'
+2025-05-14 14:55:47,655 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 14:55:47,655 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-3\test_short_summary_empty_trans0\test_transcript.txt
+2025-05-14 14:55:47,656 INFO [DEBUG] Отправляю сообщение: transcript пустой
+2025-05-14 14:55:47,684 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-14 14:55:47,684 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 14:55:47,685 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-3\test_send_todo_success0\test_transcript.txt
+2025-05-14 14:55:47,686 INFO [DEBUG] Sending file: todo_123456_2025-05-14_14-55.txt, size: 22 bytes
+2025-05-14 14:55:47,706 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-14 14:55:47,706 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 14:55:47,707 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-3\test_send_todo_no_file0\test_transcript.txt
+2025-05-14 14:55:47,728 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-14 14:55:47,728 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 14:55:47,729 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-3\test_send_todo_gpt_error0\test_transcript.txt
+2025-05-14 14:55:47,749 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-14 14:55:47,749 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 14:55:47,749 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-3\test_send_todo_empty_transcrip0\test_transcript.txt
+2025-05-14 14:55:47,768 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-14 14:55:47,768 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 14:55:47,768 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-3\test_send_todo_empty_gpt0\test_transcript.txt
+2025-05-14 14:55:47,793 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-14 14:55:47,794 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 14:55:47,794 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-3\test_send_meeting_protocol_suc0\test_transcript.txt
+2025-05-14 14:55:47,796 INFO GPT protocol_text: Текст протокола для теста...
+2025-05-14 14:55:47,833 INFO [DEBUG] Sending file: protocol_123456_2025-05-14_14-55.docx, size: 9 bytes
+2025-05-14 14:55:47,858 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-14 14:55:47,859 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 14:55:47,859 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-3\test_send_meeting_protocol_no_0\test_transcript.txt
+2025-05-14 14:55:47,875 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-14 14:55:47,876 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 14:55:47,876 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-3\test_send_meeting_protocol_gpt0\test_transcript.txt
+2025-05-14 14:55:47,898 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-14 14:55:47,899 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 14:55:47,899 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-3\test_send_meeting_protocol_exc0\test_transcript.txt
+2025-05-14 14:55:47,917 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-14 14:55:47,918 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-14 14:55:47,918 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-3\test_send_meeting_protocol_emp0\test_transcript.txt
+2025-05-15 17:51:12,568 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-15 17:52:35,434 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-15 17:52:43,974 INFO [DEBUG] Sending file: mom_123456_2025-05-15_17-52.txt, size: 84 bytes
+2025-05-15 17:52:44,004 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-15 17:52:57,027 INFO [DEBUG] Sending file: mom_123456_2025-05-15_17-52.txt, size: 1745 bytes
+2025-05-15 17:52:57,061 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-15 17:53:05,325 INFO [DEBUG] Sending file: mom_123456_2025-05-15_17-53.txt, size: 84 bytes
+2025-05-15 17:53:05,354 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-15 17:53:05,381 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-15 17:53:12,621 INFO [DEBUG] Sending file: mom_123456_2025-05-15_17-53.txt, size: 84 bytes
+2025-05-15 17:53:12,649 INFO [HANDLER] send_full_official_transcript, message.text='Полный официальный транскрипт'
+2025-05-15 17:53:12,651 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-15 17:53:12,652 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-5\test_full_official_transcript_0\test_transcript.txt
+2025-05-15 17:53:18,488 INFO [DEBUG] Sending full transcript, length: 46
+2025-05-15 17:53:18,513 INFO [HANDLER] send_short_summary, message.text='Сводка на 1 страницу'
+2025-05-15 17:53:18,515 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-15 17:53:18,515 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-5\test_short_summary_success0\test_transcript.txt
+2025-05-15 17:53:25,846 INFO [DEBUG] Sending file: summary_123456_2025-05-15_17-53.txt, size: 84 bytes
+2025-05-15 17:53:25,874 INFO [HANDLER] send_short_summary, message.text='Сводка на 1 страницу'
+2025-05-15 17:53:25,876 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-15 17:53:25,876 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-5\test_short_summary_empty_trans0\test_transcript.txt
+2025-05-15 17:53:25,877 INFO [DEBUG] Отправляю сообщение: transcript пустой
+2025-05-15 17:53:25,904 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-15 17:53:25,905 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-15 17:53:25,906 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-5\test_send_todo_success0\test_transcript.txt
+2025-05-15 17:53:25,908 INFO [DEBUG] Sending file: todo_123456_2025-05-15_17-53.txt, size: 22 bytes
+2025-05-15 17:53:25,925 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-15 17:53:25,926 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-15 17:53:25,926 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-5\test_send_todo_no_file0\test_transcript.txt
+2025-05-15 17:53:25,945 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-15 17:53:25,947 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-15 17:53:25,947 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-5\test_send_todo_gpt_error0\test_transcript.txt
+2025-05-15 17:53:25,966 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-15 17:53:25,967 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-15 17:53:25,967 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-5\test_send_todo_empty_transcrip0\test_transcript.txt
+2025-05-15 17:53:25,988 INFO [HANDLER] send_todo_checklist, message.text='Сформировать ToDo'
+2025-05-15 17:53:25,990 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-15 17:53:25,990 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-5\test_send_todo_empty_gpt0\test_transcript.txt
+2025-05-15 17:53:26,008 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-15 17:53:26,009 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-15 17:53:26,010 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-5\test_send_meeting_protocol_suc0\test_transcript.txt
+2025-05-15 17:53:26,011 INFO GPT protocol_text: Текст протокола для теста...
+2025-05-15 17:53:26,115 INFO [DEBUG] Sending file: protocol_123456_2025-05-15_17-53.docx, size: 9 bytes
+2025-05-15 17:53:26,218 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-15 17:53:26,220 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-15 17:53:26,221 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-5\test_send_meeting_protocol_no_0\test_transcript.txt
+2025-05-15 17:53:26,244 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-15 17:53:26,245 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-15 17:53:26,246 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-5\test_send_meeting_protocol_gpt0\test_transcript.txt
+2025-05-15 17:53:26,266 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-15 17:53:26,267 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-15 17:53:26,268 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-5\test_send_meeting_protocol_exc0\test_transcript.txt
+2025-05-15 17:53:26,284 INFO [HANDLER] send_meeting_protocol, message.text='Протокол заседания (Word)'
+2025-05-15 17:53:26,285 INFO [DEBUG] user_transcripts: <module 'frontend_bot.services.user_transcripts_store' from 'C:\\dev\\Aisha_bot_new\\frontend_bot\\services\\user_transcripts_store.py'>
+2025-05-15 17:53:26,286 INFO [DEBUG] transcript_path for user 123456: C:\Users\user\AppData\Local\Temp\pytest-of-user\pytest-5\test_send_meeting_protocol_emp0\test_transcript.txt
+2025-05-15 17:56:16,080 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-15 17:56:16,085 INFO [DEBUG] Sending file: mom_123456_2025-05-15_17-56.txt, size: 62 bytes
+2025-05-15 17:56:16,104 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-15 17:57:36,443 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-15 17:57:36,449 INFO [DEBUG] Sending file: mom_123456_2025-05-15_17-57.txt, size: 62 bytes
+2025-05-15 17:57:36,470 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-15 18:08:34,447 INFO [HANDLER] send_mom, message.text='Сформировать MoM'
+2025-05-15 18:08:34,458 INFO [DEBUG] Sending file: mom_123456_2025-05-15_18-08.txt, size: 62 bytes
+2025-05-15 18:08:34,482 INFO [HANDLER] send_mom, message.text='Сформировать MoM'

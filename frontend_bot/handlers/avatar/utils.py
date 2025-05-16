@@ -1,9 +1,13 @@
 from frontend_bot.config import AVATAR_MIN_PHOTOS, AVATAR_MAX_PHOTOS
-from frontend_bot.services.state_manager import clear_state, set_current_avatar_id
+from frontend_bot.services.avatar_manager import set_current_avatar_id
 from frontend_bot.bot import bot
 import asyncio
 from frontend_bot.handlers.avatar.state import user_session, user_gallery
 from frontend_bot.shared.progress import get_progressbar
+from frontend_bot.services.state_utils import clear_state, set_state
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Прогресс-бар
 
@@ -19,6 +23,11 @@ def reset_avatar_fsm(user_id):
     set_current_avatar_id(user_id, None)
 
 
+def get_gallery_key(user_id: int, avatar_id: str) -> str:
+    """Получает ключ для галереи."""
+    return f"{user_id}:{avatar_id}"
+
+
 async def start_avatar_wizard_for_user(user_id, chat_id):
     from uuid import uuid4
     from frontend_bot.texts.avatar.texts import PHOTO_REQUIREMENTS_TEXT
@@ -31,9 +40,9 @@ async def start_avatar_wizard_for_user(user_id, chat_id):
         "last_error_msg": None,
         "last_info_msg_id": None,
     }
-    user_gallery[(user_id, avatar_id)] = {"index": 0, "last_switch": 0}
+    gallery_key = get_gallery_key(user_id, avatar_id)
+    user_gallery[gallery_key] = {"index": 0, "last_switch": 0}
     from frontend_bot.services.avatar_manager import init_avatar_fsm
-    from frontend_bot.services.state_manager import set_state
 
     init_avatar_fsm(user_id, avatar_id)
     await set_state(user_id, "avatar_photo_upload")

@@ -36,26 +36,19 @@ async def test_full_official_transcript_success(
     Проверяет успешную отправку полного официального транскрипта как .txt-файла
     с корректным именем, содержимым и caption.
     """
-    from unittest.mock import patch
-    class AsyncFile:
-        async def __aenter__(self): return self
-        async def __aexit__(self, exc_type, exc, tb): pass
-        async def read(self): return "Test transcript content"
-    
     await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
     mock_gpt.return_value = "Полный транскрипт для теста"
-    
-    with patch("aiofiles.open", return_value=AsyncFile()):
-        message = type(
-            "Msg",
-            (),
-            {
-                "from_user": type("U", (), {"id": fake_user_id})(),
-                "chat": type("C", (), {"id": 1})(),
-                "text": "Полный официальный транскрипт",
-            },
-        )()
-        await transcribe_protocol.send_full_official_transcript(message)
+    message = type(
+        "Msg",
+        (),
+        {
+            "from_user": type("U", (), {"id": fake_user_id})(),
+            "chat": type("C", (), {"id": 1})(),
+            "text": "Полный официальный транскрипт",
+        },
+    )()
+    await transcribe_protocol.send_full_official_transcript(message)
     args, kwargs = mock_send_document.call_args
     filename, fileobj = args[1]
     assert filename.startswith("full_transcript_") and filename.endswith(".txt"), (
@@ -107,27 +100,20 @@ async def test_short_summary_success(
     Проверяет успешную отправку сводки как .txt-файла с корректным именем,
     содержимым и caption.
     """
-    from unittest.mock import patch
-    class AsyncFile:
-        async def __aenter__(self): return self
-        async def __aexit__(self, exc_type, exc, tb): pass
-        async def read(self): return "Test transcript content"
-    
     await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
     mock_async_exists.return_value = True
     mock_gpt.return_value = "Сводка для теста"
-    
-    with patch("aiofiles.open", return_value=AsyncFile()):
-        message = type(
-            "Msg",
-            (),
-            {
-                "from_user": type("U", (), {"id": fake_user_id})(),
-                "chat": type("C", (), {"id": 1})(),
-                "text": "Сводка на 1 страницу",
-            },
-        )()
-        await transcribe_protocol.send_short_summary(message)
+    message = type(
+        "Msg",
+        (),
+        {
+            "from_user": type("U", (), {"id": fake_user_id})(),
+            "chat": type("C", (), {"id": 1})(),
+            "text": "Сводка на 1 страницу",
+        },
+    )()
+    await transcribe_protocol.send_short_summary(message)
     assert mock_send_document.called, (
         "❌ send_document не был вызван. "
         "Проверьте, что хендлер send_short_summary корректно вызывает отправку файла."

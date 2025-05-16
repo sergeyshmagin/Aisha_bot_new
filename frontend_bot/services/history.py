@@ -1,71 +1,75 @@
+"""
+Сервис для работы с историей транскрипций.
+"""
+
 import os
 import json
+import logging
 from datetime import datetime
-from typing import List, Dict, Any
-from frontend_bot.utils.logger import get_logger
+from typing import List, Dict, Any, Optional
+from pathlib import Path
 import aiofiles
-from frontend_bot.services.file_utils import async_exists
+from frontend_bot.config import STORAGE_DIR, HISTORY_DIR
+from frontend_bot.shared.file_operations import AsyncFileManager
 
-logger = get_logger("history")
+logger = logging.getLogger(__name__)
 
-STORAGE_DIR = os.getenv("STORAGE_DIR", "storage")
-HISTORY_FILE = os.path.join(STORAGE_DIR, "history.json")
+async def ensure_history_dirs(storage_dir: Path) -> None:
+    """Создает директорию истории для указанного storage_dir."""
+    history_dir = storage_dir / "history"
+    history_dir.mkdir(parents=True, exist_ok=True)
 
+async def get_history_file_path(user_id: str, storage_dir: Path = STORAGE_DIR) -> Path:
+    """Получает путь к файлу истории пользователя."""
+    history_dir = storage_dir / HISTORY_DIR
+    return history_dir / f"{user_id}.json"
 
-def _ensure_storage_dir():
-    os.makedirs(STORAGE_DIR, exist_ok=True)
-
-
-async def load_history() -> Dict[str, List[Dict[str, Any]]]:
-    """Загрузить историю обработок из файла."""
-    if not await async_exists(HISTORY_FILE):
-        return {}
+async def load_history(user_id: str, storage_dir: Path = STORAGE_DIR) -> List[Dict[str, Any]]:
+    """Загружает историю пользователя."""
+    await ensure_history_dirs(storage_dir)
+    history_path = await get_history_file_path(user_id, storage_dir)
+    
+    if not await AsyncFileManager.exists(history_path):
+        return []
+    
     try:
-        async with aiofiles.open(HISTORY_FILE, "r", encoding="utf-8") as f:
-            content = await f.read()
-            return json.loads(content)
-    except Exception:
-        return {}
-
-
-async def save_history(history: Dict[str, List[Dict[str, Any]]]) -> None:
-    """Сохранить историю обработок в файл."""
-    _ensure_storage_dir()
-    try:
-        async with aiofiles.open(HISTORY_FILE, "w", encoding="utf-8") as f:
-            await f.write(json.dumps(history, ensure_ascii=False, indent=2))
+        content = await AsyncFileManager.read_file(history_path)
+        return json.loads(content)
     except Exception as e:
-        logger.error(f"Не удалось сохранить history.json: {e}")
+        logger.error(f"Error loading history: {e}")
+        return []
 
+async def save_history(user_id: str, history: List[Dict[str, Any]], storage_dir: Path = STORAGE_DIR) -> None:
+    """Сохраняет историю пользователя."""
+    await ensure_history_dirs(storage_dir)
+    history_path = await get_history_file_path(user_id, storage_dir)
+    
+    try:
+        content = json.dumps(history, ensure_ascii=False, indent=2)
+        await AsyncFileManager.write_file(history_path, content)
+    except Exception as e:
+        logger.error(f"Error saving history: {e}")
+        raise
 
-async def add_history_entry(
-    user_id: str, file: str, file_type: str, result_type: str
-) -> None:
-    """Добавить запись в историю пользователя."""
-    history = await load_history()
+async def add_history_entry(user_id: str, file_name: str, file_path: str, storage_dir: Path = STORAGE_DIR) -> None:
+    """Добавляет запись в историю транскрипций."""
+    history = await load_history(user_id, storage_dir)
+    
     entry = {
-        "file": os.path.basename(file),
-        "type": file_type,
-        "result": result_type,
-        "date": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        "file_name": file_name,
+        "file_path": file_path,
+        "created_at": datetime.utcnow().isoformat()
     }
-    if user_id not in history:
-        history[user_id] = []
-    history[user_id].append(entry)
-    await save_history(history)
-    logger.info(f"History entry added for user {user_id}: {entry}")
+    
+    history.append(entry)
+    await save_history(user_id, history, storage_dir)
 
+async def get_user_history(user_id: str, storage_dir: Path = STORAGE_DIR) -> List[Dict[str, Any]]:
+    """Получает историю пользователя."""
+    return await load_history(user_id, storage_dir)
 
-async def get_user_history(user_id: str, limit: int = 5) -> List[Dict[str, Any]]:
-    """Получить последние записи истории пользователя."""
-    history = await load_history()
-    return history.get(user_id, [])[-limit:]
-
-
-async def remove_last_history_entry(user_id: str) -> None:
-    """Удалить последнюю запись из истории пользователя."""
-    history = await load_history()
-    if user_id in history and history[user_id]:
-        history[user_id].pop()
-        await save_history(history)
-        logger.info(f"Last history entry removed for user {user_id}")
+async def clear_user_history(user_id: str, storage_dir: Path = STORAGE_DIR) -> None:
+    """Очищает историю пользователя."""
+    history_path = await get_history_file_path(user_id, storage_dir)
+    if await AsyncFileManager.exists(history_path):
+        await AsyncFileManager.safe_remove(history_path)

@@ -19,7 +19,55 @@ from frontend_bot.services.file_utils import (
 )
 from uuid import uuid4
 from frontend_bot.services import user_transcripts_store
+from frontend_bot.shared.file_operations import AsyncFileManager
+from frontend_bot.config import STORAGE_DIR, TRANSCRIBE_DIR
+import logging
+from pathlib import Path
+import glob
 
+logger = logging.getLogger(__name__)
+
+async def ensure_transcribe_dirs(storage_dir: Path = STORAGE_DIR) -> None:
+    """Создает необходимые директории для транскрипций."""
+    transcribe_dir = storage_dir / TRANSCRIBE_DIR
+    await AsyncFileManager.ensure_dir(storage_dir)
+    await AsyncFileManager.ensure_dir(transcribe_dir)
+
+async def save_transcribe_file(user_id: str, file_data: bytes, file_name: str, storage_dir: Path) -> Path:
+    """Сохраняет файл для транскрибации."""
+    await ensure_transcribe_dirs(storage_dir)
+    file_path = storage_dir / "transcribe" / str(user_id) / file_name
+    async with aiofiles.open(file_path, "wb") as f:
+        await f.write(file_data)
+    await add_history_entry(user_id, file_name, str(file_path), storage_dir)
+    return file_path
+
+async def get_user_transcribe_files(user_id: str, storage_dir: Path = STORAGE_DIR) -> list[Path]:
+    """Получает список файлов пользователя."""
+    transcribe_dir = storage_dir / TRANSCRIBE_DIR
+    user_dir = transcribe_dir / str(user_id)
+    if not await AsyncFileManager.exists(user_dir):
+        return []
+    
+    files = await AsyncFileManager.list_dir(user_dir)
+    return [user_dir / f for f in files]
+
+async def delete_transcribe_file(user_id: str, file_name: str, storage_dir: Path = STORAGE_DIR) -> bool:
+    """Удаляет файл пользователя."""
+    transcribe_dir = storage_dir / TRANSCRIBE_DIR
+    file_path = transcribe_dir / str(user_id) / file_name
+    if not await AsyncFileManager.exists(file_path):
+        return False
+    
+    await AsyncFileManager.safe_remove(file_path)
+    return True
+
+async def cleanup_user_transcribe_files(user_id: str, storage_dir: Path = STORAGE_DIR) -> None:
+    """Очищает все файлы пользователя."""
+    transcribe_dir = storage_dir / TRANSCRIBE_DIR
+    user_dir = transcribe_dir / str(user_id)
+    if await AsyncFileManager.exists(user_dir):
+        await AsyncFileManager.safe_rmtree(user_dir)
 
 async def save_audio_file(file_id: str, ext: str, bot, storage_dir: str) -> str:
     """
@@ -199,11 +247,13 @@ async def process_audio(
         file_id = message.voice.file_id if message.voice else message.audio.file_id
         ext = ".ogg" if message.voice else ".mp3"
         temp_file = await save_audio_file(file_id, ext, bot, storage_dir)
-        is_audio = is_audio_file_ffmpeg(temp_file)
+        is_audio = await is_audio_file_ffmpeg(temp_file)
         if not is_audio:
             await async_remove(temp_file)
             return TranscribeResult(False, None, "unsupported_format")
         temp_file_mp3 = await convert_to_mp3(temp_file)
+        # Удаляем исходный файл сразу после конвертации
+        await async_remove(temp_file)
         file_size = await async_getsize(temp_file_mp3)
         user_id = message.from_user.id
         user_dir = os.path.join(transcripts_dir, str(user_id))
@@ -215,10 +265,9 @@ async def process_audio(
             async with aiofiles.open(transcript_path, "w", encoding="utf-8") as f:
                 await f.write(transcription)
             await add_history_entry(
-                str(user_id), transcript_path, "audio", "transcript"
+                str(user_id), os.path.basename(transcript_path), transcript_path
             )
             await user_transcripts_store.set(user_id, transcript_path)
-            await async_remove(temp_file)
             await async_remove(temp_file_mp3)
             return TranscribeResult(True, transcript_path, None)
         else:
@@ -247,9 +296,23 @@ async def process_audio(
             async with aiofiles.open(transcript_path, "w", encoding="utf-8") as f:
                 await f.write(transcribed_text)
             await add_history_entry(
-                str(user_id), transcript_path, "audio", "transcript"
+                str(user_id), os.path.basename(transcript_path), transcript_path
             )
             await user_transcripts_store.set(user_id, transcript_path)
             return TranscribeResult(True, transcript_path, None)
     except Exception as e:
         return TranscribeResult(False, None, str(e))
+
+async def delete_user_transcripts(user_id: str, storage_dir: Path = STORAGE_DIR) -> None:
+    """
+    Удаляет все файлы пользователя из transcripts/{user_id} и все chunk-папки пользователя.
+    """
+    # Удаляем папку с транскриптами пользователя
+    transcripts_dir = storage_dir / "transcripts" / str(user_id)
+    if await AsyncFileManager.exists(transcripts_dir):
+        await AsyncFileManager.safe_rmtree(transcripts_dir)
+    # Удаляем все chunk-папки пользователя
+    chunk_glob = str(storage_dir / f"chunks_*")
+    for chunk_path in glob.glob(chunk_glob):
+        if os.path.isdir(chunk_path) and str(user_id) in chunk_path:
+            await AsyncFileManager.safe_rmtree(Path(chunk_path))

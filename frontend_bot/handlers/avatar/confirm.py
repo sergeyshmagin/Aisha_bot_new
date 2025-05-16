@@ -1,13 +1,8 @@
 from frontend_bot.keyboards.common import confirm_keyboard
 from frontend_bot.texts.avatar.texts import PHOTO_NAME_EMPTY, AVATAR_CONFIRM_TEXT
-from frontend_bot.services.avatar_manager import update_avatar_fsm, load_avatar_fsm
-from frontend_bot.services.state_manager import (
-    get_state,
-    set_state,
-    get_current_avatar_id,
-    fsm_states,
-)
-from frontend_bot.bot import bot
+from frontend_bot.services.avatar_manager import update_avatar_fsm, load_avatar_fsm, get_current_avatar_id
+from frontend_bot.services.state_utils import set_state, get_state, clear_state
+from frontend_bot.bot_instance import bot
 from frontend_bot.config import (
     FAL_MODE,
     FAL_ITERATIONS,
@@ -26,6 +21,7 @@ from frontend_bot.utils.validators import validate_user_avatar
 from frontend_bot.keyboards.avatar import avatar_confirm_keyboard
 import logging
 from frontend_bot.handlers.transcribe import user_states
+from frontend_bot.handlers.avatar.state import user_session
 
 print("CONFIRM HANDLERS LOADED")
 # Модуль подтверждения и управления аватаром
@@ -100,11 +96,6 @@ async def handle_avatar_confirm_yes(call):
         await bot.send_message(call.message.chat.id, ERROR_FILE)
         await bot.answer_callback_query(call.id)
         return
-    await bot.send_message(
-        call.message.chat.id,
-        "⏳ Обучение аватара началось! Это займёт примерно 15 минут. "
-        "Вы получите уведомление, когда аватар будет готов.",
-    )
     final_text = (
         "✨✨ <b>СОЗДАНИЕ АВАТАРА...</b> ✨✨\n\n"
         "Это займёт примерно 15 минут.\n"
@@ -132,7 +123,7 @@ async def handle_avatar_type(call):
         return
     gender = "man" if call.data == "avatar_type_man" else "woman"
     from frontend_bot.services.avatar_manager import update_avatar_fsm
-    from frontend_bot.services.state_manager import set_state
+    from frontend_bot.services.state_utils import set_state
 
     await update_avatar_fsm(user_id, avatar_id, gender=gender)
     await set_state(user_id, "avatar_enter_name")
@@ -140,111 +131,58 @@ async def handle_avatar_type(call):
     await bot.answer_callback_query(call.id)
 
 
-def avatar_enter_name_filter(message):
-    return fsm_states.get(message.from_user.id) == "avatar_enter_name"
-
-
-@bot.message_handler(func=avatar_enter_name_filter)
+@bot.message_handler(func=lambda m: m.text not in ["⬅️ Назад", "Отмена"])
 async def handle_avatar_name_input(message):
     user_id = message.from_user.id
-    logger.info(
-        "[handle_avatar_name_input] Вход: user_id=%s, message.text=%s",
-        user_id,
-        message.text,
-    )
+    state = await get_state(user_id)
+    if state != "avatar_enter_name":
+        return  # Не обрабатываем, если не то состояние
+    name = message.text.strip()
+    if not name:
+        await bot.send_message(message.chat.id, PHOTO_NAME_EMPTY)
+        return
+    avatar_id = get_current_avatar_id(user_id)
+    if not avatar_id:
+        await bot.send_message(message.chat.id, "Ошибка: не найден аватар.")
+        return
     try:
-        # state = await get_state(user_id)  # Уже не нужен, фильтр сработал
-        if message.text in CANCEL_COMMANDS:
-            await bot.send_message(
-                message.chat.id,
-                "Создание аватара отменено. Вы вернулись в меню аватаров.",
-                reply_markup=my_avatars_keyboard(),
-            )
-            await set_state(user_id, "my_avatars")
-            return
-        if message.text in ALL_MENU_COMMANDS:
-            return
-        name = message.text.strip()
-        logger.info("[handle_avatar_name_input] name='%s'", name)
-        if not name:
-            logger.info("[handle_avatar_name_input] name is empty")
-            await bot.send_message(message.chat.id, PHOTO_NAME_EMPTY)
-            return
-        avatar_id = get_current_avatar_id(user_id)
-        logger.info(f"[DEBUG] handle_avatar_name_input: avatar_id={avatar_id}")
-        if not avatar_id:
-            await bot.send_message(message.chat.id, "Ошибка: не найден аватар.")
-            return
-        try:
-            await update_avatar_fsm(user_id, avatar_id, title=name)
-            logger.info("[handle_avatar_name_input] update_avatar_fsm успешно")
-        except Exception as e:
-            logger.info("[handle_avatar_name_input] Ошибка в update_avatar_fsm: %s", e)
-            await bot.send_message(
-                message.chat.id,
-                "Ошибка при сохранении имени аватара. " "Попробуйте ещё раз.",
-            )
-            return
-        try:
-            await set_state(user_id, "avatar_confirm")
-            logger.info(
-                f"[DEBUG] handle_avatar_name_input: set_state avatar_confirm успешно "
-                f"для user_id={user_id}"
-            )
-        except Exception as e:
-            logger.info("[handle_avatar_name_input] Ошибка в set_state: %s", e)
-            await bot.send_message(
-                message.chat.id,
-                "Ошибка при переходе к подтверждению. " "Попробуйте ещё раз.",
-            )
-            return
-        try:
+        await update_avatar_fsm(user_id, avatar_id, title=name)
+        from frontend_bot.services.avatar_manager import get_avatars_index, load_avatar_fsm
+        from frontend_bot.handlers.avatar.gallery import send_avatar_card
+        mode = user_session.get(user_id, {}).get("edit_mode", "create")
+        # После действия очищаем edit_mode
+        user_session.get(user_id, {}).pop("edit_mode", None)
+        if mode == "create":
             data = await load_avatar_fsm(user_id, avatar_id)
-            logger.info(
-                f"[DEBUG] handle_avatar_name_input: load_avatar_fsm успешно: " f"{data}"
+            await set_state(user_id, "avatar_confirm")
+            gender = data.get("gender", "-")
+            photos = data.get("photos", [])
+            gender_str = "Мужчина" if gender == "man" else ("Женщина" if gender == "woman" else "-")
+            gender_emoji = "👨‍🦰" if gender == "man" else ("👩‍🦰" if gender == "woman" else "❓")
+            price = 150
+            balance = 250
+            text = AVATAR_CONFIRM_TEXT.format(
+                title=name,
+                gender=gender_str,
+                gender_emoji=gender_emoji,
+                photo_count=len(photos),
+                price=price,
+                balance=balance,
             )
-        except Exception as e:
-            logger.info("[handle_avatar_name_input] Ошибка в load_avatar_fsm: %s", e)
             await bot.send_message(
                 message.chat.id,
-                "Ошибка при загрузке данных аватара. " "Попробуйте ещё раз.",
+                text,
+                parse_mode="HTML",
+                reply_markup=avatar_confirm_keyboard(),
             )
-            return
-        gender = data.get("gender", "-")
-        photos = data.get("photos", [])
-        if gender == "man":
-            gender_str = "Мужчина"
-            gender_emoji = "👨‍🦰"
-        elif gender == "woman":
-            gender_str = "Женщина"
-            gender_emoji = "👩‍🦰"
         else:
-            gender_str = "-"
-            gender_emoji = "❓"
-        # TODO: получить price и balance из актуального источника, пока заглушки
-        price = 150
-        balance = 250
-        text = AVATAR_CONFIRM_TEXT.format(
-            title=name,
-            gender=gender_str,
-            gender_emoji=gender_emoji,
-            photo_count=len(photos),
-            price=price,
-            balance=balance,
-        )
-        await bot.send_message(
-            message.chat.id,
-            text,
-            parse_mode="HTML",
-            reply_markup=avatar_confirm_keyboard(),
-        )
-        logger.info(
-            "[handle_avatar_name_input] Сообщение с avatar_confirm_keyboard отправлено"
-        )
+            avatars = await get_avatars_index(user_id)
+            idx = next((i for i, a in enumerate(avatars) if a["avatar_id"] == avatar_id), 0)
+            await send_avatar_card(message.chat.id, user_id, avatars, idx)
     except Exception as e:
         logger.exception("[handle_avatar_name_input] Необработанная ошибка: %s", e)
         await bot.send_message(
-            message.chat.id, "Произошла ошибка. " "Попробуйте ещё раз."
+            message.chat.id, "Произошла ошибка. Попробуйте ещё раз."
         )
 
 
@@ -252,22 +190,13 @@ async def handle_avatar_name_input(message):
 async def handle_avatar_confirm_edit(call):
     user_id = call.from_user.id
     avatar_id = get_current_avatar_id(user_id)
-    from frontend_bot.services.avatar_manager import load_avatar_fsm
-
-    data = await load_avatar_fsm(user_id, avatar_id)
-    photos = data.get("photos", [])
-    # Переводим пользователя в режим редактирования галереи
-    await set_state(user_id, "avatar_gallery_review")
-    # Импортируем функцию показа галереи (если есть)
-    try:
-        from frontend_bot.handlers.avatar.gallery import show_wizard_gallery
-
-        await show_wizard_gallery(call.message.chat.id, user_id, avatar_id, photos, 0)
-    except ImportError:
-        await bot.send_message(
-            call.message.chat.id,
-            "Режим редактирования пока не реализован. Обратитесь к разработчику.",
-        )
+    if not avatar_id:
+        await bot.send_message(call.message.chat.id, "Ошибка: не найден аватар.")
+        await bot.answer_callback_query(call.id)
+        return
+    await set_state(user_id, "avatar_enter_name")
+    await bot.send_message(call.message.chat.id, "Введите новое имя для аватара:")
+    await bot.answer_callback_query(call.id)
 
 
 # Остальные обработчики (handle_avatar_confirm_edit,
