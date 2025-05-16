@@ -13,7 +13,7 @@ from frontend_bot.services.history import (
 from frontend_bot.keyboards.reply import history_keyboard
 from frontend_bot.services.file_utils import async_remove, async_exists
 from frontend_bot.utils.logger import get_logger
-from frontend_bot.services import user_transcripts_store
+from frontend_bot.services import transcript_cache
 from typing import List, Dict, Any
 from pathlib import Path
 from frontend_bot.services.transcribe_service import delete_user_transcripts
@@ -48,10 +48,10 @@ async def show_history(message: Message):
 @bot.message_handler(func=lambda m: m.text == "🗑 Удалить мой файл")
 async def delete_my_file(message: Message):
     user_id = message.from_user.id
-    transcript_path = await user_transcripts_store.get(user_id)
+    transcript_path = await transcript_cache.get(user_id)
     if transcript_path and await async_exists(transcript_path):
         await async_remove(transcript_path)
-        await user_transcripts_store.remove(user_id)
+        await transcript_cache.remove(user_id)
         await clear_user_history(str(user_id), STORAGE_DIR)
         await delete_user_transcripts(str(user_id), STORAGE_DIR)
         await bot.send_message(

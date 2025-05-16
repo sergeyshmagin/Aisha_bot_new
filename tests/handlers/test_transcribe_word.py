@@ -1,6 +1,6 @@
 from unittest.mock import AsyncMock, patch
 from frontend_bot.handlers import transcribe_protocol
-from frontend_bot.services import user_transcripts_store
+from frontend_bot.services import transcript_cache
 
 
 @patch(
@@ -41,7 +41,7 @@ async def test_send_meeting_protocol_success(
     """
     Проверяет успешную отправку Word-протокола: файл отправляется с правильным именем, содержимым и caption.
     """
-    await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    await transcript_cache.set(fake_user_id, fake_txt_file)
     mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
     mock_async_exists.return_value = True
     mock_gpt.return_value = "Текст протокола для теста"
@@ -115,7 +115,7 @@ async def test_send_meeting_protocol_no_file(
     Проверяет, что если файла транскрипта нет, бот отправляет корректное
     сообщение об ошибке.
     """
-    await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    await transcript_cache.set(fake_user_id, fake_txt_file)
     mock_aiofiles_open.set_content(fake_txt_file, "")
     mock_async_exists.return_value = False
     mock_gpt.return_value = ""
@@ -178,7 +178,7 @@ async def test_send_meeting_protocol_gpt_empty(
     Проверяет, что если GPT вернул пустую строку, бот отправляет корректное
     сообщение об ошибке (Word).
     """
-    await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    await transcript_cache.set(fake_user_id, fake_txt_file)
     mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
     mock_async_exists.return_value = True
     mock_gpt.return_value = "   "
@@ -247,7 +247,7 @@ async def test_send_meeting_protocol_exception(
     Проверяет, что при исключении в процессе генерации Word бот отправляет
     корректное сообщение об ошибке.
     """
-    await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    await transcript_cache.set(fake_user_id, fake_txt_file)
     mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
     mock_async_exists.return_value = True
     mock_gpt.side_effect = Exception("GPT error")
@@ -316,7 +316,7 @@ async def test_send_meeting_protocol_empty_transcript(
     Проверяет обработку случая, когда транскрипт пустой (файл есть, но пустой)
     для Word-протокола. Ожидается user-friendly сообщение об ошибке.
     """
-    await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    await transcript_cache.set(fake_user_id, fake_txt_file)
     mock_aiofiles_open.set_content(fake_txt_file, "")
     mock_async_exists.return_value = True
 

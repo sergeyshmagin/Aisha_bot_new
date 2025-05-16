@@ -1,12 +1,107 @@
 """Общие фикстуры для тестов."""
 
 import pytest
+import pytest_asyncio
+import asyncio
+import random
 from unittest.mock import patch, AsyncMock
 from frontend_bot.services.state_utils import clear_state
+from tests.conftest_redis import mock_redis
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 
+"""
+Фикстуры для тестирования PostgreSQL.
+"""
+
+from frontend_bot.models.base import Base
+from frontend_bot.database.db import get_session
+from frontend_bot.repositories.user_repository import UserRepository
+from frontend_bot.repositories.balance_repository import BalanceRepository
+from frontend_bot.repositories.state_repository import StateRepository
+
+# Тестовая БД
+TEST_DATABASE_URL = "postgresql+asyncpg://aisha_user:KbZZGJHX09KSH7r9ev4m@192.168.0.4:5432/aisha_test"
+
+def generate_telegram_id():
+    """Генерирует уникальный telegram_id для тестов."""
+    return random.randint(100000000, 999999999)
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """Создает event loop для тестов."""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+@pytest_asyncio.fixture(scope="session")
+async def test_engine():
+    """Создает тестовый движок SQLAlchemy."""
+    engine = create_async_engine(
+        TEST_DATABASE_URL,
+        echo=False,
+        future=True,
+        poolclass=NullPool
+    )
+    
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
+    
+    yield engine
+    
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    
+    await engine.dispose()
+
+@pytest_asyncio.fixture(autouse=True)
+async def clean_tables(test_engine):
+    """Очищает все таблицы перед каждым тестом."""
+    async with test_engine.begin() as conn:
+        for table in reversed(Base.metadata.sorted_tables):
+            await conn.execute(table.delete())
+
+@pytest_asyncio.fixture
+async def test_session(test_engine) -> AsyncSession:
+    """Создает тестовую сессию."""
+    async_session = sessionmaker(
+        test_engine,
+        class_=AsyncSession,
+        expire_on_commit=False
+    )
+    
+    async with async_session() as session:
+        yield session
+        await session.rollback()
+
+@pytest_asyncio.fixture
+async def user_repository(test_session) -> UserRepository:
+    """Создает репозиторий пользователей."""
+    return UserRepository(test_session)
+
+@pytest_asyncio.fixture
+async def balance_repository(test_session) -> BalanceRepository:
+    """Создает репозиторий балансов."""
+    return BalanceRepository(test_session)
+
+@pytest_asyncio.fixture
+async def state_repository(test_session) -> StateRepository:
+    """Создает репозиторий состояний."""
+    return StateRepository(test_session)
+
+@pytest_asyncio.fixture
+async def test_user(user_repository):
+    """Создает тестового пользователя."""
+    user = await user_repository.create(
+        telegram_id=generate_telegram_id(),
+        username="test_user"
+    )
+    return user
 
 @pytest.fixture
-async def clean_state():
+async def clean_state(mock_redis):
     """
     Фикстура для очистки состояния до и после теста.
     

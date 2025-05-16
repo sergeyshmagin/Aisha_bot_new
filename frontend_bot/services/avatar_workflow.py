@@ -7,6 +7,7 @@ import logging
 from typing import List, Optional, Dict, Any
 from uuid import uuid4
 from datetime import datetime
+import os
 
 from frontend_bot.services.avatar_manager import (
     init_avatar_fsm,
@@ -18,7 +19,7 @@ from frontend_bot.services.avatar_manager import (
 from frontend_bot.services.state_utils import set_state, get_state, clear_state
 from frontend_bot.constants.avatar import AVATAR_MIN_PHOTOS, AVATAR_MAX_PHOTOS
 from frontend_bot.shared.image_processing import AsyncImageProcessor
-from frontend_bot.config import PHOTO_MIN_RES
+from frontend_bot.config import PHOTO_MIN_RES, AVATAR_STORAGE_PATH
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ async def init_avatar_creation(user_id: int) -> str:
     try:
         avatar_id = str(uuid4())
         await init_avatar_fsm(user_id, avatar_id)
-        set_state(user_id, "avatar_photo_upload")
+        await set_state(user_id, "avatar_photo_upload")
         return avatar_id
     except Exception as e:
         logger.error(f"Failed to init avatar creation: {e}")
@@ -92,23 +93,23 @@ async def validate_photo(photo_bytes: bytes) -> bool:
         raise PhotoValidationError(f"Photo validation failed: {e}")
 
 async def handle_photo_upload(
-    user_id: int, 
-    avatar_id: str, 
+    user_id: int,
+    avatar_id: str,
     photo_bytes: bytes,
     file_id: Optional[str] = None
 ) -> str:
     """
     Обрабатывает загрузку фото для аватара.
-    
+
     Args:
         user_id: ID пользователя
         avatar_id: ID аватара
         photo_bytes: Байты фото
         file_id: ID файла в Telegram (опционально)
-        
+
     Returns:
         str: Путь к сохраненному фото
-        
+
     Raises:
         PhotoValidationError: Если фото не прошло валидацию
         AvatarCreationError: При других ошибках
@@ -116,20 +117,22 @@ async def handle_photo_upload(
     try:
         # Валидируем фото
         await validate_photo(photo_bytes)
-        
-        # Сохраняем фото
-        photo_path = await add_photo_to_avatar(user_id, avatar_id, photo_bytes, file_id)
-        
+
         # Проверяем количество фото
         data = await load_avatar_fsm(user_id, avatar_id)
         photos_count = len(data.get("photos", []))
-        
-        if photos_count > AVATAR_MAX_PHOTOS:
+
+        if photos_count >= AVATAR_MAX_PHOTOS:
             raise PhotoValidationError(
                 f"Maximum number of photos ({AVATAR_MAX_PHOTOS}) exceeded"
             )
-            
+
+        # Сохраняем фото
+        photo_path = await add_photo_to_avatar(user_id, avatar_id, photo_bytes, file_id)
         return photo_path
+
+    except PhotoValidationError:
+        raise
     except Exception as e:
         logger.error(f"Photo upload error: {e}")
         raise AvatarCreationError(f"Failed to upload photo: {e}")
@@ -155,8 +158,14 @@ async def handle_gender_selection(
         if gender not in ["male", "female"]:
             raise ValidationError("Invalid gender value")
             
+        # Создаем директорию для аватара если её нет
+        avatar_dir = os.path.join(AVATAR_STORAGE_PATH, str(user_id), avatar_id)
+        os.makedirs(avatar_dir, exist_ok=True)
+            
         await update_avatar_fsm(user_id, avatar_id, class_name=gender)
-        set_state(user_id, "avatar_enter_name")
+        await set_state(user_id, "avatar_enter_name")
+    except ValidationError:
+        raise
     except Exception as e:
         logger.error(f"Gender selection error: {e}")
         raise AvatarCreationError(f"Failed to set gender: {e}")
@@ -185,8 +194,14 @@ async def handle_name_input(
         if len(name) > 50:  # Максимальная длина имени
             raise ValidationError("Name is too long (max 50 characters)")
             
-        await update_avatar_fsm(user_id, avatar_id, title=name)
-        set_state(user_id, "avatar_confirm")
+        # Создаем директорию для аватара если её нет
+        avatar_dir = os.path.join(AVATAR_STORAGE_PATH, str(user_id), avatar_id)
+        os.makedirs(avatar_dir, exist_ok=True)
+            
+        await update_avatar_fsm(user_id, avatar_id, name=name)
+        await set_state(user_id, "avatar_confirm")
+    except ValidationError:
+        raise
     except Exception as e:
         logger.error(f"Name input error: {e}")
         raise AvatarCreationError(f"Failed to set name: {e}")
@@ -203,7 +218,8 @@ async def finalize_avatar(
         avatar_id: ID аватара
         
     Raises:
-        AvatarCreationError: Если не удалось завершить создание
+        ValidationError: Если недостаточно фото
+        AvatarCreationError: При других ошибках
     """
     try:
         # Проверяем количество фото
@@ -219,7 +235,9 @@ async def finalize_avatar(
         await mark_avatar_ready(user_id, avatar_id)
         
         # Сбрасываем состояние
-        set_state(user_id, "my_avatars")
+        await set_state(user_id, "my_avatars")
+    except ValidationError:
+        raise
     except Exception as e:
         logger.error(f"Avatar finalization error: {e}")
         raise AvatarCreationError(f"Failed to finalize avatar: {e}")
@@ -232,15 +250,20 @@ async def cleanup_state(user_id: int) -> None:
         user_id: ID пользователя
     """
     try:
-        avatar_id = get_state(user_id)
+        avatar_id = await get_state(user_id)
         if avatar_id:
             # Удаляем временные файлы
-            # TODO: Реализовать удаление временных файлов
+            avatar_dir = os.path.join(AVATAR_STORAGE_PATH, str(user_id), avatar_id)
+            if os.path.exists(avatar_dir):
+                for file in os.listdir(avatar_dir):
+                    os.remove(os.path.join(avatar_dir, file))
+                os.rmdir(avatar_dir)
             
             # Сбрасываем состояние
-            set_state(user_id, "my_avatars")
+            await set_state(user_id, "my_avatars")
     except Exception as e:
-        logger.error(f"State cleanup error: {e}")
+        logger.error(f"Error cleaning up state: {e}")
+        await set_state(user_id, "main_menu")
 
 async def handle_creation_error(
     user_id: int, 

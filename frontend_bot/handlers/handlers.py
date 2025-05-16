@@ -42,7 +42,7 @@ def handle_avatar_state(func):
     async def wrapper(message, *args, **kwargs):
         try:
             user_id = message.from_user.id
-            avatar_id = get_state(user_id)
+            avatar_id = await get_state(user_id)
             
             if not avatar_id:
                 await bot.send_message(
@@ -69,7 +69,27 @@ def handle_avatar_state(func):
             
     return wrapper
 
-@bot.message_handler(func=lambda message: get_state(message.from_user.id) == "avatar_photo_upload", content_types=['photo'])
+async def check_photo_upload_state(message):
+    """Проверяет состояние загрузки фото."""
+    return await get_state(message.from_user.id) == "avatar_photo_upload"
+
+async def check_photo_next_state(message):
+    """Проверяет состояние перехода к следующему шагу."""
+    return await get_state(message.from_user.id) == "avatar_photo_upload" and message.text == "Далее"
+
+async def check_gender_state(message):
+    """Проверяет состояние выбора пола."""
+    return await get_state(message.from_user.id) == "avatar_gender"
+
+async def check_name_state(message):
+    """Проверяет состояние ввода имени."""
+    return await get_state(message.from_user.id) == "avatar_enter_name"
+
+async def check_confirm_state(message):
+    """Проверяет состояние подтверждения."""
+    return await get_state(message.from_user.id) == "avatar_confirm" and message.text == "Подтвердить"
+
+@bot.message_handler(func=check_photo_upload_state, content_types=['photo'])
 @handle_avatar_state
 async def handle_avatar_photo(message, user_id, avatar_id):
     """Обработчик загрузки фото для аватара."""
@@ -93,8 +113,9 @@ async def handle_avatar_photo(message, user_id, avatar_id):
         "Продолжайте загружать фото или нажмите 'Далее' для перехода к следующему шагу.",
         reply_markup=avatar_photo_keyboard()
     )
+    await set_state(user_id, "avatar_photo_upload")
 
-@bot.message_handler(func=lambda message: get_state(message.from_user.id) == "avatar_photo_upload" and message.text == "Далее")
+@bot.message_handler(func=check_photo_next_state)
 @handle_avatar_state
 async def handle_avatar_photo_next(message, user_id, avatar_id):
     """Обработчик перехода к следующему шагу после загрузки фото."""
@@ -119,7 +140,7 @@ async def handle_avatar_photo_next(message, user_id, avatar_id):
     )
     await set_state(user_id, "avatar_gender")
 
-@bot.message_handler(func=lambda message: get_state(message.from_user.id) == "avatar_gender")
+@bot.message_handler(func=check_gender_state)
 @handle_avatar_state
 async def handle_avatar_gender(message, user_id, avatar_id):
     """Обработчик выбора пола для аватара."""
@@ -135,7 +156,7 @@ async def handle_avatar_gender(message, user_id, avatar_id):
     )
     await set_state(user_id, "avatar_enter_name")
 
-@bot.message_handler(func=lambda message: get_state(message.from_user.id) == "avatar_enter_name")
+@bot.message_handler(func=check_name_state)
 @handle_avatar_state
 async def handle_avatar_name(message, user_id, avatar_id):
     """Обработчик ввода имени для аватара."""
@@ -150,7 +171,7 @@ async def handle_avatar_name(message, user_id, avatar_id):
     )
     await set_state(user_id, "avatar_confirm")
 
-@bot.message_handler(func=lambda message: get_state(message.from_user.id) == "avatar_confirm" and message.text == "Подтвердить")
+@bot.message_handler(func=check_confirm_state)
 @handle_avatar_state
 async def handle_avatar_confirm(message, user_id, avatar_id):
     """Обработчик подтверждения создания аватара."""

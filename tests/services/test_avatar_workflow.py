@@ -33,11 +33,11 @@ def mock_avatar_manager():
          patch("frontend_bot.services.avatar_workflow.mark_avatar_ready") as mock_mark, \
          patch("frontend_bot.services.avatar_workflow.load_avatar_fsm") as mock_load:
         
-        mock_init.return_value = AsyncMock()
-        mock_add.return_value = AsyncMock(return_value="/path/to/photo.jpg")
-        mock_update.return_value = AsyncMock()
-        mock_mark.return_value = AsyncMock()
-        mock_load.return_value = AsyncMock(return_value={"photos": []})
+        mock_init.return_value = None
+        mock_add.return_value = "/path/to/photo.jpg"
+        mock_update.return_value = None
+        mock_mark.return_value = None
+        mock_load.return_value = {"photos": []}
         
         yield {
             "init": mock_init,
@@ -51,20 +51,14 @@ def mock_avatar_manager():
 def mock_state_manager():
     """Фикстура для мока state_manager."""
     with patch("frontend_bot.services.avatar_workflow.set_state") as mock_set, \
-         patch("frontend_bot.services.avatar_workflow.get_state") as mock_get, \
-         patch("frontend_bot.services.avatar_workflow.set_current_avatar_id") as mock_set_id, \
-         patch("frontend_bot.services.avatar_workflow.get_current_avatar_id") as mock_get_id:
+         patch("frontend_bot.services.avatar_workflow.get_state") as mock_get:
         
-        mock_set.return_value = AsyncMock()
-        mock_get.return_value = AsyncMock(return_value="avatar_photo_upload")
-        mock_set_id.return_value = None
-        mock_get_id.return_value = "test_avatar_id"
+        mock_set.return_value = AsyncMock()  # set_state теперь асинхронный
+        mock_get.return_value = AsyncMock(return_value="avatar_photo_upload")  # get_state теперь асинхронный
         
         yield {
             "set": mock_set,
             "get": mock_get,
-            "set_id": mock_set_id,
-            "get_id": mock_get_id,
         }
 
 @pytest.fixture
@@ -72,9 +66,10 @@ def mock_image_processor():
     """Фикстура для мока image_processor."""
     with patch("frontend_bot.services.avatar_workflow.AsyncImageProcessor") as mock:
         mock_instance = AsyncMock()
-        mock_instance.open_from_bytes.return_value = AsyncMock()
         mock_instance.size = (PHOTO_MIN_RES, PHOTO_MIN_RES)
+        mock_instance.open_from_bytes = AsyncMock(return_value=mock_instance)
         mock.return_value = mock_instance
+        mock.open_from_bytes = AsyncMock(return_value=mock_instance)
         yield mock
 
 def create_test_image(width: int, height: int) -> bytes:
@@ -93,7 +88,6 @@ async def test_init_avatar_creation(mock_avatar_manager, mock_state_manager):
     
     assert avatar_id is not None
     mock_avatar_manager["init"].assert_called_once()
-    mock_state_manager["set_id"].assert_called_once()
     mock_state_manager["set"].assert_called_once_with(user_id, "avatar_photo_upload")
 
 @pytest.mark.asyncio
@@ -102,13 +96,17 @@ async def test_validate_photo_valid(mock_image_processor):
     photo_bytes = create_test_image(PHOTO_MIN_RES, PHOTO_MIN_RES)
     
     result = await validate_photo(photo_bytes)
-    
+
     assert result is True
+    mock_image_processor.open_from_bytes.assert_called_once_with(photo_bytes)
 
 @pytest.mark.asyncio
 async def test_validate_photo_too_small(mock_image_processor):
     """Тест валидации фото с недостаточным разрешением."""
     photo_bytes = create_test_image(PHOTO_MIN_RES - 1, PHOTO_MIN_RES - 1)
+    mock_instance = AsyncMock()
+    mock_instance.size = (PHOTO_MIN_RES - 1, PHOTO_MIN_RES - 1)
+    mock_image_processor.open_from_bytes.return_value = mock_instance
     
     with pytest.raises(PhotoValidationError):
         await validate_photo(photo_bytes)
@@ -133,6 +131,7 @@ async def test_handle_photo_upload_success(mock_avatar_manager, mock_image_proce
     assert photo_path == "/path/to/photo.jpg"
     mock_avatar_manager["add"].assert_called_once()
     mock_avatar_manager["load"].assert_called_once()
+    mock_image_processor.open_from_bytes.assert_called_once_with(photo_bytes)
 
 @pytest.mark.asyncio
 async def test_handle_photo_upload_max_photos(mock_avatar_manager, mock_image_processor):
@@ -140,12 +139,15 @@ async def test_handle_photo_upload_max_photos(mock_avatar_manager, mock_image_pr
     user_id = 123
     avatar_id = "test_avatar_id"
     photo_bytes = create_test_image(PHOTO_MIN_RES, PHOTO_MIN_RES)
-    
+
     # Мокаем максимальное количество фото
-    mock_avatar_manager["load"].return_value = {"photos": ["photo"] * AVATAR_MAX_PHOTOS}
-    
-    with pytest.raises(PhotoValidationError):
+    mock_avatar_manager["load"].return_value = {"photos": ["photo"] * (AVATAR_MAX_PHOTOS + 1)}
+
+    with pytest.raises(PhotoValidationError) as exc_info:
         await handle_photo_upload(user_id, avatar_id, photo_bytes)
+    
+    assert str(exc_info.value) == f"Maximum number of photos ({AVATAR_MAX_PHOTOS}) exceeded"
+    mock_image_processor.open_from_bytes.assert_called_once_with(photo_bytes)
 
 @pytest.mark.asyncio
 async def test_handle_gender_selection_valid(mock_avatar_manager, mock_state_manager):

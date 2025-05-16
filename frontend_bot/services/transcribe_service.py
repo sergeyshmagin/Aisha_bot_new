@@ -18,7 +18,7 @@ from frontend_bot.services.file_utils import (
     async_rmtree,
 )
 from uuid import uuid4
-from frontend_bot.services import user_transcripts_store
+from frontend_bot.services import transcript_cache
 from frontend_bot.shared.file_operations import AsyncFileManager
 from frontend_bot.config import STORAGE_DIR, TRANSCRIBE_DIR
 import logging
@@ -268,7 +268,7 @@ async def process_audio(
             await add_history_entry(
                 str(user_id), os.path.basename(transcript_path), transcript_path
             )
-            await user_transcripts_store.set(user_id, transcript_path)
+            await transcript_cache.set(user_id, transcript_path)
             await async_remove(temp_file_mp3)
             return TranscribeResult(True, transcript_path, None)
         else:
@@ -299,7 +299,7 @@ async def process_audio(
             await add_history_entry(
                 str(user_id), os.path.basename(transcript_path), transcript_path
             )
-            await user_transcripts_store.set(user_id, transcript_path)
+            await transcript_cache.set(user_id, transcript_path)
             return TranscribeResult(True, transcript_path, None)
     except Exception as e:
         return TranscribeResult(False, None, str(e))

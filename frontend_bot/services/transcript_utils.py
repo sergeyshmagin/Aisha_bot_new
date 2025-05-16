@@ -1,7 +1,7 @@
 import aiofiles
 from frontend_bot.keyboards.reply import transcript_format_keyboard
 from frontend_bot.services.file_utils import async_exists
-from frontend_bot.services import user_transcripts_store
+from frontend_bot.services import transcript_cache as user_transcripts_store
 import io
 
 async def get_user_transcript_or_error(bot, message, logger=None):
@@ -9,7 +9,8 @@ async def get_user_transcript_or_error(bot, message, logger=None):
     logger.info(f"[DEBUG] Getting transcript for user {user_id}")
     transcript_path = await user_transcripts_store.get(user_id)
     logger.info(f"[DEBUG] transcript_path: {transcript_path}")
-    if not transcript_path or not await async_exists(transcript_path):
+    
+    if not transcript_path:
         logger.info(f"[DEBUG] No transcript found for user {user_id}")
         await bot.send_message(
             message.chat.id,
@@ -17,6 +18,16 @@ async def get_user_transcript_or_error(bot, message, logger=None):
             reply_markup=transcript_format_keyboard(),
         )
         return None
+        
+    if not await async_exists(transcript_path):
+        logger.info(f"[DEBUG] Transcript file not found: {transcript_path}")
+        await bot.send_message(
+            message.chat.id,
+            "Файл транскрипта не найден. Пожалуйста, отправьте аудиофайл или текстовый файл ещё раз.",
+            reply_markup=transcript_format_keyboard(),
+        )
+        return None
+        
     try:
         async with aiofiles.open(transcript_path, "r", encoding="utf-8") as f:
             transcript = await f.read()
@@ -25,17 +36,17 @@ async def get_user_transcript_or_error(bot, message, logger=None):
             logger.info("[DEBUG] Empty transcript")
             await bot.send_message(
                 message.chat.id,
-                "что-то пошло не так",
+                "Транскрипт пустой. Пожалуйста, отправьте аудиофайл или текстовый файл ещё раз.",
                 reply_markup=transcript_format_keyboard(),
             )
             return None
         return transcript
     except Exception as e:
         if logger:
-            logger.exception("Ошибка при чтении файла транскрипта")
+            logger.exception(f"Ошибка при чтении файла транскрипта: {e}")
         await bot.send_message(
             message.chat.id,
-            "что-то пошло не так",
+            "Ошибка при чтении файла транскрипта. Пожалуйста, попробуйте ещё раз.",
             reply_markup=transcript_format_keyboard(),
         )
         return None

@@ -44,6 +44,10 @@ async def test_get_history_file_path(temp_dir):
 @pytest.mark.asyncio
 async def test_load_history_empty(temp_dir):
     """Тест загрузки пустой истории."""
+    # Очищаем историю перед тестом
+    await clear_user_history("123", temp_dir)
+    
+    # Проверяем загрузку пустой истории
     history = await load_history("123", temp_dir)
     assert history == []
 

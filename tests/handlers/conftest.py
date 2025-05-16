@@ -1,29 +1,47 @@
 import pytest
-from frontend_bot.services import user_transcripts_store
+from frontend_bot.services import transcript_cache
+from frontend_bot.shared.redis_client import RedisClient
 from typing import AsyncGenerator
 from unittest.mock import AsyncMock, Mock, MagicMock, patch
+from frontend_bot.services.state_utils import clear_state
 
+@pytest.fixture
+async def redis():
+    """Фикстура для реального Redis клиента."""
+    client = RedisClient()
+    await client.init()
+    yield client
+    await client.close()
 
 @pytest.fixture(autouse=True)
-async def clear_user_transcripts() -> AsyncGenerator[None, None]:
+async def clear_user_transcripts(redis) -> AsyncGenerator[None, None]:
     """Очищает user_transcripts до и после каждого теста."""
-    await user_transcripts_store.clear()
+    await transcript_cache.clear()
     yield
-    await user_transcripts_store.clear()
+    await transcript_cache.clear()
 
 
 @pytest.fixture
 def fake_user_id() -> int:
     """Фикстура для поддельного user_id."""
-    return 123456
+    return 123456789
 
 
 @pytest.fixture
-def fake_txt_file(tmp_path) -> str:
-    """Создаёт временный .txt-файл для теста транскрипта."""
-    file_path = tmp_path / "test_transcript.txt"
-    file_path.write_text("Test transcript content")
-    return str(file_path)
+def fake_txt_file() -> str:
+    """Фикстура для тестового пути к файлу транскрипта."""
+    return "storage/transcripts/test_transcript.txt"
+
+
+@pytest.fixture
+def mock_state_manager():
+    """Фикстура для мока state_manager."""
+    return {
+        "get": AsyncMock(return_value=None),
+        "set": AsyncMock(),
+        "clear": AsyncMock(),
+        "cleanup": AsyncMock(),
+    }
 
 
 class AsyncFileMock:
@@ -164,3 +182,11 @@ def mock_openai_client(monkeypatch):
     mock_client = AsyncMock()
     monkeypatch.setattr("frontend_bot.services.gpt_assistant.client", mock_client)
     return mock_client
+
+
+@pytest.fixture(autouse=True)
+async def cleanup_state(fake_user_id):
+    """Фикстура для очистки состояния после каждого теста."""
+    yield
+    await clear_state(fake_user_id)
+    await transcript_cache.remove(fake_user_id)

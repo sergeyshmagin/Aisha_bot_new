@@ -12,6 +12,28 @@ from frontend_bot.config import STORAGE_DIR, STATE_FILE, CACHE_ENABLED, CACHE_TT
 
 logger = logging.getLogger(__name__)
 
+# Создаем глобальный экземпляр StateManager
+_state_manager = None
+
+def get_state_manager() -> 'StateManager':
+    """Получает глобальный экземпляр StateManager."""
+    global _state_manager
+    if _state_manager is None:
+        _state_manager = StateManager()
+    return _state_manager
+
+async def get_state(user_id: str) -> Optional[Dict[str, Any]]:
+    """Получает состояние пользователя."""
+    return await get_state_manager().get_state(user_id)
+
+async def set_state(user_id: str, state: Dict[str, Any]) -> None:
+    """Устанавливает состояние пользователя."""
+    await get_state_manager().set_state(user_id, state)
+
+async def clear_state(user_id: str) -> None:
+    """Очищает состояние пользователя."""
+    await get_state_manager().clear_state(user_id)
+
 class StateManager:
     """Менеджер для работы с состояниями пользователей."""
     

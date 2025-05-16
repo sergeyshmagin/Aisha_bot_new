@@ -10,13 +10,11 @@ class AsyncContextManagerMock(MagicMock):
         pass
 
 from frontend_bot.handlers import transcribe_protocol
-from frontend_bot.services import user_transcripts_store
+from frontend_bot.services import transcript_cache
 
 
-@patch("frontend_bot.services.user_transcripts_store._save", new_callable=AsyncMock)
-@patch("frontend_bot.services.user_transcripts_store._load", new_callable=AsyncMock)
 @patch(
-    "frontend_bot.handlers.general.bot.send_document",
+    "frontend_bot.handlers.general.bot.send_message",
     new_callable=AsyncMock,
 )
 @patch(
@@ -24,51 +22,29 @@ from frontend_bot.services import user_transcripts_store
     new_callable=AsyncMock,
 )
 @patch(
-    "frontend_bot.handlers.general.bot.send_message",
+    "frontend_bot.handlers.general.bot.send_document",
     new_callable=AsyncMock,
 )
 @patch(
-    "frontend_bot.services.file_utils.async_exists",
+    "frontend_bot.services.gpt_assistant.format_transcript_with_gpt",
     new_callable=AsyncMock,
 )
-async def test_send_mom_success(
-    mock_async_exists: AsyncMock,
-    mock_send_message: AsyncMock,
-    mock_send_chat_action: AsyncMock,
-    mock_send_document: AsyncMock,
-    mock_load: AsyncMock,
-    mock_save: AsyncMock,
-    mock_openai_client: AsyncMock,
+async def test_mom_success(
+    mock_gpt,
+    mock_send_document,
+    mock_send_chat_action,
+    mock_send_message,
     fake_user_id: int,
     fake_txt_file: str,
     mock_aiofiles_open,
 ):
     """
-    Проверяет успешную отправку MoM (Minutes of Meeting) как .txt-файла с
-    корректным именем, содержимым и caption.
+    Проверяет успешную отправку MoM как .txt-файла с корректным именем,
+    содержимым и caption.
     """
-    await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    await transcript_cache.set(fake_user_id, fake_txt_file)
     mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
-    mock_async_exists.return_value = True
-    
-    # Настраиваем мок клиента GPT
-    mock_message = AsyncMock()
-    mock_message.content = [AsyncMock()]
-    mock_message.content[0].text.value = "MoM для теста"
-    mock_openai_client.beta.threads.messages.list.return_value = AsyncMock(data=[mock_message])
-    mock_openai_client.beta.threads.runs.retrieve.return_value = AsyncMock(status="completed")
-
-    class AsyncFile:
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, exc_type, exc, tb):
-            pass
-
-        async def read(self):
-            return "Test transcript content"
-
-    mock_aiofiles_open.return_value = AsyncFile()
+    mock_gpt.return_value = "MoM для теста"
     message = type(
         "Msg",
         (),
@@ -79,26 +55,27 @@ async def test_send_mom_success(
         },
     )()
     await transcribe_protocol.send_mom(message)
-    # Проверяем, что файл отправлен
-    mock_send_document.assert_called()
+    assert mock_send_document.called, (
+        "❌ send_document не был вызван. "
+        "Проверьте, что хендлер send_mom корректно вызывает отправку файла."
+    )
     args, kwargs = mock_send_document.call_args
     filename, fileobj = args[1]
     assert filename.startswith("mom_") and filename.endswith(".txt"), (
         f"❌ Имя файла некорректно: {filename}. "
-        "Проверьте генерацию имени файла для MoM."
+        "Проверьте генерацию имени файла."
     )
     fileobj.seek(0)
     content = fileobj.read().decode()
     assert content, (
-        "❌ Содержимое файла пустое. Проверьте, что GPT-ответ передаётся в файл MoM."
+        "❌ Содержимое файла пустое. Проверьте, что файл отправлен."
     )
     assert kwargs["caption"].startswith("📝 MoM (Minutes of Meeting)"), (
-        f"❌ Caption некорректен: {kwargs['caption']}. " "Проверьте caption для MoM."
+        f"❌ Caption некорректен: {kwargs['caption']}. "
+        "Проверьте caption для MoM."
     )
 
 
-@patch("frontend_bot.services.user_transcripts_store._save", new_callable=AsyncMock)
-@patch("frontend_bot.services.user_transcripts_store._load", new_callable=AsyncMock)
 @patch(
     "frontend_bot.handlers.general.bot.send_document",
     new_callable=AsyncMock,
@@ -120,9 +97,6 @@ async def test_send_mom_no_file(
     mock_send_message: AsyncMock,
     mock_send_chat_action: AsyncMock,
     mock_send_document: AsyncMock,
-    mock_load: AsyncMock,
-    mock_save: AsyncMock,
-    mock_openai_client: AsyncMock,
     fake_user_id: int,
     fake_txt_file: str,
     mock_aiofiles_open,
@@ -131,7 +105,7 @@ async def test_send_mom_no_file(
     Проверяет, что если файла транскрипта нет, бот отправляет корректное
     сообщение об ошибке.
     """
-    await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    await transcript_cache.set(fake_user_id, fake_txt_file)
     mock_aiofiles_open.set_content(fake_txt_file, "")
     mock_async_exists.return_value = False
     message = type(
@@ -144,12 +118,9 @@ async def test_send_mom_no_file(
         },
     )()
     await transcribe_protocol.send_mom(message)
-    # Проверяем только факт отправки сообщения
     mock_send_message.assert_called()
 
 
-@patch("frontend_bot.services.user_transcripts_store._save", new_callable=AsyncMock)
-@patch("frontend_bot.services.user_transcripts_store._load", new_callable=AsyncMock)
 @patch(
     "frontend_bot.handlers.general.bot.send_document",
     new_callable=AsyncMock,
@@ -166,14 +137,16 @@ async def test_send_mom_no_file(
     "frontend_bot.services.file_utils.async_exists",
     new_callable=AsyncMock,
 )
+@patch(
+    "frontend_bot.services.gpt_assistant.format_transcript_with_gpt",
+    new_callable=AsyncMock,
+)
 async def test_send_mom_gpt_error(
+    mock_gpt: AsyncMock,
     mock_async_exists: AsyncMock,
     mock_send_message: AsyncMock,
     mock_send_chat_action: AsyncMock,
     mock_send_document: AsyncMock,
-    mock_load: AsyncMock,
-    mock_save: AsyncMock,
-    mock_openai_client: AsyncMock,
     fake_user_id: int,
     fake_txt_file: str,
     mock_aiofiles_open,
@@ -181,10 +154,10 @@ async def test_send_mom_gpt_error(
     """
     Проверяет, что при ошибке GPT бот отправляет корректное сообщение об ошибке.
     """
-    await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    await transcript_cache.set(fake_user_id, fake_txt_file)
     mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
     mock_async_exists.return_value = True
-    mock_openai_client.beta.threads.runs.retrieve.side_effect = Exception("GPT error")
+    mock_gpt.side_effect = Exception("GPT error")
 
     class AsyncFile:
         async def __aenter__(self):
@@ -207,12 +180,9 @@ async def test_send_mom_gpt_error(
         },
     )()
     await transcribe_protocol.send_mom(message)
-    # Проверяем только факт отправки сообщения
     mock_send_message.assert_called()
 
 
-@patch("frontend_bot.services.user_transcripts_store._save", new_callable=AsyncMock)
-@patch("frontend_bot.services.user_transcripts_store._load", new_callable=AsyncMock)
 @patch(
     "frontend_bot.handlers.general.bot.send_document",
     new_callable=AsyncMock,
@@ -229,14 +199,16 @@ async def test_send_mom_gpt_error(
     "frontend_bot.services.file_utils.async_exists",
     new_callable=AsyncMock,
 )
+@patch(
+    "frontend_bot.services.gpt_assistant.format_transcript_with_gpt",
+    new_callable=AsyncMock,
+)
 async def test_send_mom_empty_transcript(
+    mock_gpt: AsyncMock,
     mock_async_exists: AsyncMock,
     mock_send_message: AsyncMock,
     mock_send_chat_action: AsyncMock,
     mock_send_document: AsyncMock,
-    mock_load: AsyncMock,
-    mock_save: AsyncMock,
-    mock_openai_client: AsyncMock,
     fake_user_id: int,
     fake_txt_file: str,
     mock_aiofiles_open,
@@ -245,7 +217,7 @@ async def test_send_mom_empty_transcript(
     Проверяет обработку случая, когда транскрипт пустой (файл есть, но пустой) для MoM.
     Ожидается user-friendly сообщение об ошибке.
     """
-    await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    await transcript_cache.set(fake_user_id, fake_txt_file)
     mock_aiofiles_open.set_content(fake_txt_file, "")
     mock_async_exists.return_value = True
 
@@ -270,12 +242,9 @@ async def test_send_mom_empty_transcript(
         },
     )()
     await transcribe_protocol.send_mom(message)
-    # Проверяем только факт отправки сообщения
     mock_send_message.assert_called()
 
 
-@patch("frontend_bot.services.user_transcripts_store._save", new_callable=AsyncMock)
-@patch("frontend_bot.services.user_transcripts_store._load", new_callable=AsyncMock)
 @patch(
     "frontend_bot.handlers.general.bot.send_document",
     new_callable=AsyncMock,
@@ -292,14 +261,16 @@ async def test_send_mom_empty_transcript(
     "frontend_bot.services.file_utils.async_exists",
     new_callable=AsyncMock,
 )
+@patch(
+    "frontend_bot.services.gpt_assistant.format_transcript_with_gpt",
+    new_callable=AsyncMock,
+)
 async def test_send_mom_empty_gpt(
+    mock_gpt: AsyncMock,
     mock_async_exists: AsyncMock,
     mock_send_message: AsyncMock,
     mock_send_chat_action: AsyncMock,
     mock_send_document: AsyncMock,
-    mock_load: AsyncMock,
-    mock_save: AsyncMock,
-    mock_openai_client: AsyncMock,
     fake_user_id: int,
     fake_txt_file: str,
     mock_aiofiles_open,
@@ -308,7 +279,7 @@ async def test_send_mom_empty_gpt(
     Проверяет обработку случая, когда GPT возвращает пустую строку для MoM.
     Ожидается user-friendly сообщение об ошибке.
     """
-    await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    await transcript_cache.set(fake_user_id, fake_txt_file)
     mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
     mock_async_exists.return_value = True
 
@@ -323,13 +294,7 @@ async def test_send_mom_empty_gpt(
             return "Test transcript content"
 
     mock_aiofiles_open.return_value = AsyncFile()
-    
-    # Настраиваем мок клиента GPT для возврата пустого ответа
-    mock_message = AsyncMock()
-    mock_message.content = [AsyncMock()]
-    mock_message.content[0].text.value = ""
-    mock_openai_client.beta.threads.messages.list.return_value = AsyncMock(data=[mock_message])
-    mock_openai_client.beta.threads.runs.retrieve.return_value = AsyncMock(status="completed")
+    mock_gpt.return_value = ""
     
     message = type(
         "Msg",
@@ -341,5 +306,4 @@ async def test_send_mom_empty_gpt(
         },
     )()
     await transcribe_protocol.send_mom(message)
-    # Проверяем только факт отправки сообщения
     mock_send_message.assert_called()

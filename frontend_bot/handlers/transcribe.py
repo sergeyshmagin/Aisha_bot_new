@@ -24,7 +24,7 @@ from frontend_bot.GPT_Prompts.transcribe.prompts import (
 import asyncio
 from frontend_bot.services.word_generator import generate_protocol_word
 from frontend_bot.services.history import add_history_entry, STORAGE_DIR
-from frontend_bot.services import user_transcripts_store
+from frontend_bot.services import transcript_cache as user_transcripts_store
 from datetime import datetime
 
 logger = get_logger("transcribe")

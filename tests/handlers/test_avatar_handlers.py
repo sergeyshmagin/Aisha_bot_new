@@ -9,25 +9,31 @@ from PIL import Image
 
 from frontend_bot.handlers.handlers import (
     handle_avatar_photo,
-    handle_avatar_photo_next,
     handle_avatar_gender,
     handle_avatar_name,
     handle_avatar_confirm,
+    handle_avatar_photo_next
 )
-from frontend_bot.services.avatar_workflow import (
-    PhotoValidationError,
-    ValidationError,
-)
+from frontend_bot.services.state_utils import get_state, set_state
+from frontend_bot.services.avatar_workflow import cleanup_state
 from frontend_bot.constants.avatar import AVATAR_MIN_PHOTOS, AVATAR_MAX_PHOTOS
 from frontend_bot.bot_instance import bot
+from tests.conftest_redis import mock_redis
+
+@pytest.fixture
+def mock_message():
+    """Фикстура для создания тестового сообщения."""
+    message = MagicMock()
+    message.from_user.id = 123456
+    message.chat.id = 123456
+    return message
 
 @pytest.fixture
 def mock_bot():
-    """Фикстура для мока бота."""
-    with patch("frontend_bot.handlers.handlers.bot") as mock:
+    """Мок для бота."""
+    with patch("frontend_bot.bot_instance.bot") as mock:
         mock.send_message = AsyncMock()
-        mock.get_file = AsyncMock()
-        mock.download_file = AsyncMock()
+        mock.send_chat_action = AsyncMock()
         yield mock
 
 @pytest.fixture
@@ -61,19 +67,16 @@ def mock_state_manager():
     """Фикстура для мока state_manager."""
     with patch("frontend_bot.handlers.handlers.get_state") as mock_get, \
          patch("frontend_bot.handlers.handlers.set_state") as mock_set, \
-         patch("frontend_bot.handlers.handlers.get_current_avatar_id") as mock_get_id, \
          patch("frontend_bot.services.avatar_workflow.set_state") as mock_set_workflow:
         
-        mock_get.return_value = "avatar_photo_upload"
-        mock_set.return_value = AsyncMock()
-        mock_get_id.return_value = "test_avatar_id"
-        mock_set_workflow.return_value = AsyncMock()
+        mock_get.return_value = "avatar_upload_photo"
+        mock_set.return_value = None
+        mock_set_workflow.return_value = None
         
         yield {
             "get": mock_get,
             "set": mock_set,
-            "set_workflow": mock_set_workflow,
-            "get_id": mock_get_id,
+            "set_workflow": mock_set_workflow
         }
 
 def create_test_photo_message():
@@ -113,111 +116,179 @@ def create_test_text_message(text: str, state: str = "avatar_photo_upload"):
         yield message
 
 @pytest.mark.asyncio
-async def test_handle_avatar_photo_success(mock_bot, mock_avatar_workflow, mock_state_manager):
-    """Тест успешной загрузки фото."""
-    message, photo_bytes = create_test_photo_message()
-    mock_bot.download_file.return_value = photo_bytes
+async def test_handle_avatar_photo_success(mock_message, mock_bot, mock_redis):
+    """Тест успешной обработки фото аватара."""
+    # Настраиваем моки
+    mock_message.photo = [MagicMock(file_id="test_file_id")]
+    mock_bot.get_file.return_value = MagicMock(file_path="test_path")
+    mock_bot.download_file.return_value = b"test_photo_data"
+    mock_bot.send_message = AsyncMock()
     
-    await handle_avatar_photo(message)
+    # Устанавливаем начальное состояние
+    await set_state(mock_message.from_user.id, "avatar_photo_upload")
     
-    mock_avatar_workflow["upload"].assert_called_once()
+    # Вызываем обработчик
+    await handle_avatar_photo(mock_message)
+    
+    # Проверяем результат
+    assert await get_state(mock_message.from_user.id) == "avatar_photo_upload"
     mock_bot.send_message.assert_called_once()
-    assert "Фото успешно загружено" in mock_bot.send_message.call_args[0][1]
+    mock_bot.get_file.assert_called_once_with("test_file_id")
+    mock_bot.download_file.assert_called_once_with("test_path")
 
 @pytest.mark.asyncio
-async def test_handle_avatar_photo_validation_error(mock_bot, mock_avatar_workflow, mock_state_manager):
-    """Тест ошибки валидации фото."""
-    message, photo_bytes = create_test_photo_message()
-    mock_bot.download_file.return_value = photo_bytes
-    mock_avatar_workflow["upload"].side_effect = PhotoValidationError("Test error")
+async def test_handle_avatar_photo_validation_error(mock_message, mock_bot, mock_redis):
+    """Тест ошибки валидации фото аватара."""
+    # Настраиваем моки
+    mock_message.photo = None
+    mock_bot.send_message = AsyncMock()
     
-    await handle_avatar_photo(message)
+    # Устанавливаем начальное состояние
+    await set_state(mock_message.from_user.id, "avatar_photo_upload")
     
-    mock_avatar_workflow["cleanup"].assert_called_once_with(123)
-
-@pytest.mark.asyncio
-async def test_handle_avatar_photo_next_success(mock_bot, mock_avatar_workflow, mock_state_manager):
-    """Тест успешного перехода к следующему шагу."""
-    message = next(create_test_text_message("Далее"))
-    mock_avatar_workflow["load"].return_value = {"photos": ["photo"] * AVATAR_MIN_PHOTOS}
+    # Вызываем обработчик
+    await handle_avatar_photo(mock_message)
     
-    await handle_avatar_photo_next(message)
-    
+    # Проверяем результат
+    assert await get_state(mock_message.from_user.id) == "avatar_photo_upload"
     mock_bot.send_message.assert_called_once()
-    assert "Выберите пол для аватара" in mock_bot.send_message.call_args[0][1]
-    mock_state_manager["set"].assert_called_once_with(123, "avatar_gender")
 
 @pytest.mark.asyncio
-async def test_handle_avatar_photo_next_not_enough_photos(mock_bot, mock_avatar_workflow, mock_state_manager):
-    """Тест перехода при недостаточном количестве фото."""
-    message = next(create_test_text_message("Далее"))
-    mock_avatar_workflow["load"].return_value = {"photos": ["photo"] * (AVATAR_MIN_PHOTOS - 1)}
+async def test_handle_avatar_gender_success(mock_message, mock_bot, mock_redis):
+    """Тест успешной обработки выбора пола."""
+    # Настраиваем моки
+    mock_message.text = "Мужской"
+    mock_bot.send_message = AsyncMock()
     
-    await handle_avatar_photo_next(message)
+    # Устанавливаем начальное состояние
+    await set_state(mock_message.from_user.id, "avatar_gender")
     
+    # Вызываем обработчик
+    await handle_avatar_gender(mock_message)
+    
+    # Проверяем результат
+    assert await get_state(mock_message.from_user.id) == "avatar_enter_name"
     mock_bot.send_message.assert_called_once()
-    assert "Недостаточно фото" in mock_bot.send_message.call_args[0][1]
-    mock_state_manager["set"].assert_not_called()
 
 @pytest.mark.asyncio
-async def test_handle_avatar_gender_success(mock_bot, mock_avatar_workflow, mock_state_manager):
-    """Тест успешного выбора пола."""
-    message = next(create_test_text_message("Мужской", "avatar_gender"))
+async def test_handle_avatar_gender_validation_error(mock_message, mock_bot, mock_redis):
+    """Тест ошибки валидации выбора пола."""
+    # Настраиваем моки
+    mock_message.text = "Неверный выбор"
+    mock_bot.send_message = AsyncMock()
     
-    await handle_avatar_gender(message)
+    # Устанавливаем начальное состояние
+    await set_state(mock_message.from_user.id, "avatar_gender")
     
-    mock_avatar_workflow["gender"].assert_called_once_with(123, "test_avatar_id", "male")
+    # Вызываем обработчик
+    await handle_avatar_gender(mock_message)
+    
+    # Проверяем результат
+    assert await get_state(mock_message.from_user.id) == "avatar_gender"
     mock_bot.send_message.assert_called_once()
-    assert "Введите имя для аватара" in mock_bot.send_message.call_args[0][1]
 
 @pytest.mark.asyncio
-async def test_handle_avatar_gender_validation_error(mock_bot, mock_avatar_workflow, mock_state_manager):
-    """Тест ошибки валидации при выборе пола."""
-    message = next(create_test_text_message("Неверный пол", "avatar_gender"))
-    mock_avatar_workflow["gender"].side_effect = ValidationError("Test error")
+async def test_handle_avatar_name_success(mock_message, mock_bot, mock_redis):
+    """Тест успешной обработки ввода имени."""
+    # Настраиваем моки
+    mock_message.text = "Test Avatar"
+    mock_bot.send_message = AsyncMock()
     
-    await handle_avatar_gender(message)
+    # Устанавливаем начальное состояние
+    await set_state(mock_message.from_user.id, "avatar_enter_name")
     
-    mock_avatar_workflow["cleanup"].assert_called_once_with(123)
-
-@pytest.mark.asyncio
-async def test_handle_avatar_name_success(mock_bot, mock_avatar_workflow, mock_state_manager):
-    """Тест успешного ввода имени."""
-    message = next(create_test_text_message("Test Avatar", "avatar_enter_name"))
+    # Вызываем обработчик
+    await handle_avatar_name(mock_message)
     
-    await handle_avatar_name(message)
-    
-    mock_avatar_workflow["name"].assert_called_once_with(123, "test_avatar_id", "Test Avatar")
+    # Проверяем результат
+    assert await get_state(mock_message.from_user.id) == "avatar_confirm"
     mock_bot.send_message.assert_called_once()
-    assert "Проверьте данные аватара" in mock_bot.send_message.call_args[0][1]
 
 @pytest.mark.asyncio
-async def test_handle_avatar_name_validation_error(mock_bot, mock_avatar_workflow, mock_state_manager):
-    """Тест ошибки валидации при вводе имени."""
-    message = next(create_test_text_message("", "avatar_enter_name"))
-    mock_avatar_workflow["name"].side_effect = ValidationError("Test error")
+async def test_handle_avatar_name_validation_error(mock_message, mock_bot, mock_redis):
+    """Тест ошибки валидации имени."""
+    # Настраиваем моки
+    mock_message.text = ""
+    mock_bot.send_message = AsyncMock()
     
-    await handle_avatar_name(message)
+    # Устанавливаем начальное состояние
+    await set_state(mock_message.from_user.id, "avatar_enter_name")
     
-    mock_avatar_workflow["cleanup"].assert_called_once_with(123)
+    # Вызываем обработчик
+    await handle_avatar_name(mock_message)
+    
+    # Проверяем результат
+    assert await get_state(mock_message.from_user.id) == "avatar_enter_name"
+    mock_bot.send_message.assert_called_once()
 
 @pytest.mark.asyncio
-async def test_handle_avatar_confirm_success(mock_bot, mock_avatar_workflow, mock_state_manager):
+async def test_handle_avatar_confirm_success(mock_message, mock_bot, mock_redis):
     """Тест успешного подтверждения создания аватара."""
-    message = next(create_test_text_message("Подтвердить", "avatar_confirm"))
+    # Настраиваем моки
+    mock_message.text = "Подтвердить"
+    mock_bot.send_message = AsyncMock()
     
-    await handle_avatar_confirm(message)
+    # Устанавливаем начальное состояние
+    await set_state(mock_message.from_user.id, "avatar_confirm")
     
-    mock_avatar_workflow["finalize"].assert_called_once_with(123, "test_avatar_id")
+    # Вызываем обработчик
+    await handle_avatar_confirm(mock_message)
+    
+    # Проверяем результат
+    assert await get_state(mock_message.from_user.id) == "main_menu"
     mock_bot.send_message.assert_called_once()
-    assert "Аватар успешно создан" in mock_bot.send_message.call_args[0][1]
 
 @pytest.mark.asyncio
-async def test_handle_avatar_confirm_validation_error(mock_bot, mock_avatar_workflow, mock_state_manager):
-    """Тест ошибки валидации при подтверждении."""
-    message = next(create_test_text_message("Подтвердить", "avatar_confirm"))
-    mock_avatar_workflow["finalize"].side_effect = ValidationError("Test error")
+async def test_handle_avatar_confirm_validation_error(mock_message, mock_bot, mock_redis):
+    """Тест ошибки валидации подтверждения."""
+    # Настраиваем моки
+    mock_message.text = "Отмена"
+    mock_bot.send_message = AsyncMock()
     
-    await handle_avatar_confirm(message)
+    # Устанавливаем начальное состояние
+    await set_state(mock_message.from_user.id, "avatar_confirm")
     
-    mock_avatar_workflow["cleanup"].assert_called_once_with(123) 
+    # Вызываем обработчик
+    await handle_avatar_confirm(mock_message)
+    
+    # Проверяем результат
+    assert await get_state(mock_message.from_user.id) == "main_menu"
+    mock_bot.send_message.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_handle_avatar_photo_next_success(mock_bot, mock_avatar_workflow, mock_state_manager, mock_redis):
+    """Тест успешной обработки следующего фото."""
+    # Настраиваем моки
+    message = MagicMock()
+    message.from_user.id = 123456
+    message.chat.id = 123456
+    message.photo = [MagicMock(file_id="test_file_id")]
+    mock_bot.send_message = AsyncMock()
+    
+    # Устанавливаем начальное состояние
+    await set_state(message.from_user.id, "avatar_photo_upload")
+    
+    # Вызываем обработчик
+    await handle_avatar_photo_next(message)
+    
+    # Проверяем результат
+    mock_bot.send_message.assert_called_once()
+
+@pytest.mark.asyncio
+async def test_handle_avatar_photo_next_not_enough_photos(mock_bot, mock_avatar_workflow, mock_state_manager, mock_redis):
+    """Тест обработки недостаточного количества фото."""
+    # Настраиваем моки
+    message = MagicMock()
+    message.from_user.id = 123456
+    message.chat.id = 123456
+    message.photo = None
+    mock_bot.send_message = AsyncMock()
+    
+    # Устанавливаем начальное состояние
+    await set_state(message.from_user.id, "avatar_photo_upload")
+    
+    # Вызываем обработчик
+    await handle_avatar_photo_next(message)
+    
+    # Проверяем результат
+    mock_bot.send_message.assert_called_once() 

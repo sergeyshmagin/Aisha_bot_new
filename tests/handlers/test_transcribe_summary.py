@@ -4,7 +4,7 @@
 
 from unittest.mock import AsyncMock, Mock, patch
 from frontend_bot.handlers import transcribe_protocol
-from frontend_bot.services import user_transcripts_store
+from frontend_bot.services import transcript_cache
 
 
 @patch(
@@ -36,7 +36,7 @@ async def test_full_official_transcript_success(
     Проверяет успешную отправку полного официального транскрипта как .txt-файла
     с корректным именем, содержимым и caption.
     """
-    await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    await transcript_cache.set(fake_user_id, fake_txt_file)
     mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
     mock_gpt.return_value = "Полный транскрипт для теста"
     message = type(
@@ -100,7 +100,7 @@ async def test_short_summary_success(
     Проверяет успешную отправку сводки как .txt-файла с корректным именем,
     содержимым и caption.
     """
-    await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    await transcript_cache.set(fake_user_id, fake_txt_file)
     mock_aiofiles_open.set_content(fake_txt_file, "Test transcript content")
     mock_async_exists.return_value = True
     mock_gpt.return_value = "Сводка для теста"
@@ -170,7 +170,7 @@ async def test_short_summary_empty_transcript(
     для сводки. Ожидается user-friendly сообщение об ошибке.
     """
     mock_aiofiles_open.set_content(fake_txt_file, "")
-    await user_transcripts_store.set(fake_user_id, fake_txt_file)
+    await transcript_cache.set(fake_user_id, fake_txt_file)
     mock_async_exists.return_value = True
     mock_gpt.return_value = ""
     message = type(
@@ -195,9 +195,9 @@ import pytest
 @pytest.mark.asyncio
 async def test_audio_transcript_persistence(fake_user_id, fake_txt_file):
     """
-    Проверяет, что после set/get user_transcripts_store возвращает путь к транскрипту.
+    Проверяет, что после set/get transcript_cache возвращает путь к транскрипту.
     """
-    from frontend_bot.services import user_transcripts_store
-    await user_transcripts_store.set(fake_user_id, fake_txt_file)
-    result = await user_transcripts_store.get(fake_user_id)
-    assert result == fake_txt_file, f"❌ user_transcripts_store.get вернул {result}, ожидалось {fake_txt_file}"
+    from frontend_bot.services import transcript_cache
+    await transcript_cache.set(fake_user_id, fake_txt_file)
+    result = await transcript_cache.get(fake_user_id)
+    assert result == fake_txt_file, f"❌ transcript_cache.get вернул {result}, ожидалось {fake_txt_file}"

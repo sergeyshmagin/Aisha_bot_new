@@ -1,5 +1,150 @@
 # Aisha Bot
 
+## Описание
+Aisha Bot - это Telegram бот с расширенными возможностями обработки изображений, документов и аудио.
+
+## Требования
+- Python 3.9+
+- Docker и Docker Compose
+- PostgreSQL 15+
+- Redis 7+
+- MinIO
+
+## Установка и запуск
+
+### 1. Клонирование репозитория
+```bash
+git clone https://github.com/your-username/aisha-bot.git
+cd aisha-bot
+```
+
+### 2. Настройка переменных окружения
+```bash
+cp .env.example .env
+# Отредактируйте .env файл, указав необходимые значения
+```
+
+### 3. Запуск сервисов через Docker Compose
+```bash
+docker-compose up -d
+```
+
+### 4. Установка зависимостей Python
+```bash
+python -m venv venv
+source venv/bin/activate  # для Linux/Mac
+venv\Scripts\activate     # для Windows
+pip install -r requirements.txt
+```
+
+### 5. Инициализация базы данных
+```bash
+alembic upgrade head
+```
+
+### 6. Запуск бота
+```bash
+python main.py
+```
+
+## Мониторинг
+
+### Prometheus
+- URL: http://localhost:9090
+- Метрики:
+  - PostgreSQL
+  - Redis
+  - MinIO
+  - Aisha Bot
+
+### Grafana
+- URL: http://localhost:3000
+- Логин: admin
+- Пароль: указан в .env файле
+
+## Структура проекта
+
+```
+aisha-bot/
+├── alembic/              # Миграции базы данных
+├── frontend_bot/         # Основной код бота
+│   ├── handlers/         # Обработчики команд
+│   ├── services/         # Бизнес-логика
+│   ├── models/          # Модели данных
+│   └── utils/           # Утилиты
+├── tests/               # Тесты
+├── prometheus/          # Конфигурация Prometheus
+├── docker-compose.yml   # Конфигурация Docker
+├── requirements.txt     # Зависимости Python
+└── README.md           # Документация
+```
+
+## Разработка
+
+### Запуск тестов
+```bash
+pytest tests/ -v
+```
+
+### Проверка стиля кода
+```bash
+flake8 frontend_bot/
+black frontend_bot/
+isort frontend_bot/
+mypy frontend_bot/
+```
+
+### Миграции базы данных
+```bash
+# Создание миграции
+alembic revision --autogenerate -m "description"
+
+# Применение миграций
+alembic upgrade head
+```
+
+## Мониторинг и логирование
+
+### Prometheus метрики
+- `/metrics` - эндпоинт с метриками
+- Метрики PostgreSQL через `pg_exporter`
+- Метрики Redis через `redis_exporter`
+- Метрики MinIO через встроенный экспортер
+
+### Логирование
+- Логи приложения в `logs/`
+- Логи Docker контейнеров через `docker-compose logs`
+
+## Безопасность
+
+### Переменные окружения
+- Все секретные данные хранятся в `.env`
+- `.env` добавлен в `.gitignore`
+
+### SSL/TLS
+- MinIO настроен с SSL/TLS
+- PostgreSQL использует SSL соединения
+- Redis использует SSL соединения
+
+## Резервное копирование
+
+### PostgreSQL
+```bash
+# Создание бэкапа
+pg_dump -U aisha_user -d aisha > backup.sql
+
+# Восстановление
+psql -U aisha_user -d aisha < backup.sql
+```
+
+### MinIO
+- Настроена репликация
+- Версионирование объектов включено
+- Политики жизненного цикла настроены
+
+## Лицензия
+MIT
+
 Telegram-бот для создания и управления аватарами с помощью ИИ, транскрибации аудио/видео, улучшения фото и бизнес-ассистента.
 
 ## Основные возможности
@@ -353,3 +498,32 @@ pytest
 ## Лицензия
 
 MIT
+
+## Интеграция с Redis
+
+Для работы с состояниями, кэшем и очередями используется Redis. Все интеграционные тесты требуют реального Redis-сервера.
+
+### Переменные окружения для Redis
+
+- `REDIS_HOST` — адрес сервера Redis (например, 192.168.0.3)
+- `REDIS_PORT` — порт Redis (по умолчанию 6379)
+- `REDIS_DB` — номер базы (по умолчанию 0)
+- `REDIS_PASSWORD` — пароль для подключения (если установлен)
+
+Пример для `.env`:
+```
+REDIS_HOST=192.168.0.3
+REDIS_PORT=6379
+REDIS_DB=0
+REDIS_PASSWORD=<ваш_пароль>
+```
+
+### Запуск интеграционных тестов Redis
+
+Перед запуском убедитесь, что Redis доступен по сети и переменные окружения заданы. Пример запуска:
+
+```bash
+set REDIS_HOST=192.168.0.3 && set REDIS_PORT=6379 && set REDIS_PASSWORD=<ваш_пароль> && python -m pytest frontend_bot/tests/shared/test_redis_integration.py -v
+```
+
+Тесты используют реальные подключения и требуют доступности Redis. Для pub/sub тестов реализован polling для стабильности.
