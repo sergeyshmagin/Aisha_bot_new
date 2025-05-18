@@ -1,4 +1,4 @@
-from frontend_bot.config import AVATAR_MIN_PHOTOS, AVATAR_MAX_PHOTOS
+from frontend_bot.config import settings
 from frontend_bot.shared.progress import get_progressbar
 
 # --- Шаблоны ошибок ---
@@ -32,22 +32,22 @@ PROMPT_TYPE_MENU = (
 # --- Caption для галереи ---
 def get_gallery_caption(idx: int, total: int) -> str:
     progress = get_progressbar(
-        total, AVATAR_MAX_PHOTOS, AVATAR_MIN_PHOTOS, AVATAR_MAX_PHOTOS, idx
+        total, settings.AVATAR_MAX_PHOTOS, settings.AVATAR_MIN_PHOTOS, settings.AVATAR_MAX_PHOTOS, idx
     )
-    if total == AVATAR_MIN_PHOTOS:
+    if total == settings.AVATAR_MIN_PHOTOS:
         return (
             f"Фото {idx+1} из {total}\n{progress}\n\n"
-            f"✅ Вы загрузили минимально необходимое количество фото (<b>{AVATAR_MIN_PHOTOS}</b>).\n\n"
-            f"🔝 Для лучшего качества генерации рекомендуем добавить ещё до <b>{AVATAR_MAX_PHOTOS}</b> фото.\n\n"
+            f"✅ Вы загрузили минимально необходимое количество фото (<b>{settings.AVATAR_MIN_PHOTOS}</b>).\n\n"
+            f"🔝 Для лучшего качества генерации рекомендуем добавить ещё до <b>{settings.AVATAR_MAX_PHOTOS}</b> фото.\n\n"
             f"➡️ Вы можете продолжить или добавить ещё фото."
         )
-    elif AVATAR_MIN_PHOTOS < total < AVATAR_MAX_PHOTOS:
+    elif settings.AVATAR_MIN_PHOTOS < total < settings.AVATAR_MAX_PHOTOS:
         return (
             f"Фото {idx+1} из {total}\n{progress}\n\n"
-            f"🔝 Можно добавить ещё <b>{AVATAR_MAX_PHOTOS - total}</b> фото для лучшего качества.\n\n"
+            f"🔝 Можно добавить ещё <b>{settings.AVATAR_MAX_PHOTOS - total}</b> фото для лучшего качества.\n\n"
             f"➡️ Или продолжить к генерации аватара."
         )
-    elif total == AVATAR_MAX_PHOTOS:
+    elif total == settings.AVATAR_MAX_PHOTOS:
         return (
             f"Фото {idx+1} из {total}\n{progress}\n\n"
             f"Достигнут максимум фото. Можете только продолжить."
@@ -55,7 +55,22 @@ def get_gallery_caption(idx: int, total: int) -> str:
     else:
         return (
             f"Фото {idx+1} из {total}\n{progress}\n\n"
-            f"❗️Минимум для старта: <b>{AVATAR_MIN_PHOTOS}</b> фото.\n"
-            f"Осталось загрузить: <b>{AVATAR_MIN_PHOTOS - total}</b> фото.\n\n"
+            f"❗️Минимум для старта: <b>{settings.AVATAR_MIN_PHOTOS}</b> фото.\n"
+            f"Осталось загрузить: <b>{settings.AVATAR_MIN_PHOTOS - total}</b> фото.\n\n"
             f"Добавьте ещё фото для лучшего качества."
         )
+
+HELP_TEXT = (
+    "ℹ️ <b>Помощь</b>\n\n"
+    "Этот бот поможет вам создавать аватары, работать с фото, вести бизнес-протоколы и многое другое.\n"
+    "Основные команды:\n"
+    "• 📷 Создать аватар\n"
+    "• 👁 Просмотреть аватары\n"
+    "• 🧑‍🎨 ИИ фотограф\n"
+    "• ✨ Улучшить фото\n"
+    "• 🖼 Мои аватары\n"
+    "• 🖼 Работа с фото\n"
+    "• 🖼 Образы\n"
+    "• ❓ Помощь — это сообщение\n"
+    "\nЕсли возникли вопросы — напишите /support."
+)

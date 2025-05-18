@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from frontend_bot.models.base import UserBalance, Transaction
-from frontend_bot.config import MIN_BALANCE
+from frontend_bot.config import settings
 
 class BalanceRepository:
     """Репозиторий для работы с балансом пользователей."""

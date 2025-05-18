@@ -11,12 +11,10 @@ from telebot.types import (
     InlineKeyboardButton,
     InputMediaPhoto,
 )
-from frontend_bot.config import AVATAR_MIN_PHOTOS
+from frontend_bot.config import settings
 from frontend_bot.shared.progress import get_progressbar
 from frontend_bot.handlers.avatar.state import user_session, user_gallery
 from frontend_bot.bot_instance import bot
-import aiofiles
-from io import BytesIO
 import time
 from frontend_bot.texts.common import (
     ERROR_NO_PHOTOS,
@@ -26,16 +24,11 @@ from frontend_bot.texts.common import (
     PROMPT_AVATAR_CANCELLED,
 )
 from frontend_bot.services.avatar_manager import (
-    load_avatar_fsm,
     remove_photo_from_avatar,
     get_avatars_index,
-    update_avatar_in_index,
-    remove_avatar_from_index,
-    update_avatar_fsm,
     get_current_avatar_id,
     set_current_avatar_id,
-    clear_avatar_fsm,
-    get_avatars_index_path,
+    get_avatar_photo,
 )
 from frontend_bot.services.state_utils import set_state, get_state, clear_state
 from frontend_bot.utils.validators import validate_user_avatar
@@ -46,9 +39,15 @@ from frontend_bot.keyboards.reply import (
     ai_photographer_keyboard,
     my_avatars_keyboard,
 )
-import os
 from datetime import datetime
-import json
+from sqlalchemy.ext.asyncio import AsyncSession
+import uuid
+from frontend_bot.services.avatar_workflow import delete_draft_avatar, set_main_avatar, get_avatar, delete_avatar, list_avatars
+from database.config import AsyncSessionLocal
+from frontend_bot.repositories.user_repository import UserRepository
+from database.models import UserAvatarPhoto
+from sqlalchemy import select
+from io import BytesIO
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +65,7 @@ def get_full_gallery_keyboard(idx, total):
         InlineKeyboardButton("❌ Удалить", callback_data="avatar_gallery_delete"),
     )
     markup.row(InlineKeyboardButton("Вперёд ▶️", callback_data="avatar_gallery_next"))
-    if total >= AVATAR_MIN_PHOTOS:
+    if total >= settings.AVATAR_MIN_PHOTOS:
         markup.row(
             InlineKeyboardButton(
                 "✅ Продолжить", callback_data="avatar_gallery_continue"
@@ -76,123 +75,70 @@ def get_full_gallery_keyboard(idx, total):
     return markup
 
 
+async def get_avatar_photos_from_db(user_id, avatar_id, db: AsyncSession):
+    """Возвращает список фото для аватара из PostgreSQL."""
+    query = select(UserAvatarPhoto).where(
+        UserAvatarPhoto.user_id == user_id,
+        UserAvatarPhoto.avatar_id == avatar_id
+    ).order_by(UserAvatarPhoto.created_at)
+    result = await db.execute(query)
+    photos = result.scalars().all()
+    logger.info(f"[gallery] get_avatar_photos_from_db: {len(photos)} фото найдено для avatar_id={avatar_id}")
+    return [p.photo_key for p in photos]
+
+
 async def show_wizard_gallery(
     chat_id: int,
     user_id: int,
     avatar_id: str,
-    photos: list,
-    idx: int,
+    photos: list = None,
+    idx: int = 0,
     message_id: int = None,
+    db: AsyncSession = None,
 ) -> None:
     """
-    Показывает галерею фото для аватара в визарде.
+    Показывает галерею фото аватара.
     """
-    user_session.setdefault(
-        user_id,
-        {
-            "wizard_message_ids": [],
-            "last_wizard_state": None,
-            "uploaded_photo_msgs": [],
-            "last_error_msg": None,
-            "last_info_msg_id": None,
-        },
-    )
-    if not isinstance(user_id, int) or not avatar_id:
-        logger.error(
-            f"[show_wizard_gallery] Некорректные user_id или avatar_id: "
-            f"{user_id}, {avatar_id}"
-        )
+    if db is None:
+        logger.error("[show_wizard_gallery] db (AsyncSession) обязателен!")
         return
-    if not isinstance(photos, list):
-        logger.error(
-            f"[show_wizard_gallery] photos не list: {type(photos)}"
-        )
-        return
+    # Получаем фото из БД
+    photos = await get_avatar_photos_from_db(user_id, avatar_id, db)
     if not photos:
         await bot.send_message(chat_id, ERROR_NO_PHOTOS)
         return
     idx = max(0, min(idx, len(photos) - 1))
-    gallery_key = get_gallery_key(user_id, avatar_id)
-    user_gallery.setdefault(gallery_key, {"index": 0, "last_switch": 0})
-    user_gallery[gallery_key]["index"] = idx
-    photo = photos[idx]
-    if isinstance(photo, dict):
-        file_id = photo.get("file_id")
-        photo_path = photo.get("path")
-    else:
-        file_id = None
-        photo_path = photo
+    photo_key = photos[idx]
     total = len(photos)
     caption = get_gallery_caption(idx, total)
     keyboard = get_gallery_keyboard(idx, total)
-    last = user_session[user_id]["last_wizard_state"]
-    logger.info(f"[show_wizard_gallery] last_wizard_state={last}")
-    if last and last[0] == caption and last[1].to_dict() == keyboard.to_dict():
-        logger.info(
-            "[show_wizard_gallery] return: no change (gallery)"
-        )
-        return
-    if message_id:
-        try:
-            if file_id:
-                await bot.edit_message_media(
-                    media=InputMediaPhoto(
-                        file_id, caption=caption, parse_mode="HTML"
-                    ),
-                    chat_id=chat_id,
-                    message_id=message_id,
-                    reply_markup=keyboard,
-                )
-            else:
-                async with aiofiles.open(photo_path, "rb") as img:
-                    img_bytes = await img.read()
-                    img_stream = BytesIO(img_bytes)
-                    await bot.edit_message_media(
-                        media=InputMediaPhoto(
-                            img_stream, caption=caption, parse_mode="HTML"
-                        ),
-                        chat_id=chat_id,
-                        message_id=message_id,
-                        reply_markup=keyboard,
-                    )
-            await clear_old_wizard_messages(
-                bot, user_session, chat_id, user_id, keep_msg_id=message_id
+    
+    try:
+        # Получаем фото из MinIO
+        photo_bytes = await get_avatar_photo(photo_key)
+        img_stream = BytesIO(photo_bytes)
+        
+        if message_id:
+            await bot.edit_message_media(
+                media=InputMediaPhoto(
+                    img_stream, caption=caption, parse_mode="HTML"
+                ),
+                chat_id=chat_id,
+                message_id=message_id,
+                reply_markup=keyboard,
             )
-            user_session[user_id]["last_wizard_state"] = (caption, keyboard)
-            logger.info(
-                "[show_wizard_gallery] return: edit_message_media"
-            )
-            return
-        except Exception as e:
-            logger.error(f"[show_wizard_gallery] Error editing message: {e}")
-    else:
-        if file_id:
+        else:
             msg = await bot.send_photo(
                 chat_id,
-                file_id,
+                img_stream,
                 caption=caption,
                 reply_markup=keyboard,
                 parse_mode="HTML",
             )
-        else:
-            async with aiofiles.open(photo_path, "rb") as img:
-                img_bytes = await img.read()
-                img_stream = BytesIO(img_bytes)
-                msg = await bot.send_photo(
-                    chat_id,
-                    img_stream,
-                    caption=caption,
-                    reply_markup=keyboard,
-                    parse_mode="HTML",
-                )
-        await clear_old_wizard_messages(
-            bot, user_session, chat_id, user_id, keep_msg_id=msg.message_id
-        )
-        user_session[user_id]["wizard_message_ids"] = [msg.message_id]
-        user_session[user_id]["last_wizard_state"] = (caption, keyboard)
-        logger.info(
-            "[show_wizard_gallery] return: send_photo (new message)"
-        )
+        logger.info(f"[show_wizard_gallery] показано фото {idx+1}/{total} для avatar_id={avatar_id}")
+    except Exception as e:
+        logger.error(f"[show_wizard_gallery] Ошибка при получении фото из MinIO: {e}")
+        await bot.send_message(chat_id, ERROR_NO_PHOTOS)
 
 
 # Остальные функции и обработчики галереи:
@@ -210,20 +156,12 @@ async def handle_gallery_prev(call) -> None:
         await bot.send_message(call.message.chat.id, ERROR_USER_AVATAR)
         await bot.answer_callback_query(call.id)
         return
-    data = await load_avatar_fsm(user_id, avatar_id)
-    photos = data.get("photos", [])
+    async with AsyncSessionLocal() as session:
+        photos = await get_avatar_photos_from_db(user_id, avatar_id, session)
     if not photos:
         await bot.send_message(call.message.chat.id, "Нет фото для отображения.")
         await bot.answer_callback_query(call.id)
         return
-    if user_id not in user_session:
-        user_session[user_id] = {
-            "wizard_message_ids": [],
-            "last_wizard_state": None,
-            "uploaded_photo_msgs": [],
-            "last_error_msg": None,
-            "last_info_msg_id": None,
-        }
     gallery_key = get_gallery_key(user_id, avatar_id)
     idx = user_gallery.get(gallery_key, {}).get("index", 0)
     if not (0 <= idx < len(photos)):
@@ -240,14 +178,15 @@ async def handle_gallery_prev(call) -> None:
         idx = len(photos) - 1
     else:
         idx -= 1
-    await show_wizard_gallery(
-        call.message.chat.id,
-        user_id,
-        avatar_id,
-        photos,
-        idx,
-        message_id=call.message.message_id,
-    )
+    async with AsyncSessionLocal() as session:
+        await show_wizard_gallery(
+            call.message.chat.id,
+            user_id,
+            avatar_id,
+            idx=idx,
+            message_id=call.message.message_id,
+            db=session,
+        )
     await bot.answer_callback_query(call.id)
 
 
@@ -260,20 +199,12 @@ async def handle_gallery_next(call) -> None:
         await bot.send_message(call.message.chat.id, ERROR_USER_AVATAR)
         await bot.answer_callback_query(call.id)
         return
-    data = await load_avatar_fsm(user_id, avatar_id)
-    photos = data.get("photos", [])
+    async with AsyncSessionLocal() as session:
+        photos = await get_avatar_photos_from_db(user_id, avatar_id, session)
     if not photos:
         await bot.send_message(call.message.chat.id, "Нет фото для отображения.")
         await bot.answer_callback_query(call.id)
         return
-    if user_id not in user_session:
-        user_session[user_id] = {
-            "wizard_message_ids": [],
-            "last_wizard_state": None,
-            "uploaded_photo_msgs": [],
-            "last_error_msg": None,
-            "last_info_msg_id": None,
-        }
     gallery_key = get_gallery_key(user_id, avatar_id)
     idx = user_gallery.get(gallery_key, {}).get("index", 0)
     if not (0 <= idx < len(photos)):
@@ -290,14 +221,15 @@ async def handle_gallery_next(call) -> None:
         idx = 0
     else:
         idx += 1
-    await show_wizard_gallery(
-        call.message.chat.id,
-        user_id,
-        avatar_id,
-        photos,
-        idx,
-        message_id=call.message.message_id,
-    )
+    async with AsyncSessionLocal() as session:
+        await show_wizard_gallery(
+            call.message.chat.id,
+            user_id,
+            avatar_id,
+            idx=idx,
+            message_id=call.message.message_id,
+            db=session,
+        )
     await bot.answer_callback_query(call.id)
 
 
@@ -311,52 +243,42 @@ async def handle_gallery_delete(call) -> None:
         await bot.send_message(call.message.chat.id, ERROR_USER_AVATAR)
         await bot.answer_callback_query(call.id)
         return
-    data = await load_avatar_fsm(user_id, avatar_id)
-    logger.info(f"[handle_gallery_delete] loaded data: {data}")
-    photos = data.get("photos", [])
-    if user_id not in user_session:
-        user_session[user_id] = {
-            "wizard_message_ids": [],
-            "last_wizard_state": None,
-            "uploaded_photo_msgs": [],
-            "last_error_msg": None,
-            "last_info_msg_id": None,
-        }
-    gallery_key = get_gallery_key(user_id, avatar_id)
-    idx = user_gallery.get(gallery_key, {}).get("index", 0)
-    logger.info(f"[handle_gallery_delete] idx={idx}, photos={photos}")
-    if not photos or not (0 <= idx < len(photos)):
-        await bot.send_message(call.message.chat.id, ERROR_INDEX)
-        await bot.answer_callback_query(call.id)
-        return
-    await remove_photo_from_avatar(user_id, avatar_id, idx)
-    logger.info(f"[handle_gallery_delete] photo removed at idx={idx}")
-    data = await load_avatar_fsm(user_id, avatar_id)
-    logger.info(f"[handle_gallery_delete] data after remove: {data}")
-    photos = data.get("photos", [])
-    if not photos:
-        try:
-            await bot.delete_message(call.message.chat.id, call.message.message_id)
-        except Exception:
-            pass
-        await clear_old_wizard_messages(
-            bot, user_session, call.message.chat.id, user_id
+    async with AsyncSessionLocal() as session:
+        photos = await get_avatar_photos_from_db(user_id, avatar_id, session)
+        gallery_key = get_gallery_key(user_id, avatar_id)
+        idx = user_gallery.get(gallery_key, {}).get("index", 0)
+        logger.info(f"[handle_gallery_delete] idx={idx}, photos={photos}")
+        if not photos or not (0 <= idx < len(photos)):
+            await bot.send_message(call.message.chat.id, ERROR_INDEX)
+            await bot.answer_callback_query(call.id)
+            return
+        # Удаляем фото из БД и MinIO
+        await remove_photo_from_avatar(session, user_id, avatar_id, photos[idx])
+        logger.info(f"[handle_gallery_delete] photo removed at idx={idx}")
+        # Получаем обновлённый список фото
+        photos = await get_avatar_photos_from_db(user_id, avatar_id, session)
+        if not photos:
+            try:
+                await bot.delete_message(call.message.chat.id, call.message.message_id)
+            except Exception:
+                pass
+            await clear_old_wizard_messages(
+                bot, user_session, call.message.chat.id, user_id
+            )
+            import asyncio
+            await asyncio.sleep(0.5)
+            return
+        new_idx = min(idx, len(photos) - 1)
+        user_gallery[gallery_key]["index"] = new_idx
+        logger.info(f"[handle_gallery_delete] show_wizard_gallery new_idx={new_idx}")
+        await show_wizard_gallery(
+            call.message.chat.id,
+            user_id,
+            avatar_id,
+            idx=new_idx,
+            message_id=call.message.message_id,
+            db=session,
         )
-        import asyncio
-
-        await asyncio.sleep(0.5)
-        return
-    new_idx = min(idx, len(photos) - 1)
-    user_gallery[gallery_key]["index"] = new_idx
-    logger.info(f"[handle_gallery_delete] show_wizard_gallery new_idx={new_idx}")
-    await show_wizard_gallery(
-        call.message.chat.id,
-        user_id,
-        avatar_id,
-        photos,
-        new_idx,
-        message_id=call.message.message_id,
-    )
     await bot.answer_callback_query(call.id)
 
 
@@ -371,12 +293,12 @@ async def handle_gallery_continue(call):
 async def handle_show_photos(call):
     user_id = call.from_user.id
     avatar_id = get_current_avatar_id(user_id)
-    data = await load_avatar_fsm(user_id, avatar_id)
-    photos = data.get("photos", [])
-    if not photos:
-        await bot.send_message(call.message.chat.id, "У вас пока нет загруженных фото.")
-    else:
-        await show_wizard_gallery(call.message.chat.id, user_id, avatar_id, photos, 0)
+    async with AsyncSessionLocal() as session:
+        photos = await get_avatar_photos_from_db(user_id, avatar_id, session)
+        if not photos:
+            await bot.send_message(call.message.chat.id, "У вас пока нет загруженных фото.")
+        else:
+            await show_wizard_gallery(call.message.chat.id, user_id, avatar_id, idx=0, db=session)
     await bot.answer_callback_query(call.id)
 
 
@@ -399,7 +321,7 @@ async def handle_avatar_cancel(call):
                 await bot.delete_message(call.message.chat.id, mid)
             except Exception:
                 pass
-    reset_avatar_fsm(user_id)
+    reset_avatar_fsm(user_id, session)
     await bot.send_message(
         call.message.chat.id, PROMPT_AVATAR_CANCELLED, parse_mode="HTML"
     )
@@ -408,7 +330,7 @@ async def handle_avatar_cancel(call):
 
 @bot.message_handler(func=lambda m: m.text == "🧑‍🎨 ИИ фотограф")
 async def ai_photographer_menu(message):
-    await set_state(message.from_user.id, "ai_photographer")
+    await set_state(message.from_user.id, "ai_photographer", session)
     await bot.send_message(
         message.chat.id,
         "🧑‍🎨 ИИ фотограф\n\nСоздавайте аватары и образы с помощью ИИ.",
@@ -427,7 +349,8 @@ async def my_avatars_menu(message):
 
 @bot.message_handler(func=lambda m: m.text == "📷 Создать аватар")
 async def create_avatar_handler(message):
-    await start_avatar_wizard(message)
+    async with AsyncSessionLocal() as session:
+        await start_avatar_wizard(message, session)
 
 
 async def send_avatar_card(chat_id, user_id, avatars, idx=0):
@@ -486,9 +409,33 @@ async def send_avatar_card(chat_id, user_id, avatars, idx=0):
 
 
 @bot.message_handler(func=lambda m: m.text == "👁 Просмотреть аватары")
-async def view_avatars_handler(message):
+async def view_avatars_handler(message, db: AsyncSession = None):
+    """
+    Миграция: листинг аватаров через MinIO/PostgreSQL (list_user_avatars_minio).
+    Если db не передан — fallback на legacy get_avatars_index.
+    """
     user_id = message.from_user.id
-    avatars = await get_avatars_index(user_id)
+    if db is not None:
+        avatars = await list_avatars(
+            user_id=user_id,
+            session=db
+        )
+        # Приводим к формату legacy для send_avatar_card
+        avatars = [
+            {
+                "avatar_id": a["avatar_id"],
+                "title": a.get("name", "Без имени"),
+                "created_at": a.get("created_at", "-"),
+                "status": a["metadata"].get("status", "-") if a.get("metadata") else "-",
+                "is_main": a["metadata"].get("is_main", False) if a.get("metadata") else False,
+                "preview_path": a["metadata"].get("preview_path") if a.get("metadata") else None,
+                "gender": a["metadata"].get("gender") if a.get("metadata") else None,
+            }
+            for a in avatars
+        ]
+    else:
+        async with AsyncSessionLocal() as session:
+            avatars = await get_avatars_index(user_id, session)
     if not avatars:
         await bot.send_message(
             message.chat.id,
@@ -525,7 +472,8 @@ async def handle_avatar_card_prev(call):
     user_id = call.from_user.id
     try:
         idx = int(call.data.split("_")[-1])
-        avatars = await get_avatars_index(user_id)
+        async with AsyncSessionLocal() as session:
+            avatars = await get_avatars_index(user_id, session)
         if not avatars:
             await bot.answer_callback_query(
                 call.id,
@@ -563,7 +511,8 @@ async def handle_avatar_card_next(call):
     user_id = call.from_user.id
     try:
         idx = int(call.data.split("_")[-1])
-        avatars = await get_avatars_index(user_id)
+        async with AsyncSessionLocal() as session:
+            avatars = await get_avatars_index(user_id, session)
         if not avatars:
             await bot.answer_callback_query(
                 call.id,
@@ -596,32 +545,31 @@ async def handle_avatar_card_next(call):
 @bot.callback_query_handler(
     func=lambda call: call.data.startswith("avatar_card_main_")
 )
-async def handle_avatar_card_main(call):
+async def handle_avatar_card_main(call, db: AsyncSession = None):
     """Обработчик кнопки "Сделать основным" в карточке аватара."""
     user_id = call.from_user.id
     try:
         avatar_id = call.data.split("_")[-1]
-        avatars = await get_avatars_index(user_id)
+        session = db
+        if session is None:
+            from frontend_bot.database import get_async_session
+            async with get_async_session() as session:
+                await set_main_avatar(user_id, avatar_id, session)
+        else:
+            await set_main_avatar(user_id, avatar_id, session)
+        async with AsyncSessionLocal() as session:
+            avatars = await get_avatars_index(user_id, session)
         if not avatars:
             await bot.answer_callback_query(
                 call.id,
                 "Нет доступных аватаров"
             )
             return
-        # Явно сбрасываем is_main у всех, кроме выбранного
-        for a in avatars:
-            a["is_main"] = (a["avatar_id"] == avatar_id)
-        # Сохраняем avatars.json централизованно
-        path = get_avatars_index_path(user_id)
-        async with aiofiles.open(path, "w", encoding="utf-8") as f:
-            await f.write(json.dumps({"avatars": avatars}, ensure_ascii=False, indent=2))
-        # Находим индекс выбранного аватара
         current_idx = 0
         for i, a in enumerate(avatars):
             if a["avatar_id"] == avatar_id:
                 current_idx = i
                 break
-        # Обновляем карточку
         await send_avatar_card(
             call.message.chat.id,
             user_id,
@@ -659,7 +607,7 @@ async def handle_avatar_card_edit(call):
     from frontend_bot.handlers.avatar.state import user_session
     user_session.setdefault(user_id, {})
     user_session[user_id]["edit_mode"] = "edit"
-    await set_state(user_id, "avatar_enter_name")
+    await set_state(user_id, "avatar_enter_name", session)
     await bot.send_message(
         call.message.chat.id,
         "Введите новое имя для аватара:"
@@ -670,12 +618,16 @@ async def handle_avatar_card_edit(call):
 @bot.callback_query_handler(
     func=lambda call: call.data.startswith("avatar_card_delete_")
 )
-async def handle_avatar_card_delete(call):
-    """Обработчик кнопки "Удалить" в карточке аватара."""
+async def handle_avatar_card_delete(call, db: AsyncSession = None):
+    """
+    Миграция: удаление аватара через MinIO/PostgreSQL (delete_avatar_minio).
+    Если db не передан — fallback на legacy delete_draft_avatar.
+    """
     user_id = call.from_user.id
     try:
         avatar_id = call.data.split("_")[-1]
-        avatars = await get_avatars_index(user_id)
+        async with AsyncSessionLocal() as session:
+            avatars = await get_avatars_index(user_id, session)
         if not avatars:
             await bot.answer_callback_query(
                 call.id,
@@ -689,7 +641,16 @@ async def handle_avatar_card_delete(call):
                 current_idx = i
                 break
         # Удаляем аватар полностью (и файлы, и запись)
-        await clear_avatar_fsm(user_id, avatar_id)
+        if db is not None:
+            await delete_avatar(
+                user_id=user_id,
+                avatar_id=avatar_id,
+                session=db
+            )
+        else:
+            from frontend_bot.database import get_async_session
+            async with get_async_session() as session:
+                await delete_draft_avatar(user_id, session)
         # Обновляем список и показываем следующий аватар
         avatars = await get_avatars_index(user_id)
         if avatars:

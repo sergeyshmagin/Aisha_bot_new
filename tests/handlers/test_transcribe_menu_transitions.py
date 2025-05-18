@@ -2,7 +2,7 @@
 
 import pytest
 from unittest.mock import patch, AsyncMock
-from frontend_bot.services.state_utils import set_state, get_state, clear_state
+# from frontend_bot.services.state_utils import set_state, get_state, clear_state
 from frontend_bot.keyboards.main_menu_keyboard import main_menu_keyboard
 from frontend_bot.keyboards.reply import transcript_format_keyboard
 from frontend_bot.services.shared_menu import send_main_menu
@@ -68,7 +68,7 @@ async def test_main_menu_to_transcribe(clean_state, mock_bot, create_message):
     """
     # Arrange
     user_id = 123456789
-    await set_state(user_id, "main_menu")
+    await set_state(user_id, "main_menu", session)
     message = create_message(user_id, "🎙 Транскрибация")
 
     # Act
@@ -96,7 +96,7 @@ async def test_transcribe_to_history(clean_state, mock_bot, create_message):
     """
     # Arrange
     user_id = 123456789
-    await set_state(user_id, "transcribe")
+    await set_state(user_id, "transcribe", session)
     message = create_message(user_id, "📋 История")
 
     # Act
@@ -122,7 +122,7 @@ async def test_transcribe_to_new(clean_state, mock_bot, create_message):
     """
     # Arrange
     user_id = 123456789
-    await set_state(user_id, "transcribe")
+    await set_state(user_id, "transcribe", session)
     message = create_message(user_id, "📝 Новая транскрибация")
 
     # Act
@@ -148,7 +148,7 @@ async def test_back_from_transcribe(clean_state, mock_bot, create_message):
     """
     # Arrange
     user_id = 123456789
-    await set_state(user_id, "transcribe")
+    await set_state(user_id, "transcribe", session)
     message = create_message(user_id, "⬅️ Назад")
 
     # Act
@@ -175,7 +175,7 @@ async def test_back_from_history(clean_state, mock_bot, create_message):
     """
     # Arrange
     user_id = 123456789
-    await set_state(user_id, "transcribe_history")
+    await set_state(user_id, "transcribe_history", session)
     message = create_message(user_id, "⬅️ Назад")
 
     # Act

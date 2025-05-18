@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 from frontend_bot.utils.logger import setup_logging
 from frontend_bot.shared.file_operations import AsyncFileManager
-from frontend_bot.config import LOG_DIR
+from frontend_bot.config import settings
 
 @pytest.fixture
 async def temp_dir(tmp_path):
@@ -29,7 +29,7 @@ async def test_setup_logging(temp_dir):
         await setup_logging()
         
         # Проверяем, что директория для логов создана
-        assert await AsyncFileManager.exists(Path(LOG_DIR))
+        assert await AsyncFileManager.exists(Path(settings.LOG_DIR))
         
         # Проверяем корневой логгер
         root_logger = logging.getLogger()
@@ -64,7 +64,7 @@ async def test_log_file_creation(temp_dir):
     await setup_logging()
     
     # Проверяем, что файл логов создан
-    log_file = Path(LOG_DIR) / "bot.log"
+    log_file = Path(settings.LOG_DIR) / "bot.log"
     assert await AsyncFileManager.exists(log_file)
     
     # Записываем тестовое сообщение
@@ -83,7 +83,7 @@ async def test_log_levels(temp_dir):
     await setup_logging()
     
     logger = logging.getLogger("test")
-    log_file = Path(LOG_DIR) / "bot.log"
+    log_file = Path(settings.LOG_DIR) / "bot.log"
     
     # Записываем сообщения разных уровней
     logger.debug("Debug message")
@@ -107,7 +107,7 @@ async def test_log_format(temp_dir):
     await setup_logging()
     
     logger = logging.getLogger("test")
-    log_file = Path(LOG_DIR) / "bot.log"
+    log_file = Path(settings.LOG_DIR) / "bot.log"
     
     # Записываем тестовое сообщение
     test_message = "Test format message"
@@ -136,7 +136,7 @@ async def test_multiple_loggers(temp_dir):
         "test3": logging.getLogger("test3")
     }
     
-    log_file = Path(LOG_DIR) / "bot.log"
+    log_file = Path(settings.LOG_DIR) / "bot.log"
     
     # Записываем сообщения от разных логгеров
     for name, logger in loggers.items():
@@ -156,7 +156,7 @@ async def test_external_libraries_logging(temp_dir):
     # Настраиваем логирование
     await setup_logging()
     
-    log_file = Path(LOG_DIR) / "bot.log"
+    log_file = Path(settings.LOG_DIR) / "bot.log"
     
     # Записываем сообщения от внешних библиотек
     logging.getLogger("telegram").info("Telegram info")

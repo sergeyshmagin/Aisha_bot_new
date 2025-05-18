@@ -5,7 +5,7 @@
 import pytest
 from pathlib import Path
 from frontend_bot.services.file_utils import FileUtils
-from frontend_bot.config import MAX_FILE_SIZE
+from frontend_bot.config import settings
 import os
 import shutil
 import tempfile
@@ -57,7 +57,7 @@ async def test_get_file_size(setup_file_utils):
 async def test_is_file_too_large(setup_file_utils):
     """Тест проверки превышения размера файла."""
     file_path = setup_file_utils.storage_dir / "large.txt"
-    file_path.write_bytes(b"x" * (MAX_FILE_SIZE + 1))
+    file_path.write_bytes(b"x" * (settings.MAX_FILE_SIZE + 1))
     assert await setup_file_utils.is_file_too_large(file_path)
 
 @pytest.mark.asyncio

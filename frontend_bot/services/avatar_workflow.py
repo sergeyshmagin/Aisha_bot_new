@@ -1,301 +1,297 @@
 """
-Модуль для управления процессом создания аватара.
-Реализует полный workflow создания аватара с обработкой ошибок и валидацией.
+Рабочий процесс для создания и управления аватарами.
 """
 
-import logging
-from typing import List, Optional, Dict, Any
-from uuid import uuid4
-from datetime import datetime
 import os
+import uuid
+from typing import Optional, List, Dict, Any
+from datetime import datetime
 
-from frontend_bot.services.avatar_manager import (
-    init_avatar_fsm,
-    add_photo_to_avatar,
-    update_avatar_fsm,
-    mark_avatar_ready,
-    load_avatar_fsm,
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update, delete
+
+from shared_storage.storage_utils import (
+    init_storage,
+    upload_file,
+    download_file,
+    delete_file,
+    generate_presigned_url,
+    get_file_metadata
 )
-from frontend_bot.services.state_utils import set_state, get_state, clear_state
-from frontend_bot.constants.avatar import AVATAR_MIN_PHOTOS, AVATAR_MAX_PHOTOS
-from frontend_bot.shared.image_processing import AsyncImageProcessor
-from frontend_bot.config import PHOTO_MIN_RES, AVATAR_STORAGE_PATH
+from database.models import UserAvatar
+from frontend_bot.config import settings
+from frontend_bot.utils.logger import get_logger
+from frontend_bot.services.state_utils import set_state_pg
+from database.config import AsyncSessionLocal
+# from database.repository import UserAvatarRepository  # раскомментируйте, если нужен реальный репозиторий
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-class AvatarCreationError(Exception):
-    """Базовый класс для ошибок создания аватара."""
-    pass
-
-class PhotoValidationError(AvatarCreationError):
-    """Ошибка валидации фото."""
-    pass
-
-class StateError(AvatarCreationError):
-    """Ошибка состояния."""
-    pass
-
-class ValidationError(AvatarCreationError):
-    """Ошибка валидации данных."""
-    pass
-
-async def init_avatar_creation(user_id: int) -> str:
+async def save_avatar(
+    user_id: int,
+    image_data: bytes,
+    name: str,
+    session: AsyncSession,
+    metadata: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """
-    Инициализирует процесс создания аватара.
+    Сохраняет аватар пользователя.
     
     Args:
-        user_id: ID пользователя
+        user_id (int): ID пользователя
+        image_data (bytes): Данные изображения
+        name (str): Имя аватара
+        session (AsyncSession): Сессия SQLAlchemy
+        metadata (Dict[str, Any], optional): Дополнительные метаданные
         
     Returns:
-        str: ID созданного аватара
-        
-    Raises:
-        AvatarCreationError: Если не удалось инициализировать аватар
+        Dict[str, Any]: Метаданные сохраненного аватара
     """
     try:
-        avatar_id = str(uuid4())
-        await init_avatar_fsm(user_id, avatar_id)
-        await set_state(user_id, "avatar_photo_upload")
-        return avatar_id
-    except Exception as e:
-        logger.error(f"Failed to init avatar creation: {e}")
-        raise AvatarCreationError(f"Failed to init avatar creation: {e}")
-
-async def validate_photo(photo_bytes: bytes) -> bool:
-    """
-    Валидирует фото по размеру и качеству.
-    
-    Args:
-        photo_bytes: Байты фото
+        # Генерируем уникальный ключ для файла
+        avatar_id = str(uuid.uuid4())
+        image_key = f"{user_id}/{avatar_id}/avatar.jpg"
         
-    Returns:
-        bool: True если фото валидно
+        # Загружаем файл в MinIO
+        await upload_file(
+            "avatars",
+            image_key,
+            image_data,
+            content_type="image/jpeg"
+        )
         
-    Raises:
-        PhotoValidationError: Если фото не прошло валидацию
-    """
-    try:
-        # Проверяем размер фото
-        if len(photo_bytes) > 10 * 1024 * 1024:  # 10MB
-            raise PhotoValidationError("Photo size exceeds 10MB")
-            
-        # Проверяем разрешение
-        img = await AsyncImageProcessor.open_from_bytes(photo_bytes)
-        width, height = img.size
-        if width < PHOTO_MIN_RES or height < PHOTO_MIN_RES:
-            raise PhotoValidationError(
-                f"Photo resolution too low. Minimum: {PHOTO_MIN_RES}x{PHOTO_MIN_RES}"
-            )
-            
-        return True
+        # Сохраняем метаданные в БД
+        avatar = UserAvatar(
+            user_id=user_id,
+            avatar_id=avatar_id,
+            name=name,
+            image_path=image_key,
+            metadata=metadata or {},
+            created_at=datetime.utcnow()
+        )
+        session.add(avatar)
+        await session.commit()
+        
+        return {
+            "avatar_id": avatar_id,
+            "name": name,
+            "image_url": f"/avatars/{image_key}",
+            "metadata": metadata,
+            "created_at": avatar.created_at
+        }
     except Exception as e:
-        logger.error(f"Photo validation error: {e}")
-        raise PhotoValidationError(f"Photo validation failed: {e}")
+        logger.error(f"Ошибка при сохранении аватара: {e}")
+        raise
 
-async def handle_photo_upload(
+async def get_avatar(
     user_id: int,
     avatar_id: str,
-    photo_bytes: bytes,
-    file_id: Optional[str] = None
-) -> str:
+    session: AsyncSession
+) -> Optional[Dict[str, Any]]:
     """
-    Обрабатывает загрузку фото для аватара.
-
+    Получает аватар пользователя.
+    
     Args:
-        user_id: ID пользователя
-        avatar_id: ID аватара
-        photo_bytes: Байты фото
-        file_id: ID файла в Telegram (опционально)
-
+        user_id (int): ID пользователя
+        avatar_id (str): ID аватара
+        session (AsyncSession): Сессия SQLAlchemy
+        
     Returns:
-        str: Путь к сохраненному фото
-
-    Raises:
-        PhotoValidationError: Если фото не прошло валидацию
-        AvatarCreationError: При других ошибках
+        Optional[Dict[str, Any]]: Метаданные аватара или None если не найден
     """
     try:
-        # Валидируем фото
-        await validate_photo(photo_bytes)
+        query = select(UserAvatar).where(
+            UserAvatar.user_id == user_id,
+            UserAvatar.avatar_id == avatar_id
+        )
+        result = await session.execute(query)
+        avatar = result.scalar_one_or_none()
+        
+        if not avatar:
+            return None
+            
+        # Получаем presigned URL для файла
+        image_url = await generate_presigned_url("avatars", avatar.image_path)
+        
+        return {
+            "avatar_id": avatar.avatar_id,
+            "name": avatar.name,
+            "image_url": image_url,
+            "metadata": avatar.metadata,
+            "created_at": avatar.created_at
+        }
+    except Exception as e:
+        logger.error(f"Ошибка при получении аватара: {e}")
+        return None
 
-        # Проверяем количество фото
-        data = await load_avatar_fsm(user_id, avatar_id)
-        photos_count = len(data.get("photos", []))
-
-        if photos_count >= AVATAR_MAX_PHOTOS:
-            raise PhotoValidationError(
-                f"Maximum number of photos ({AVATAR_MAX_PHOTOS}) exceeded"
+async def delete_avatar(
+    user_id: int,
+    avatar_id: str,
+    session: AsyncSession
+) -> bool:
+    """
+    Удаляет аватар пользователя.
+    
+    Args:
+        user_id (int): ID пользователя
+        avatar_id (str): ID аватара
+        session (AsyncSession): Сессия SQLAlchemy
+        
+    Returns:
+        bool: True если аватар был удален
+    """
+    try:
+        # Получаем метаданные аватара
+        query = select(UserAvatar).where(
+            UserAvatar.user_id == user_id,
+            UserAvatar.avatar_id == avatar_id
+        )
+        result = await session.execute(query)
+        avatar = result.scalar_one_or_none()
+        
+        if not avatar:
+            return False
+            
+        # Удаляем файл из MinIO
+        await delete_file("avatars", avatar.image_path)
+        
+        # Удаляем метаданные из БД
+        await session.execute(
+            delete(UserAvatar).where(
+                UserAvatar.user_id == user_id,
+                UserAvatar.avatar_id == avatar_id
             )
-
-        # Сохраняем фото
-        photo_path = await add_photo_to_avatar(user_id, avatar_id, photo_bytes, file_id)
-        return photo_path
-
-    except PhotoValidationError:
-        raise
+        )
+        await session.commit()
+        
+        return True
     except Exception as e:
-        logger.error(f"Photo upload error: {e}")
-        raise AvatarCreationError(f"Failed to upload photo: {e}")
+        logger.error(f"Ошибка при удалении аватара: {e}")
+        return False
 
-async def handle_gender_selection(
-    user_id: int, 
-    avatar_id: str, 
-    gender: str
-) -> None:
+async def list_avatars(
+    user_id: int,
+    session: AsyncSession,
+    limit: int = 10,
+    offset: int = 0
+) -> List[Dict[str, Any]]:
     """
-    Обрабатывает выбор пола для аватара.
+    Получает список аватаров пользователя.
     
     Args:
-        user_id: ID пользователя
-        avatar_id: ID аватара
-        gender: Выбранный пол ('male' или 'female')
+        user_id (int): ID пользователя
+        session (AsyncSession): Сессия SQLAlchemy
+        limit (int, optional): Максимальное количество аватаров
+        offset (int, optional): Смещение
         
-    Raises:
-        ValidationError: Если пол невалиден
-        AvatarCreationError: При других ошибках
+    Returns:
+        List[Dict[str, Any]]: Список метаданных аватаров
     """
     try:
-        if gender not in ["male", "female"]:
-            raise ValidationError("Invalid gender value")
+        query = select(UserAvatar).where(
+            UserAvatar.user_id == user_id
+        ).order_by(
+            UserAvatar.created_at.desc()
+        ).limit(limit).offset(offset)
+        
+        result = await session.execute(query)
+        avatars = result.scalars().all()
+        
+        # Получаем presigned URL для файлов
+        avatar_list = []
+        for avatar in avatars:
+            image_url = await generate_presigned_url("avatars", avatar.image_path)
+            avatar_list.append({
+                "avatar_id": avatar.avatar_id,
+                "name": avatar.name,
+                "image_url": image_url,
+                "metadata": avatar.metadata,
+                "created_at": avatar.created_at
+            })
             
-        # Создаем директорию для аватара если её нет
-        avatar_dir = os.path.join(AVATAR_STORAGE_PATH, str(user_id), avatar_id)
-        os.makedirs(avatar_dir, exist_ok=True)
-            
-        await update_avatar_fsm(user_id, avatar_id, class_name=gender)
-        await set_state(user_id, "avatar_enter_name")
-    except ValidationError:
-        raise
+        return avatar_list
     except Exception as e:
-        logger.error(f"Gender selection error: {e}")
-        raise AvatarCreationError(f"Failed to set gender: {e}")
+        logger.error(f"Ошибка при получении списка аватаров: {e}")
+        return []
 
-async def handle_name_input(
-    user_id: int, 
-    avatar_id: str, 
-    name: str
-) -> None:
+async def create_draft_avatar(user_id: str, session: AsyncSession, data: dict) -> UserAvatar:
     """
-    Обрабатывает ввод имени для аватара.
-    
-    Args:
-        user_id: ID пользователя
-        avatar_id: ID аватара
-        name: Имя аватара
-        
-    Raises:
-        ValidationError: Если имя невалидно
-        AvatarCreationError: При других ошибках
+    Создаёт черновик аватара (is_draft=True).
     """
-    try:
-        if not name or len(name.strip()) == 0:
-            raise ValidationError("Name cannot be empty")
-            
-        if len(name) > 50:  # Максимальная длина имени
-            raise ValidationError("Name is too long (max 50 characters)")
-            
-        # Создаем директорию для аватара если её нет
-        avatar_dir = os.path.join(AVATAR_STORAGE_PATH, str(user_id), avatar_id)
-        os.makedirs(avatar_dir, exist_ok=True)
-            
-        await update_avatar_fsm(user_id, avatar_id, name=name)
-        await set_state(user_id, "avatar_confirm")
-    except ValidationError:
-        raise
-    except Exception as e:
-        logger.error(f"Name input error: {e}")
-        raise AvatarCreationError(f"Failed to set name: {e}")
+    draft = UserAvatar(
+        user_id=user_id,
+        photo_key=data.get("photo_key", ""),
+        preview_key=data.get("preview_key", ""),
+        avatar_data=data.get("avatar_data", {}),
+        is_draft=1,
+        created_at=datetime.utcnow(),
+    )
+    session.add(draft)
+    await session.commit()
+    return draft
 
-async def finalize_avatar(
-    user_id: int, 
-    avatar_id: str
-) -> None:
+async def update_draft_avatar(user_id: str, session: AsyncSession, data: dict) -> None:
     """
-    Завершает создание аватара.
-    
-    Args:
-        user_id: ID пользователя
-        avatar_id: ID аватара
-        
-    Raises:
-        ValidationError: Если недостаточно фото
-        AvatarCreationError: При других ошибках
+    Обновляет черновик аватара (is_draft=True).
     """
-    try:
-        # Проверяем количество фото
-        data = await load_avatar_fsm(user_id, avatar_id)
-        photos_count = len(data.get("photos", []))
-        
-        if photos_count < AVATAR_MIN_PHOTOS:
-            raise ValidationError(
-                f"Not enough photos. Minimum required: {AVATAR_MIN_PHOTOS}"
-            )
-            
-        # Помечаем аватар как готовый
-        await mark_avatar_ready(user_id, avatar_id)
-        
-        # Сбрасываем состояние
-        await set_state(user_id, "my_avatars")
-    except ValidationError:
-        raise
-    except Exception as e:
-        logger.error(f"Avatar finalization error: {e}")
-        raise AvatarCreationError(f"Failed to finalize avatar: {e}")
+    await session.execute(
+        update(UserAvatar)
+        .where(UserAvatar.user_id == user_id, UserAvatar.is_draft == 1)
+        .values(
+            photo_key=data.get("photo_key", ""),
+            preview_key=data.get("preview_key", ""),
+            avatar_data=data.get("avatar_data", {}),
+        )
+    )
+    await session.commit()
 
-async def cleanup_state(user_id: int) -> None:
+async def finalize_draft_avatar(user_id: str, session: AsyncSession) -> None:
     """
-    Очищает состояние пользователя.
-    
-    Args:
-        user_id: ID пользователя
+    Переводит черновик в финальный аватар (is_draft=False).
     """
-    try:
-        avatar_id = await get_state(user_id)
-        if avatar_id:
-            # Удаляем временные файлы
-            avatar_dir = os.path.join(AVATAR_STORAGE_PATH, str(user_id), avatar_id)
-            if os.path.exists(avatar_dir):
-                for file in os.listdir(avatar_dir):
-                    os.remove(os.path.join(avatar_dir, file))
-                os.rmdir(avatar_dir)
-            
-            # Сбрасываем состояние
-            await set_state(user_id, "my_avatars")
-    except Exception as e:
-        logger.error(f"Error cleaning up state: {e}")
-        await set_state(user_id, "main_menu")
+    await session.execute(
+        update(UserAvatar)
+        .where(UserAvatar.user_id == user_id, UserAvatar.is_draft == 1)
+        .values(is_draft=0)
+    )
+    await session.commit()
 
-async def handle_creation_error(
-    user_id: int, 
-    chat_id: int, 
-    error: Exception
-) -> None:
+async def delete_draft_avatar(user_id: str, session: AsyncSession) -> None:
     """
-    Обрабатывает ошибки создания аватара.
-    
-    Args:
-        user_id: ID пользователя
-        chat_id: ID чата
-        error: Ошибка
+    Удаляет черновик аватара пользователя.
     """
-    try:
-        # Логируем ошибку
-        logger.error(f"Avatar creation error: {error}")
-        
-        # Очищаем состояние
-        await cleanup_state(user_id)
-        
-        # Отправляем сообщение об ошибке
-        error_message = str(error)
-        if isinstance(error, PhotoValidationError):
-            error_message = "Ошибка при загрузке фото. Пожалуйста, проверьте требования к фото."
-        elif isinstance(error, ValidationError):
-            error_message = "Ошибка валидации данных. Пожалуйста, проверьте введенные данные."
-        elif isinstance(error, StateError):
-            error_message = "Ошибка состояния. Пожалуйста, начните создание аватара заново."
-            
-        # TODO: Отправить сообщение пользователю
-        # await bot.send_message(chat_id, error_message)
-        
-    except Exception as e:
-        logger.error(f"Error handling error: {e}") 
+    await session.execute(
+        delete(UserAvatar)
+        .where(UserAvatar.user_id == user_id, UserAvatar.is_draft == 1)
+    )
+    await session.commit()
+
+async def cleanup_state(user_id: int, session: AsyncSession):
+    """
+    Очищает временные данные, связанные с созданием аватара пользователя.
+    - Сбрасывает FSM-состояние.
+    - Удаляет черновики аватара из БД.
+    - (Опционально) Удаляет временные файлы из MinIO.
+    """
+    async with AsyncSessionLocal() as session:
+        await set_state_pg(user_id, "main_menu", session)
+    await delete_draft_avatar(user_id, session)
+    # Если есть временные файлы — добавьте удаление из MinIO 
+
+async def set_main_avatar(user_id: int, avatar_id: str, session: AsyncSession) -> None:
+    """
+    Устанавливает основной аватар пользователя (is_main=True), сбрасывает у остальных.
+    """
+    # Сбросить is_main у всех аватаров пользователя
+    await session.execute(
+        update(UserAvatar)
+        .where(UserAvatar.user_id == user_id)
+        .values(avatar_data={"is_main": False})
+    )
+    # Установить is_main у выбранного аватара
+    await session.execute(
+        update(UserAvatar)
+        .where(UserAvatar.id == avatar_id)
+        .values(avatar_data={"is_main": True})
+    )
+    await session.commit() 

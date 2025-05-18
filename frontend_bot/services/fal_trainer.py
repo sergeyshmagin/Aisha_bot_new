@@ -4,16 +4,7 @@ import zipfile
 from typing import List, Optional
 
 import fal_client
-from frontend_bot.config import (
-    FAL_MODE,
-    FAL_ITERATIONS,
-    FAL_PRIORITY,
-    FAL_CAPTIONING,
-    FAL_TRIGGER_WORD,
-    FAL_LORA_RANK,
-    FAL_FINETUNE_TYPE,
-    FAL_WEBHOOK_URL,
-)
+from frontend_bot.config import settings
 from frontend_bot.utils.logger import get_logger
 
 logger = get_logger("fal_trainer")
@@ -40,14 +31,14 @@ async def train_avatar(
     Возвращает finetune_id или None при ошибке.
     """
     # Используем значения из config, если не переданы явно
-    mode = mode or FAL_MODE
-    iterations = iterations or FAL_ITERATIONS
-    priority = priority or FAL_PRIORITY
-    captioning = FAL_CAPTIONING if captioning is None else captioning
-    trigger_word = trigger_word or FAL_TRIGGER_WORD
-    lora_rank = lora_rank or FAL_LORA_RANK
-    finetune_type = finetune_type or FAL_FINETUNE_TYPE
-    webhook_url = webhook_url or FAL_WEBHOOK_URL
+    mode = mode or settings.FAL_MODE
+    iterations = iterations or settings.FAL_ITERATIONS
+    priority = priority or settings.FAL_PRIORITY
+    captioning = settings.FAL_CAPTIONING if captioning is None else captioning
+    trigger_word = trigger_word or settings.FAL_TRIGGER_WORD
+    lora_rank = lora_rank or settings.FAL_LORA_RANK
+    finetune_type = finetune_type or settings.FAL_FINETUNE_TYPE
+    webhook_url = webhook_url or settings.FAL_WEBHOOK_URL
     try:
         logger.info(
             f"[FAL_TRAINER] Старт обучения: user_id={user_id}, "

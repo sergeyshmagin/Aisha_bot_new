@@ -5,7 +5,7 @@
 import pytest
 from sqlalchemy import text
 from frontend_bot.models.base import User, UserBalance, UserAvatar, UserState, Transaction
-from tests.conftest import generate_telegram_id
+# TODO: Добавить фикстуру или функцию генерации telegram_id для тестов
 
 @pytest.mark.asyncio
 async def test_user_indexes(test_session):

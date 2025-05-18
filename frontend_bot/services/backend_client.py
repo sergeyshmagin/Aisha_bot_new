@@ -1,12 +1,12 @@
 import aiohttp
 import os
-from frontend_bot.config import BACKEND_URL
+from frontend_bot.config import settings
 import aiofiles
 import io
 
 
 async def send_photo_for_animation(photo_path: str, emotion: str) -> str:
-    url = f"{BACKEND_URL}/animate-photo"
+    url = f"{settings.BACKEND_URL}/animate-photo"
 
     async with aiohttp.ClientSession() as session:
         async with aiofiles.open(photo_path, "rb") as f:
@@ -28,7 +28,7 @@ async def send_photo_for_animation(photo_path: str, emotion: str) -> str:
 
 
 async def send_photo_for_enhancement(photo_path: str) -> str:
-    url = f"{BACKEND_URL}/gfpgan-enhance?auto=true"
+    url = f"{settings.BACKEND_URL}/gfpgan-enhance?auto=true"
     async with aiohttp.ClientSession() as session:
         async with aiofiles.open(photo_path, "rb") as f:
             photo_bytes = await f.read()

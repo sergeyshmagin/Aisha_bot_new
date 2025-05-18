@@ -1,6 +1,5 @@
 from unittest.mock import AsyncMock, patch
-from frontend_bot.handlers import transcribe_history
-from frontend_bot.services import transcript_cache
+# from frontend_bot.services import transcript_cache
 from frontend_bot.shared import redis_client
 
 
@@ -114,3 +113,5 @@ async def test_delete_my_file_no_file(
     assert (
         "Нет файла для удаления." in args[1]
     ), "❌ При отсутствии файла не отправлено ожидаемое сообщение."
+
+# TODO: Перевести тесты на работу с транскриптами через MinIO/PostgreSQL

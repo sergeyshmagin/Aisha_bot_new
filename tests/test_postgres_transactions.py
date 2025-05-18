@@ -6,7 +6,6 @@ import pytest
 from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
 from frontend_bot.models.base import User, UserBalance, UserAvatar, UserState, Transaction
-from tests.conftest import generate_telegram_id
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import text, select
@@ -185,4 +184,6 @@ async def test_transaction_isolation(test_engine):
         
         # Теперь изменения должны быть видны во второй сессии
         result = await session2.execute(text("SELECT coins FROM user_balances WHERE user_id = :user_id"), {"user_id": user.id})
-        assert result.scalar() == Decimal("100.00") 
+        assert result.scalar() == Decimal("100.00")
+
+# TODO: Добавить фикстуру или функцию генерации telegram_id для тестов 

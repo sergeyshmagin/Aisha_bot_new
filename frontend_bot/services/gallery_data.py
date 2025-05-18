@@ -1,6 +1,6 @@
 """Данные для галереи образов и стилей."""
 
-from frontend_bot.config import GALLERY_PATH
+from frontend_bot.config import settings
 
 GALLERY_STYLES = [
     {"emoji": "👩🏼‍🦰", "name": "Женский"},
@@ -30,18 +30,23 @@ GALLERY_STYLES = [
     {"emoji": "🔥", "name": "Тренды"},
 ]
 
+# Пути к изображениям в MinIO
 GALLERY_IMAGES = [
     {
         "style": "Женский",
         "name": "Солнечное утро",
-        "image_path": str(GALLERY_PATH / "woman_morning.jpg"),
+        "image_path": "gallery/woman_morning.jpg",  # Путь в MinIO
         "description": "Стиль: Женский\nОбраз: Солнечное утро",
     },
     {
         "style": "Женский",
         "name": "Вечерний шик",
-        "image_path": str(GALLERY_PATH / "woman_evening.jpg"),
+        "image_path": "gallery/woman_evening.jpg",  # Путь в MinIO
         "description": "Стиль: Женский\nОбраз: Вечерний шик",
     },
     # ... другие образы
 ]
+
+def get_gallery_image_url(image_path: str) -> str:
+    """Получить URL изображения из MinIO."""
+    return f"{settings.MINIO_ENDPOINT}/gallery/{image_path}"

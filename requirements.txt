@@ -1,11 +1,19 @@
 # Основные зависимости
-python-telegram-bot>=20.0
-redis[async]>=5.0.0
-python-dotenv>=1.0.0
-aiofiles>=23.0
-Pillow>=10.0.0
-openai>=1.0.0
-pydantic>=2.0.0
+python-dotenv==1.0.0
+pydantic==2.5.2
+pydantic-settings==2.1.0
+sqlalchemy==2.0.23
+asyncpg==0.29.0
+alembic==1.12.1
+python-telegram-bot==20.7
+aiogram==3.2.0
+
+# Зависимости для тестов
+pytest==7.4.3
+pytest-asyncio==0.21.1
+pytest-cov==4.1.0
+pytest-mock==3.12.0
+pytest-env==1.1.3
 
 # PostgreSQL
 sqlalchemy>=2.0.0
@@ -17,6 +25,7 @@ pytest>=8.0.0
 pytest-asyncio>=0.23.0
 pytest-cov>=4.1.0
 pytest-mock>=3.12.0
+aiosqlite>=0.19.0  # Для тестов с SQLite
 
 # Линтинг и форматирование
 black>=24.1.0
@@ -79,15 +88,12 @@ pluggy==1.5.0
 pre_commit==4.2.0
 propcache==0.3.1
 pycodestyle==2.13.0
-pydantic==2.11.3
 pydantic_core==2.33.1
 pydub==0.25.1
 pyflakes==3.3.2
 pyTelegramBotAPI==4.26.0
-pytest==8.3.5
 pytest-cov==6.1.1
 python-docx==1.1.2
-python-dotenv==1.1.0
 python-telegram-bot==22.0
 PyYAML==6.0.2
 requests==2.32.3
@@ -99,9 +105,9 @@ urllib3==2.4.0
 virtualenv==20.31.2
 yarl==1.20.0
 
-# Redis
-redis[async]>=5.0.1
-
 # Testing
 pytest-asyncio>=0.26.0
 pytest-cov>=6.1.1
+
+# MinIO
+minio>=7.1.0

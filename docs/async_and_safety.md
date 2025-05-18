@@ -76,3 +76,9 @@ class AsyncFile:
 with patch("aiofiles.open", return_value=AsyncFile()):
     await my_async_func()
 ```
+
+## Тестирование и миграция
+- Все тесты моделей и сервисов должны быть полностью асинхронными.
+- Использовать только async-compatible библиотеки (aiosqlite, asyncpg).
+- Для кросс-базовой поддержки UUID и telegram_id — см. best practices.
+- Текущий этап: интеграция MinIO для аватаров, ревизия сервисов и тестов.

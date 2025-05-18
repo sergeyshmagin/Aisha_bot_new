@@ -6,7 +6,7 @@ import logging
 import sys
 from pathlib import Path
 from frontend_bot.shared.file_operations import AsyncFileManager
-from frontend_bot.config import LOG_DIR
+from frontend_bot.config import settings
 
 def get_logger(name: str) -> logging.Logger:
     """
@@ -26,7 +26,7 @@ async def setup_logging():
     Создает директорию для логов, если она не существует.
     """
     # Создаем директорию для логов
-    await AsyncFileManager.ensure_dir(Path(LOG_DIR))
+    await AsyncFileManager.ensure_dir(Path(settings.LOG_DIR))
     
     # Настраиваем формат логов
     log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -46,7 +46,7 @@ async def setup_logging():
     
     # Добавляем хендлер для записи в файл
     file_handler = logging.FileHandler(
-        Path(LOG_DIR) / "bot.log",
+        Path(settings.LOG_DIR) / "bot.log",
         encoding="utf-8"
     )
     file_handler.setFormatter(logging.Formatter(log_format, date_format))

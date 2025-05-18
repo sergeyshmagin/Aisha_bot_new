@@ -14,6 +14,11 @@ pip install -r requirements.txt
 TELEGRAM_TOKEN=ваш_токен
 OPENAI_API_KEY=ваш_openai_ключ
 STORAGE_DIR=storage
+POSTGRES_DB=aisha
+POSTGRES_USER=aisha_user
+POSTGRES_PASSWORD=KbZZGJHX09KSH7r9ev4m
+POSTGRES_HOST=192.168.0.4
+POSTGRES_PORT=5432
 ```
 
 Запустите бота:

@@ -10,16 +10,7 @@ import uuid
 import aiofiles.os
 
 from frontend_bot.shared.file_operations import AsyncFileManager
-from frontend_bot.config import (
-    STORAGE_DIR,
-    MAX_FILE_SIZE,
-    ALLOWED_AUDIO_FORMATS,
-    ALLOWED_VIDEO_FORMATS,
-    ALLOWED_PHOTO_FORMATS,
-    MAX_AUDIO_DURATION,
-    MAX_VIDEO_DURATION,
-    MAX_PHOTO_SIZE
-)
+from frontend_bot.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +69,7 @@ async def async_getsize(path: Path) -> Optional[int]:
 class FileUtils:
     """Утилиты для работы с файлами."""
     
-    def __init__(self, storage_dir: Path = STORAGE_DIR):
+    def __init__(self, storage_dir: Path = settings.STORAGE_DIR):
         """
         Инициализация утилит для работы с файлами.
         
@@ -139,7 +130,7 @@ class FileUtils:
         size = await self.get_file_size(file_path)
         if size is None:
             return False
-        return size > MAX_FILE_SIZE
+        return size > settings.MAX_FILE_SIZE
     
     async def get_file_type(self, file_path: Path) -> str:
         """

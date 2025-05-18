@@ -1,4 +1,4 @@
-from frontend_bot.config import AVATAR_MIN_PHOTOS, AVATAR_MAX_PHOTOS
+from frontend_bot.config import settings
 from frontend_bot.services.avatar_manager import set_current_avatar_id
 from frontend_bot.bot import bot
 import asyncio
@@ -14,13 +14,9 @@ logger = logging.getLogger(__name__)
 # --- FSM/Session утилиты ---
 
 
-def reset_avatar_fsm(user_id):
-    user_session.pop(user_id, None)
-    for key in list(user_gallery.keys()):
-        if key[0] == user_id:
-            user_gallery.pop(key, None)
-    clear_state(user_id)
-    set_current_avatar_id(user_id, None)
+def reset_avatar_fsm(user_id, session):
+    from frontend_bot.handlers.avatar.fsm import reset_avatar_fsm as _reset_avatar_fsm
+    _reset_avatar_fsm(user_id, session)
 
 
 def get_gallery_key(user_id: int, avatar_id: str) -> str:
@@ -45,7 +41,7 @@ async def start_avatar_wizard_for_user(user_id, chat_id):
     from frontend_bot.services.avatar_manager import init_avatar_fsm
 
     init_avatar_fsm(user_id, avatar_id)
-    await set_state(user_id, "avatar_photo_upload")
+    await set_state(user_id, "avatar_photo_upload", session)
     set_current_avatar_id(user_id, avatar_id)
     requirements = PHOTO_REQUIREMENTS_TEXT
 
@@ -81,18 +77,13 @@ def get_photo_hint_text(current, min_photos, max_photos):
 
 
 async def update_photo_hint(user_id, chat_id, avatar_id):
-    from frontend_bot.services.avatar_manager import load_avatar_fsm
-
-    data = await load_avatar_fsm(user_id, avatar_id)
-    photos = data.get("photos", [])
-    count = len(photos)
     msg_id = user_session[user_id].get("last_info_msg_id")
     if msg_id:
         try:
             await bot.delete_message(chat_id, msg_id)
         except Exception:
             pass
-    text = get_photo_hint_text(count, AVATAR_MIN_PHOTOS, AVATAR_MAX_PHOTOS)
+    text = get_photo_hint_text(count, settings.AVATAR_MIN_PHOTOS, settings.AVATAR_MAX_PHOTOS)
     msg = await bot.send_message(chat_id, text)
     user_session[user_id]["last_info_msg_id"] = msg.message_id
 

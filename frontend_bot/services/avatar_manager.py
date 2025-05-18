@@ -1,598 +1,332 @@
 """
-Сервис для управления аватарами пользователей.
+Менеджер аватаров пользователя.
 """
 
-import os
+from typing import List, Dict, Any, Optional, Tuple, Union
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 import json
-import io
-from datetime import datetime
-from typing import Optional, Dict, Any, List, Tuple
-from PIL import Image
-import hashlib
-import aiofiles.os
-import logging
+import os
 from pathlib import Path
-from frontend_bot.config import (
-    AVATAR_STORAGE_PATH,
-    PHOTO_MAX_MB,
-    PHOTO_MIN_RES,
-    STORAGE_DIR,
-    AVATAR_MIN_PHOTOS,
-    AVATAR_MAX_PHOTOS,
-    THUMBNAIL_SIZE,
-    ALLOWED_PHOTO_FORMATS,
-    MAX_PHOTO_SIZE
-)
-import aiofiles
-from frontend_bot.services.file_utils import (
-    async_exists,
-    async_makedirs,
-    async_remove,
-    async_rmtree,
-)
-from frontend_bot.shared.image_processing import AsyncImageProcessor
-from frontend_bot.shared.file_operations import AsyncFileManager
-from frontend_bot.config import AVATAR_DIR
+import mimetypes
+from PIL import Image
+import io
+from minio import Minio
+from minio.error import S3Error
+import uuid
+import sys
+from uuid import UUID
+from datetime import datetime
 
-AVATAR_STORAGE = Path(AVATAR_STORAGE_PATH)
+from database.models import UserAvatar, UserAvatarPhoto
+from frontend_bot.utils.logger import get_logger
+from frontend_bot.config import settings
+from frontend_bot.config.storage import StorageConfig, BUCKET_STRUCTURES
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-# Глобальный словарь для хранения текущих avatar_id
+print("[DEBUG] avatar_manager.py: start", file=sys.stderr)
+
+# Словарь для хранения текущих ID аватаров пользователей
 _current_avatar_ids: Dict[int, str] = {}
 
-async def validate_photo(photo_bytes: bytes, existing_paths: List[str] = None) -> Tuple[bool, str]:
+# Создаем необходимые директории при импорте
+os.makedirs(settings.AVATAR_FSM_PATH, exist_ok=True)
+os.makedirs(settings.AVATAR_PHOTOS_PATH, exist_ok=True)
+
+# Инициализация MinIO клиента
+storage_config = StorageConfig()
+minio_client = Minio(
+    storage_config.MINIO_ENDPOINT,
+    access_key=storage_config.MINIO_ACCESS_KEY,
+    secret_key=storage_config.MINIO_SECRET_KEY,
+    secure=storage_config.MINIO_SECURE
+)
+
+# Создаем бакет для аватаров, если его нет
+try:
+    if not minio_client.bucket_exists(storage_config.AVATAR_DIR):
+        minio_client.make_bucket(storage_config.AVATAR_DIR)
+except S3Error as e:
+    logger.error(f"Ошибка при создании бакета MinIO: {e}")
+
+def init_avatar_fsm(user_id: int) -> None:
     """
-    Валидирует фото по размеру, формату и уникальности.
+    Инициализирует FSM для создания аватара.
     
     Args:
-        photo_bytes: Бинарные данные фото
-        existing_paths: Список путей к существующим фото для проверки уникальности
+        user_id (int): ID пользователя
+    """
+    _current_avatar_ids[user_id] = None
+
+def get_current_avatar_id(user_id: Union[int, UUID]) -> Optional[str]:
+    """
+    Получает текущий ID аватара пользователя.
+    
+    Args:
+        user_id (Union[int, UUID]): ID пользователя (int или UUID)
         
     Returns:
-        Tuple[bool, str]: (is_valid, error_message)
+        Optional[str]: ID аватара или None
+    """
+    # Если user_id - UUID, преобразуем в int
+    if isinstance(user_id, UUID):
+        user_id = user_id.int
+    return _current_avatar_ids.get(user_id)
+
+def set_current_avatar_id(user_id: Union[int, UUID], avatar_id: Optional[str]) -> None:
+    """
+    Устанавливает текущий ID аватара пользователя.
+    
+    Args:
+        user_id (Union[int, UUID]): ID пользователя (int или UUID)
+        avatar_id (Optional[str]): ID аватара или None
+    """
+    # Если user_id - UUID, преобразуем в int
+    if isinstance(user_id, UUID):
+        user_id = user_id.int
+    _current_avatar_ids[user_id] = avatar_id
+
+async def get_avatars_index(user_id: int, session: AsyncSession) -> List[Dict[str, Any]]:
+    """
+    Получает список аватаров пользователя.
+    
+    Args:
+        user_id (int): ID пользователя
+        session (AsyncSession): Сессия SQLAlchemy
+        
+    Returns:
+        List[Dict[str, Any]]: Список аватаров
     """
     try:
-        # Проверка размера файла
-        if len(photo_bytes) > MAX_PHOTO_SIZE:
-            return False, f"Фото слишком большое. Максимальный размер: {PHOTO_MAX_MB}MB"
+        query = select(UserAvatar).where(
+            UserAvatar.user_id == user_id
+        ).order_by(
+            UserAvatar.created_at.desc()
+        )
+        
+        result = await session.execute(query)
+        avatars = result.scalars().all()
+        
+        return [
+            {
+                "avatar_id": avatar.id,
+                "photo_key": avatar.photo_key,
+                "preview_key": avatar.preview_key,
+                "created_at": avatar.created_at,
+                "avatar_data": avatar.avatar_data
+            }
+            for avatar in avatars
+        ]
+    except Exception as e:
+        logger.error(f"Ошибка при получении списка аватаров: {e}")
+        return []
+
+async def validate_photo(photo_bytes: bytes, existing_paths: List[str]) -> Tuple[bool, str]:
+    """
+    Валидирует фото для аватара.
+    
+    Args:
+        photo_bytes (bytes): Байты фото
+        existing_paths (List[str]): Список существующих путей
+        
+    Returns:
+        Tuple[bool, str]: (Результат валидации, Сообщение)
+    """
+    try:
+        # Проверяем формат файла
+        mime_type = mimetypes.guess_type("photo.jpg")[0]
+        if not mime_type or not mime_type.startswith('image/'):
+            return False, "Неподдерживаемый формат файла"
             
-        # Проверка формата и размеров изображения
-        img = Image.open(io.BytesIO(photo_bytes))
-        if img.format.lower() not in ALLOWED_PHOTO_FORMATS:
-            return False, f"Неподдерживаемый формат. Разрешены: {', '.join(ALLOWED_PHOTO_FORMATS)}"
+        # Проверяем размер файла
+        if len(photo_bytes) > storage_config.MAX_PHOTO_SIZE:
+            return False, f"Размер файла превышает {storage_config.MAX_PHOTO_SIZE / 1024 / 1024}MB"
             
-        width, height = img.size
-        if width < PHOTO_MIN_RES or height < PHOTO_MIN_RES:
-            return False, f"Фото слишком маленькое. Минимальное разрешение: {PHOTO_MIN_RES}x{PHOTO_MIN_RES}"
+        # Проверяем изображение через PIL
+        try:
+            img = Image.open(io.BytesIO(photo_bytes))
             
-        # Проверка уникальности
-        if existing_paths:
-            photo_hash = hashlib.md5(photo_bytes).hexdigest()
-            for path in existing_paths:
-                if os.path.exists(path):
-                    with open(path, 'rb') as f:
-                        existing_hash = hashlib.md5(f.read()).hexdigest()
-                        if existing_hash == photo_hash:
-                            return False, "Это фото уже добавлено"
-                            
+            # Проверяем размеры
+            width, height = img.size
+            if width < storage_config.PHOTO_MIN_RES or height < storage_config.PHOTO_MIN_RES:
+                return False, f"Изображение слишком маленькое. Минимальный размер: {storage_config.PHOTO_MIN_RES}x{storage_config.PHOTO_MIN_RES}"
+                
+            # Проверяем формат
+            if img.format.lower() not in storage_config.ALLOWED_PHOTO_FORMATS:
+                return False, f"Неподдерживаемый формат изображения. Разрешены: {', '.join(storage_config.ALLOWED_PHOTO_FORMATS)}"
+                
+        except Exception as e:
+            return False, f"Ошибка при обработке изображения: {str(e)}"
+            
+        # Проверяем количество существующих фото
+        if len(existing_paths) >= storage_config.AVATAR_MAX_PHOTOS:
+            return False, f"Достигнут лимит в {storage_config.AVATAR_MAX_PHOTOS} фото"
+            
         return True, "OK"
         
     except Exception as e:
-        logger.error(f"Ошибка валидации фото: {e}")
-        return False, f"Ошибка при проверке фото: {str(e)}"
+        logger.error(f"Ошибка при валидации фото: {e}")
+        return False, str(e)
 
-async def generate_avatar_preview(
-    photo_path: Path, preview_path: Path, size=(256, 256)
-) -> Path:
+async def save_avatar_minio(db: AsyncSession, user_id: UUID, avatar_id: UUID, original: bytes, metadata: Dict[str, Any]) -> None:
     """
-    Генерирует уменьшенное превью для аватара.
+    Сохраняет фото аватара в MinIO и метаданные в PostgreSQL.
     
     Args:
-        photo_path: Путь к исходному фото
-        preview_path: Путь для сохранения превью
-        size: Размер превью
-        
-    Returns:
-        Path: Путь к сгенерированному превью или None при ошибке
+        db (AsyncSession): Сессия SQLAlchemy
+        user_id (UUID): ID пользователя
+        avatar_id (UUID): ID аватара
+        original (bytes): Байты фото
+        metadata (Dict[str, Any]): Метаданные фото
     """
-    import os
-    from io import BytesIO
-    from pathlib import Path
     try:
-        # Приведение путей к Path
-        photo_path = Path(photo_path)
-        preview_path = Path(preview_path)
-        if not os.path.exists(photo_path):
-            logger.error(f"[AVATAR_MANAGER] Исходный файл для превью не найден: {photo_path}")
-            return None
-        file_size = os.path.getsize(photo_path)
-        logger.info(f"[AVATAR_MANAGER] Открываю фото для превью: {photo_path}, размер={file_size} байт")
-        photo_bytes = await AsyncFileManager.read_binary(photo_path)
-        img = await AsyncImageProcessor.open(photo_bytes)
-        logger.info(f"[AVATAR_MANAGER] Формат исходного фото: {getattr(img, 'format', None)}, размер={img.size}")
-        img = img.convert("RGB")
-        img.thumbnail(size)
-        await AsyncFileManager.ensure_dir(preview_path.parent)
-        preview_bytes = BytesIO()
-        img.save(preview_bytes, "JPEG", quality=90)
-        await AsyncFileManager.write_binary(preview_path, preview_bytes.getvalue())
-        logger.info(f"[AVATAR_MANAGER] Превью успешно создано: {preview_path}")
-        return preview_path
-    except Exception as e:
-        logger.exception(f"[AVATAR_MANAGER] Ошибка генерации превью: {e} (photo_path={photo_path}, preview_path={preview_path})")
-        return None
-
-async def mark_avatar_ready(user_id: int, avatar_id: str):
-    """Помечает аватар как готовый (ready=True), генерирует превью и добавляет его в avatars.json."""
-    data = await load_avatar_fsm(user_id, avatar_id)
-    if not data:
-        return
-    data["ready"] = True
-    # Генерируем превью по первому фото
-    preview_path = None
-    if data.get("photos"):
-        first_photo = data["photos"][0]
-        photo_path = (
-            first_photo["path"] if isinstance(first_photo, dict) else first_photo
+        # Проверяем существование аватара
+        query = select(UserAvatar).where(
+            UserAvatar.id == avatar_id,
+            UserAvatar.user_id == user_id
         )
-        preview_path = os.path.join(get_avatar_dir(user_id, avatar_id), "preview.jpg")
-        try:
-            await generate_avatar_preview(photo_path, preview_path)
-            data["preview_path"] = preview_path
-        except Exception as e:
-            logging.error(f"[AVATAR_MANAGER] Не удалось сгенерировать превью: {e}")
-            data["preview_path"] = None
-    await save_avatar_fsm(user_id, avatar_id, data)
-    # Добавляем в avatars.json
-    await add_avatar_to_index(
-        user_id,
-        avatar_id,
-        data.get("title", ""),
-        data.get("style", ""),
-        data.get("created_at", ""),
-        data.get("preview_path"),
-        data.get("status", "training"),
-        data.get("finetune_id", None),
-        data.get("is_main", False),
-        data.get("gender", None),
-    )
-
-async def ensure_avatar_dirs(storage_dir: Path = STORAGE_DIR) -> None:
-    """Создает необходимые директории для аватаров."""
-    avatar_dir = storage_dir / AVATAR_DIR
-    await AsyncFileManager.ensure_dir(storage_dir)
-    await AsyncFileManager.ensure_dir(avatar_dir)
-
-async def get_user_avatar_dir(user_id: str, storage_dir: Path = STORAGE_DIR) -> Path:
-    """Получает директорию пользователя для аватаров."""
-    avatar_dir = storage_dir / AVATAR_DIR
-    user_dir = avatar_dir / str(user_id)
-    await AsyncFileManager.ensure_dir(user_dir)
-    return user_dir
-
-async def save_avatar_photo(user_id: str, photo_data: bytes, photo_id: str, storage_dir: Path = STORAGE_DIR) -> Path:
-    """Сохраняет фото пользователя."""
-    user_dir = await get_user_avatar_dir(user_id, storage_dir)
-    photo_path = user_dir / f"{photo_id}.jpg"
-    await AsyncFileManager.write_binary(photo_path, photo_data)
-    return photo_path
-
-async def get_user_avatar_photos(user_id: str, storage_dir: Path = STORAGE_DIR) -> List[Path]:
-    """Получает список фото пользователя."""
-    user_dir = await get_user_avatar_dir(user_id, storage_dir)
-    if not await AsyncFileManager.exists(user_dir):
-        return []
-    
-    files = await AsyncFileManager.list_dir(user_dir)
-    return [user_dir / f for f in files if f.endswith(".jpg")]
-
-async def clear_user_avatar_photos(user_id: str, storage_dir: Path = STORAGE_DIR) -> None:
-    """Очищает все фото пользователя."""
-    user_dir = await get_user_avatar_dir(user_id, storage_dir)
-    if await AsyncFileManager.exists(user_dir):
-        await AsyncFileManager.safe_rmtree(user_dir)
-
-def get_current_avatar_id(user_id: int) -> str | None:
-    """Получает текущий avatar_id для пользователя."""
-    return _current_avatar_ids.get(user_id)
-
-def set_current_avatar_id(user_id: int, avatar_id: str | None) -> None:
-    """Устанавливает текущий avatar_id для пользователя."""
-    if avatar_id is None:
-        _current_avatar_ids.pop(user_id, None)
-    else:
-        _current_avatar_ids[user_id] = avatar_id
-
-def get_user_dir(user_id: int) -> str:
-    return os.path.join(AVATAR_STORAGE, str(user_id))
-
-def get_avatar_dir(user_id: int, avatar_id: str) -> str:
-    return os.path.join(get_user_dir(user_id), avatar_id)
-
-def get_avatar_json_path(user_id: int, avatar_id: str) -> str:
-    return os.path.join(get_avatar_dir(user_id, avatar_id), "data.json")
-
-def get_avatars_index_path(user_id: int) -> str:
-    return os.path.join(get_user_dir(user_id), "avatars.json")
-
-async def init_avatar_fsm(
-    user_id: int,
-    avatar_id: str,
-    title: str = "",
-    class_name: str = "",
-    training_params: dict = None,
-) -> None:
-    avatar_dir = get_avatar_dir(user_id, avatar_id)
-    print(
-        f"[AVATAR_MANAGER] init_avatar_fsm: user_id={user_id}, "
-        f"avatar_id={avatar_id}, avatar_dir={avatar_dir}"
-    )
-    await async_makedirs(avatar_dir, exist_ok=True)
-    data = {
-        "photos": [],
-        "title": title,
-        "class_name": class_name,
-        "finetune_id": None,
-        "status": "pending",
-        "avatar_url": None,
-        "created_at": datetime.utcnow().isoformat(),
-        "training_params": training_params or {},
-    }
-    print(f"[AVATAR_MANAGER] init_avatar_fsm: data={data}")
-    await save_avatar_fsm(user_id, avatar_id, data)
-    # Не добавляем в avatars.json до завершения генерации
-
-async def load_avatar_fsm(user_id: int, avatar_id: str) -> Optional[Dict[str, Any]]:
-    path = get_avatar_json_path(user_id, avatar_id)
-    if await async_exists(path):
-        async with aiofiles.open(path, "r", encoding="utf-8") as f:
-            content = await f.read()
-            return json.loads(content)
-    return None
-
-async def save_avatar_fsm(user_id: int, avatar_id: str, data: Dict[str, Any]) -> None:
-    avatar_dir = get_avatar_dir(user_id, avatar_id)
-    print(
-        f"[AVATAR_MANAGER] save_avatar_fsm: user_id={user_id}, "
-        f"avatar_id={avatar_id}, avatar_dir={avatar_dir}"
-    )
-    await async_makedirs(avatar_dir, exist_ok=True)
-    path = get_avatar_json_path(user_id, avatar_id)
-    print(f"[AVATAR_MANAGER] save_avatar_fsm: path={path}")
-    # Сохраняем gender, если есть
-    if "gender" not in data:
-        data["gender"] = None
-    async with aiofiles.open(path, "w", encoding="utf-8") as f:
-        await f.write(json.dumps(data, ensure_ascii=False, indent=2))
-    print(f"[AVATAR_MANAGER] save_avatar_fsm: data saved")
-
-async def add_photo_to_avatar(
-    user_id: int, avatar_id: str, photo_bytes: bytes, file_id: str = None
-) -> str:
-    # Валидация фото на размер, формат, уникальность
-    avatar_dir = get_avatar_dir(user_id, avatar_id)
-    await async_makedirs(avatar_dir, exist_ok=True)
-    existing = [
-        os.path.join(avatar_dir, f)
-        for f in os.listdir(avatar_dir)
-        if f.startswith("photo_") and f.endswith(".jpg")
-    ]
-    is_valid, result = await validate_photo(photo_bytes, existing)
-    if not is_valid:
-        logging.warning(f"[AVATAR_MANAGER] Фото не прошло валидацию: {result}")
-        raise ValueError(result)
-    photo_num = len(existing) + 1
-    photo_path = os.path.join(avatar_dir, f"photo_{photo_num}.jpg")
-    async with aiofiles.open(photo_path, "wb") as f:
-        await f.write(photo_bytes)
-    # Обновляем JSON
-    data = await load_avatar_fsm(user_id, avatar_id) or {
-        "photos": [],
-        "title": "",
-        "class_name": "",
-        "finetune_id": None,
-        "status": "pending",
-        "avatar_url": None,
-        "created_at": None,
-        "training_params": {},
-    }
-    if file_id is None:
-        photo_entry = {"path": photo_path}
-    else:
-        photo_entry = {"path": photo_path, "file_id": file_id}
-    data.setdefault("photos", []).append(photo_entry)
-    # Генерируем превью, если это первое фото и превью ещё нет
-    if len(data["photos"]) == 1 or not data.get("preview_path"):
-        preview_path = os.path.join(avatar_dir, "preview.jpg")
-        try:
-            await generate_avatar_preview(photo_path, preview_path)
-            data["preview_path"] = preview_path
-        except Exception as e:
-            print(f"[AVATAR_MANAGER] Ошибка генерации превью: {e}")
-            data["preview_path"] = None
-    # Оставляем только нужные поля
-    data = {
-        k: data.get(k)
-        for k in (
-            "photos",
-            "title",
-            "class_name",
-            "finetune_id",
-            "status",
-            "avatar_url",
-            "created_at",
-            "training_params",
-            "preview_path",
-            "gender",
-        )
-    }
-    await save_avatar_fsm(user_id, avatar_id, data)
-    print(f"[AVATAR_MANAGER] add_photo_to_avatar: photo added to data.json")
-    return photo_path
-
-async def update_avatar_fsm(user_id: int, avatar_id: str, **kwargs) -> None:
-    data = await load_avatar_fsm(user_id, avatar_id) or {
-        "photos": [],
-        "title": "",
-        "class_name": "",
-        "finetune_id": None,
-        "status": "pending",
-        "avatar_url": None,
-        "created_at": None,
-        "training_params": {},
-        "gender": None,
-    }
-    for k in (
-        "title",
-        "class_name",
-        "finetune_id",
-        "status",
-        "avatar_url",
-        "created_at",
-        "training_params",
-        "gender",
-    ):
-        if k in kwargs:
-            data[k] = kwargs[k]
-    # Оставляем только нужные поля
-    data = {
-        k: data.get(k)
-        for k in (
-            "photos",
-            "title",
-            "class_name",
-            "finetune_id",
-            "status",
-            "avatar_url",
-            "created_at",
-            "training_params",
-            "gender",
-        )
-    }
-    await save_avatar_fsm(user_id, avatar_id, data)
-    # Если обновили title/style/tune_id — обновить avatars.json
-    await update_avatar_in_index(user_id, avatar_id, data)
-
-async def clear_avatar_fsm(user_id: int, avatar_id: str) -> None:
-    """
-    Асинхронно удаляет все файлы аватара и запись из avatars.json.
-    """
-    logger = logging.getLogger(__name__)
-    avatar_dir = get_avatar_dir(user_id, avatar_id)
-    try:
-        # Удаляем все файлы и поддиректории
-        if await async_exists(avatar_dir):
-            for root, dirs, files in os.walk(avatar_dir, topdown=False):
-                for name in files:
-                    file_path = os.path.join(root, name)
-                    try:
-                        await async_remove(file_path)
-                        logger.info(f"[AVATAR_MANAGER] Файл удалён: {file_path}")
-                    except Exception as e:
-                        logger.exception(f"Ошибка удаления файла {file_path}: {e}")
-                for name in dirs:
-                    dir_path = os.path.join(root, name)
-                    try:
-                        await async_rmtree(dir_path)
-                        logger.info(f"[AVATAR_MANAGER] Папка удалена: {dir_path}")
-                    except Exception as e:
-                        logger.exception(f"Ошибка удаления папки {dir_path}: {e}")
-            try:
-                await async_rmtree(avatar_dir)
-                logger.info(f"[AVATAR_MANAGER] Папка аватара удалена: {avatar_dir}")
-            except Exception as e:
-                logger.exception(f"Ошибка удаления папки аватара {avatar_dir}: {e}")
-    except Exception as e:
-        logger.exception(f"Ошибка при удалении аватара {avatar_id}: {e}")
-    # Удаляем из avatars.json
-    await remove_avatar_from_index(user_id, avatar_id)
-
-async def migrate_avatars_index(user_id: int):
-    """Миграция avatars.json: добавляет is_main, если нет; первый становится основным."""
-    path = get_avatars_index_path(user_id)
-    if not await async_exists(path):
-        return
-    async with aiofiles.open(path, "r", encoding="utf-8") as f:
-        data = json.loads(await f.read())
-    avatars = data.get("avatars", [])
-    has_main = any(a.get("is_main") for a in avatars)
-    if not has_main and avatars:
-        avatars[0]["is_main"] = True
-    for a in avatars:
-        if "is_main" not in a:
-            a["is_main"] = False
-    async with aiofiles.open(path, "w", encoding="utf-8") as f:
-        await f.write(json.dumps({"avatars": avatars}, ensure_ascii=False, indent=2))
-
-async def get_avatars_index(user_id: int) -> List[Dict[str, Any]]:
-    path = get_avatars_index_path(user_id)
-    if await async_exists(path):
-        async with aiofiles.open(path, "r", encoding="utf-8") as f:
-            content = await f.read()
-            avatars = json.loads(content).get("avatars", [])
-            # Миграция на лету: если нет is_main, добавить
-            has_main = any(a.get("is_main") for a in avatars)
-            if not has_main and avatars:
-                avatars[0]["is_main"] = True
-            for a in avatars:
-                if "is_main" not in a:
-                    a["is_main"] = False
-            return avatars
-    return []
-
-async def add_avatar_to_index(
-    user_id: int,
-    avatar_id: str,
-    title: str,
-    style: str,
-    created_at: str,
-    preview_path: str = None,
-    status: str = "training",
-    finetune_id: str = None,
-    is_main: bool = False,
-    gender: str = None,
-) -> None:
-    logging.info(
-        f"[add_avatar_to_index] called with: user_id={user_id}, avatar_id={avatar_id}, title={title}, style={style}, created_at={created_at}, preview_path={preview_path}, status={status}, finetune_id={finetune_id}, is_main={is_main}, gender={gender}"
-    )
-    path = get_avatars_index_path(user_id)
-    avatars = await get_avatars_index(user_id)
-    logging.info(f"[add_avatar_to_index] avatars before: {avatars}")
-    if not title:
-        title = "Без имени"
-    # Если это первый аватар — делаем его основным
-    if not avatars:
-        is_main = True
-    avatar_entry = {
-        "avatar_id": avatar_id,
-        "title": title,
-        "style": style,
-        "tune_id": None,
-        "created_at": created_at,
-        "status": status,
-        "finetune_id": finetune_id,
-        "is_main": is_main,
-        "gender": gender,
-    }
-    if preview_path:
-        avatar_entry["preview_path"] = preview_path
-    avatars.append(avatar_entry)
-    # Гарантируем, что только один is_main
-    if is_main:
-        for a in avatars:
-            if a["avatar_id"] != avatar_id:
-                a["is_main"] = False
-    logging.info(f"[add_avatar_to_index] avatars after: {avatars}")
-    async with aiofiles.open(path, "w", encoding="utf-8") as f:
-        await f.write(json.dumps({"avatars": avatars}, ensure_ascii=False, indent=2))
-    logging.info(f"[add_avatar_to_index] avatars.json written: {path}")
-
-async def update_avatar_in_index(
-    user_id: int, avatar_id: str, data: Dict[str, Any]
-) -> None:
-    path = get_avatars_index_path(user_id)
-    avatars = await get_avatars_index(user_id)
-    # Сначала обновляем нужный аватар
-    for avatar in avatars:
-        if avatar["avatar_id"] == avatar_id:
-            avatar["title"] = data.get("title")
-            avatar["style"] = data.get("style")
-            avatar["tune_id"] = data.get("tune_id")
-            avatar["status"] = data.get("status", "training")
-            avatar["finetune_id"] = data.get("finetune_id", None)
-            if "preview_path" in data:
-                avatar["preview_path"] = data["preview_path"]
-            if "is_main" in data:
-                avatar["is_main"] = data["is_main"]
-            if "gender" in data:
-                avatar["gender"] = data["gender"]
-    # Затем сбрасываем is_main у всех остальных
-    main_id = None
-    for avatar in avatars:
-        if avatar.get("is_main"):
-            main_id = avatar["avatar_id"]
-            break
-    if main_id:
-        for avatar in avatars:
-            if avatar["avatar_id"] != main_id:
-                avatar["is_main"] = False
-    # Гарантируем, что хотя бы один основной
-    main_count = sum(1 for a in avatars if a.get("is_main"))
-    if main_count == 0 and avatars:
-        avatars[0]["is_main"] = True
-    async with aiofiles.open(path, "w", encoding="utf-8") as f:
-        await f.write(json.dumps({"avatars": avatars}, ensure_ascii=False, indent=2))
-
-async def remove_avatar_from_index(user_id: int, avatar_id: str) -> None:
-    path = get_avatars_index_path(user_id)
-    avatars = await get_avatars_index(user_id)
-    avatars = [a for a in avatars if a["avatar_id"] != avatar_id]
-    # Если удалили основной — сделать основным первый оставшийся
-    if avatars and not any(a.get("is_main") for a in avatars):
-        avatars[0]["is_main"] = True
-    async with aiofiles.open(path, "w", encoding="utf-8") as f:
-        await f.write(json.dumps({"avatars": avatars}, ensure_ascii=False, indent=2))
-
-async def find_avatar_by_tune_id(tune_id: str):
-    """Ищет аватар по tune_id среди всех пользователей. Возвращает (user_id, avatar_id, title) или None."""
-    base_dir = AVATAR_STORAGE
-    for user_id in os.listdir(base_dir):
-        user_dir = os.path.join(base_dir, user_id)
-        if not os.path.isdir(user_dir):
-            continue
-        for avatar_id in os.listdir(user_dir):
-            avatar_dir = os.path.join(user_dir, avatar_id)
-            json_path = os.path.join(avatar_dir, "data.json")
-            if not await async_exists(json_path):
-                continue
-            async with aiofiles.open(json_path, "r", encoding="utf-8") as f:
-                data = json.loads(await f.read())
-                if data.get("tune_id") == tune_id:
-                    return user_id, avatar_id, data.get("title", "")
-    return None
-
-async def remove_photo_from_avatar(user_id: int, avatar_id: str, photo_idx: int) -> bool:
-    """
-    Асинхронно удаляет фото с сервера и из data.json.
-    
-    Args:
-        user_id: ID пользователя
-        avatar_id: ID аватара
-        photo_idx: Индекс фото для удаления
+        result = await db.execute(query)
+        avatar = result.scalar_one_or_none()
         
-    Returns:
-        bool: True если фото удалено, False если не удалено
-    """
-    data = await load_avatar_fsm(user_id, avatar_id) or {}
-    photos = data.get("photos", [])
-    if 0 <= photo_idx < len(photos):
-        photo = photos.pop(photo_idx)
-        # Если dict — берём путь, иначе строка
-        if isinstance(photo, dict):
-            photo_path = photo.get("path")
-        else:
-            photo_path = photo
-        if (
-            photo_path
-            and isinstance(photo_path, str)
-            and await async_exists(photo_path)
-        ):
-            try:
-                await async_remove(photo_path)
-                logging.info(f"[AVATAR_MANAGER] Фото удалено: {photo_path}")
-                result = True
-            except Exception as e:
-                logging.error(
-                    f"[AVATAR_MANAGER] Ошибка удаления фото {photo_path}: {e}"
-                )
-                result = False
-        else:
-            logging.warning(
-                f"[AVATAR_MANAGER] Путь к фото невалиден или файл уже удалён: {photo_path}"
+        if not avatar:
+            # Создаём аватар, если его нет
+            avatar = UserAvatar(
+                id=avatar_id,
+                user_id=user_id,
+                created_at=datetime.utcnow(),
+                photo_key="",  # Временное значение
+                preview_key="",  # Временное значение
+                is_draft=True
             )
-            result = False
-        data["photos"] = photos
-        await save_avatar_fsm(user_id, avatar_id, data)
-        return result
-    return False
+            db.add(avatar)
+            await db.commit()
+            logger.info(f"[FSM] save_avatar_minio: создан новый аватар {avatar_id}")
+        
+        # Генерируем уникальный ID для фото
+        photo_id = str(uuid.uuid4())
+        # Формируем путь в MinIO согласно структуре бакетов
+        minio_path = BUCKET_STRUCTURES["avatars"]["path"].format(
+            user_id=user_id,
+            avatar_id=avatar_id
+        ) + f"/{photo_id}.jpg"
+        logger.info(f"[FSM] save_avatar_minio: minio_path={minio_path}")
+        
+        # Сохраняем в MinIO
+        minio_client.put_object(
+            bucket_name=storage_config.AVATAR_DIR,
+            object_name=minio_path,
+            data=io.BytesIO(original),
+            length=len(original),
+            content_type='image/jpeg'
+        )
+        
+        # Сохраняем метаданные в PostgreSQL
+        photo = UserAvatarPhoto(
+            id=photo_id,
+            user_id=user_id,
+            avatar_id=avatar_id,
+            photo_key=minio_path,
+            photo_metadata=metadata
+        )
+        
+        db.add(photo)
+        await db.commit()
+
+        # --- NEW: обновляем photo_key/preview_key у аватара, если это первое фото ---
+        query = select(UserAvatar).where(
+            UserAvatar.id == avatar_id,
+            UserAvatar.user_id == user_id
+        )
+        result = await db.execute(query)
+        avatar = result.scalar_one_or_none()
+        if avatar and (not avatar.photo_key or avatar.photo_key == ""):
+            avatar.photo_key = minio_path
+            avatar.preview_key = minio_path  # если нет отдельного превью
+            await db.commit()
+            logger.info(f"[FSM] save_avatar_minio: обновлён photo_key/preview_key для аватара {avatar_id}")
+        
+        logger.info(f"Фото сохранено в MinIO и PostgreSQL: {minio_path}")
+        
+    except Exception as e:
+        logger.error(f"Ошибка при сохранении в MinIO: {e}")
+        await db.rollback()  # Откатываем транзакцию при ошибке
+        raise
+
+async def remove_photo_from_avatar(db: AsyncSession, user_id: int, avatar_id: str, photo_id: str) -> bool:
+    """
+    Удаляет фото из аватара.
+    
+    Args:
+        db (AsyncSession): Сессия SQLAlchemy
+        user_id (int): ID пользователя
+        avatar_id (str): ID аватара
+        photo_id (str): ID фото
+        
+    Returns:
+        bool: True если фото удалено, False если не найдено
+    """
+    try:
+        # Получаем фото
+        query = select(UserAvatarPhoto).where(
+            UserAvatarPhoto.id == photo_id,
+            UserAvatarPhoto.user_id == user_id,
+            UserAvatarPhoto.avatar_id == avatar_id
+        )
+        result = await db.execute(query)
+        photo = result.scalar_one_or_none()
+        
+        if not photo:
+            return False
+            
+        # Удаляем из MinIO
+        try:
+            minio_client.remove_object(
+                bucket_name=storage_config.AVATAR_DIR,
+                object_name=photo.photo_key
+            )
+        except S3Error as e:
+            logger.error(f"Ошибка при удалении из MinIO: {e}")
+            
+        # Удаляем из БД
+        await db.delete(photo)
+        await db.commit()
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Ошибка при удалении фото: {e}")
+        return False
+
+async def get_avatar_photo(photo_key: str) -> bytes:
+    """
+    Получает фото из MinIO по ключу.
+    
+    Args:
+        photo_key (str): Ключ фото в MinIO
+        
+    Returns:
+        bytes: Байты фото
+    """
+    try:
+        response = minio_client.get_object(
+            bucket_name=storage_config.AVATAR_DIR,
+            object_name=photo_key
+        )
+        return response.read()
+    except Exception as e:
+        logger.error(f"Ошибка при получении фото из MinIO: {e}")
+        raise
+
+__all__ = [
+    'init_avatar_fsm',
+    'get_current_avatar_id',
+    'set_current_avatar_id',
+    'get_avatars_index',
+    'validate_photo',
+    'save_avatar_minio',
+    'remove_photo_from_avatar',
+    'get_avatar_photo'
+]
+
+print("[DEBUG] avatar_manager.py: end", file=sys.stderr) 

@@ -18,7 +18,7 @@ from frontend_bot.utils.advanced_logger import (
     clear_old_logs,
     cleanup_logs
 )
-from frontend_bot.config import LOG_DIR
+from frontend_bot.config import settings
 
 @pytest.fixture
 async def setup_logging():
@@ -89,10 +89,10 @@ async def test_redis_handler(setup_logging):
 async def test_setup_advanced_logging(setup_logging):
     """Тест настройки расширенного логирования."""
     # Проверяем создание директории
-    assert Path(LOG_DIR).exists()
+    assert Path(settings.LOG_DIR).exists()
     
     # Проверяем создание файла лога
-    log_file = Path(LOG_DIR) / "bot.log"
+    log_file = Path(settings.LOG_DIR) / "bot.log"
     assert log_file.exists()
     
     # Проверяем хендлеры
@@ -152,7 +152,7 @@ async def test_clear_old_logs(setup_logging):
 async def test_log_rotation(setup_logging):
     """Тест ротации логов."""
     logger = logging.getLogger("test")
-    log_file = Path(LOG_DIR) / "bot.log"
+    log_file = Path(settings.LOG_DIR) / "bot.log"
     
     # Заполняем файл лога
     for i in range(1000):
@@ -162,5 +162,5 @@ async def test_log_rotation(setup_logging):
     await asyncio.sleep(0.1)
     
     # Проверяем создание файлов ротации
-    log_files = list(Path(LOG_DIR).glob("*.log*"))
+    log_files = list(Path(settings.LOG_DIR).glob("*.log*"))
     assert len(log_files) > 1  # Должен быть основной файл и файлы ротации 

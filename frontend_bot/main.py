@@ -2,20 +2,21 @@ import logging
 import asyncio
 from frontend_bot.bot_instance import bot
 
-# Импорт всех хендлеров для регистрации
-import frontend_bot.handlers.general
-import frontend_bot.handlers.universal_back
-import frontend_bot.handlers.image_gallery
-import frontend_bot.handlers.start
-import frontend_bot.handlers.avatar.fsm
-import frontend_bot.handlers.avatar.photo_upload
+# Импорт специфичных хендлеров (первыми)
 import frontend_bot.handlers.transcribe_audio
+import frontend_bot.handlers.transcribe
 import frontend_bot.handlers.transcribe_history
 import frontend_bot.handlers.transcribe_protocol
-
-# Универсальные хендлеры — СТРОГО В КОНЦЕ!
+import frontend_bot.handlers.avatar.fsm
+import frontend_bot.handlers.avatar.photo_upload
 import frontend_bot.handlers.avatar.gallery
 import frontend_bot.handlers.avatar.confirm
+import frontend_bot.handlers.image_gallery
+import frontend_bot.handlers.start
+
+# Универсальные хендлеры (последними)
+import frontend_bot.handlers.universal_back
+import frontend_bot.handlers.general
 
 print("=== BOT MAIN STARTED ===")
 logging.basicConfig(level=logging.INFO)

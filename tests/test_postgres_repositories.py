@@ -4,7 +4,6 @@
 
 import pytest
 from decimal import Decimal
-from frontend_bot.config import INITIAL_BALANCE
 
 @pytest.mark.asyncio
 async def test_user_repository_create(user_repository):

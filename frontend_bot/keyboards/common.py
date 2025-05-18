@@ -1,5 +1,5 @@
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
-from frontend_bot.config import AVATAR_MIN_PHOTOS
+from frontend_bot.config import settings
 
 # Клавиатура отмены
 cancel_keyboard = InlineKeyboardMarkup()
@@ -55,7 +55,7 @@ def get_gallery_keyboard(idx: int, total: int) -> InlineKeyboardMarkup:
         InlineKeyboardButton("❌ Удалить", callback_data="avatar_gallery_delete"),
         InlineKeyboardButton("Вперёд ▶️", callback_data="avatar_gallery_next"),
     )
-    if total >= AVATAR_MIN_PHOTOS:
+    if total >= settings.AVATAR_MIN_PHOTOS:
         markup.row(
             InlineKeyboardButton(
                 "✅ Продолжить", callback_data="avatar_gallery_continue"

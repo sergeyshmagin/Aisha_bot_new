@@ -39,8 +39,16 @@ from frontend_bot.services.avatar_manager import (
 )
 from frontend_bot.shared.file_operations import AsyncFileManager
 from frontend_bot.shared.image_processing import AsyncImageProcessor
-from frontend_bot.config import PHOTO_MIN_RES, PHOTO_MAX_MB
+from frontend_bot.config import settings
 import io
+from sqlalchemy.ext.asyncio import AsyncSession
+from frontend_bot.services.avatar_workflow import (
+    create_draft_avatar,
+    update_draft_avatar,
+    finalize_draft_avatar,
+    delete_draft_avatar
+)
+from database.models import UserAvatar
 
 def create_test_image(width=256, height=256, color=(255, 0, 0)):
     img = Image.new("RGB", (width, height), color)
@@ -369,4 +377,42 @@ async def test_generate_avatar_preview_str_and_path(tmp_path):
     img1 = Image.open(io.BytesIO(await AsyncFileManager.read_binary(result1)))
     img2 = Image.open(io.BytesIO(await AsyncFileManager.read_binary(result2)))
     assert img1.size == (256, 256)
-    assert img2.size == (256, 256) 
+    assert img2.size == (256, 256)
+
+@pytest.mark.asyncio
+async def test_create_draft_avatar(async_session: AsyncSession):
+    user_id = "test_user"
+    data = {"photo_key": "photo1.jpg", "preview_key": "preview1.jpg", "avatar_data": {"step": 1}}
+    draft = await create_draft_avatar(user_id, async_session, data)
+    assert draft.is_draft == 1
+    assert draft.photo_key == "photo1.jpg"
+    assert draft.preview_key == "preview1.jpg"
+
+@pytest.mark.asyncio
+async def test_update_and_finalize_draft_avatar(async_session: AsyncSession):
+    user_id = "test_user2"
+    data = {"photo_key": "photo2.jpg", "preview_key": "preview2.jpg", "avatar_data": {"step": 1}}
+    await create_draft_avatar(user_id, async_session, data)
+    update = {"photo_key": "photo3.jpg", "preview_key": "preview3.jpg", "avatar_data": {"step": 2}}
+    await update_draft_avatar(user_id, async_session, update)
+    draft = (await async_session.execute(
+        select(UserAvatar).where(UserAvatar.user_id == user_id, UserAvatar.is_draft == 1)
+    )).scalar_one()
+    assert draft.photo_key == "photo3.jpg"
+    assert draft.avatar_data["step"] == 2
+    await finalize_draft_avatar(user_id, async_session)
+    final = (await async_session.execute(
+        select(UserAvatar).where(UserAvatar.user_id == user_id, UserAvatar.is_draft == 0)
+    )).scalar_one()
+    assert final.is_draft == 0
+
+@pytest.mark.asyncio
+async def test_delete_draft_avatar(async_session: AsyncSession):
+    user_id = "test_user3"
+    data = {"photo_key": "photo4.jpg", "preview_key": "preview4.jpg", "avatar_data": {"step": 1}}
+    await create_draft_avatar(user_id, async_session, data)
+    await delete_draft_avatar(user_id, async_session)
+    draft = (await async_session.execute(
+        select(UserAvatar).where(UserAvatar.user_id == user_id, UserAvatar.is_draft == 1)
+    )).scalar_one_or_none()
+    assert draft is None 

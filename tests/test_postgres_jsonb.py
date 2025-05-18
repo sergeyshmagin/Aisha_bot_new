@@ -4,7 +4,6 @@
 
 import pytest
 from frontend_bot.models.base import User, UserAvatar, UserState
-from tests.conftest import generate_telegram_id
 from sqlalchemy import text
 
 @pytest.mark.asyncio
@@ -185,4 +184,6 @@ async def test_jsonb_update_operations(test_session):
     assert updated_state is not None
     assert updated_state.state_data["current_state"] == "main_menu"
     assert updated_state.state_data["context"]["selected_avatar"] == "avatar_123"
-    assert updated_state.state_data["last_action"] == "select_avatar" 
+    assert updated_state.state_data["last_action"] == "select_avatar"
+
+# TODO: Добавить фикстуру или функцию генерации telegram_id для тестов 

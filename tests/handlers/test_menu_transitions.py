@@ -2,7 +2,6 @@
 
 import pytest
 from unittest.mock import patch, AsyncMock, MagicMock
-from frontend_bot.services.state_utils import set_state, get_state, clear_state
 from frontend_bot.keyboards.main_menu_keyboard import main_menu_keyboard
 from frontend_bot.keyboards.reply import photo_menu_keyboard, ai_photographer_keyboard, my_avatars_keyboard
 from frontend_bot.handlers.start import handle_start
@@ -59,7 +58,7 @@ async def test_main_menu_to_ai_photographer(clean_state, mock_bot):
     message.chat.id = user_id
     message.text = "AI-фотограф"
     
-    await set_state(user_id, "main_menu")
+    await set_state(user_id, "main_menu", session)
     await handle_main_menu(message)
     
     assert await get_state(user_id) == "ai_photographer"
@@ -77,7 +76,7 @@ async def test_ai_photographer_to_my_avatars(clean_state, mock_bot, create_messa
     """
     # Arrange
     user_id = 123456789
-    await set_state(user_id, "ai_photographer")
+    await set_state(user_id, "ai_photographer", session)
     message = create_message(user_id, "👁 Мои аватары")
 
     # Act
@@ -103,7 +102,7 @@ async def test_my_avatars_to_create_avatar(clean_state, mock_bot, create_message
     """
     # Arrange
     user_id = 123456789
-    await set_state(user_id, "my_avatars")
+    await set_state(user_id, "my_avatars", session)
     message = create_message(user_id, "📷 Создать аватар")
 
     # Act
@@ -131,7 +130,7 @@ async def test_back_to_previous_menu(clean_state, mock_bot, create_message):
     user_id = 123456789
     
     # Тест возврата из my_avatars в ai_photographer
-    await set_state(user_id, "my_avatars")
+    await set_state(user_id, "my_avatars", session)
     message = create_message(user_id, "⬅️ Назад")
     
     # Act & Assert для первого перехода
@@ -158,8 +157,8 @@ async def test_invalid_state_transition(clean_state, mock_bot, create_message):
     """
     # Arrange
     user_id = 123456789
-    await set_state(user_id, "invalid_state")
-    message = create_message(user_id, "🧑‍🎨 ИИ фотограф")
+    await set_state(user_id, "invalid_state", session)
+    message = create_message(user_id, "��‍🎨 ИИ фотограф")
 
     # Act
     await send_main_menu(mock_bot, message)
@@ -171,4 +170,6 @@ async def test_invalid_state_transition(clean_state, mock_bot, create_message):
         reply_markup=main_menu_keyboard()
     )
     state = await get_state(user_id)
-    assert state == "main_menu" 
+    assert state == "main_menu"
+
+# TODO: Перевести на state_utils с поддержкой PostgreSQL 

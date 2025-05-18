@@ -1,21 +1,15 @@
-from frontend_bot.config import (
-    AVATAR_MIN_PHOTOS,
-    AVATAR_MAX_PHOTOS,
-    PROGRESSBAR_EMOJI_FILLED,
-    PROGRESSBAR_EMOJI_CURRENT,
-    PROGRESSBAR_EMOJI_EMPTY,
-)
+from frontend_bot.config import settings
 
 
 def get_progressbar(
     current: int,
     total: int,
-    min_photos: int = AVATAR_MIN_PHOTOS,
-    max_photos: int = AVATAR_MAX_PHOTOS,
+    min_photos: int = settings.AVATAR_MIN_PHOTOS,
+    max_photos: int = settings.AVATAR_MAX_PHOTOS,
     current_idx: int = None,
-    filled: str = PROGRESSBAR_EMOJI_FILLED,
-    current_emoji: str = PROGRESSBAR_EMOJI_CURRENT,
-    empty: str = PROGRESSBAR_EMOJI_EMPTY,
+    filled: str = settings.PROGRESSBAR_EMOJI_FILLED,
+    current_emoji: str = settings.PROGRESSBAR_EMOJI_CURRENT,
+    empty: str = settings.PROGRESSBAR_EMOJI_EMPTY,
 ) -> str:
     """
     Генерирует строку прогресс-бара для загрузки фото или других целей.

@@ -1,10 +1,10 @@
 import re
 from typing import Optional
 from openai import AsyncOpenAI
-from frontend_bot.config import ASSISTANT_ID, OPENAI_API_KEY
+from frontend_bot.config import settings
 import asyncio
 
-client = AsyncOpenAI(api_key=OPENAI_API_KEY)
+client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
 
 def format_transcript_text(text: str) -> str:
@@ -81,7 +81,7 @@ async def format_transcript_with_gpt(
     )
     run = await client.beta.threads.runs.create(
         thread_id=thread_id,
-        assistant_id=ASSISTANT_ID,
+        assistant_id=settings.ASSISTANT_ID,
         temperature=temperature,
         top_p=top_p,
     )
