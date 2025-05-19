@@ -20,23 +20,11 @@ from frontend_bot.config import settings
 import logging
 from pathlib import Path
 import glob
-from frontend_bot.services.transcript_service import TranscriptService
-from minio import Minio
-from database.models import UserTranscript
-from shared_storage.storage_utils import upload_file, download_file, delete_file
+from frontend_bot.services.minio_client import upload_file, download_file, delete_file, generate_presigned_url, check_file_exists
 import aiofiles
 import async_timeout
 
 logger = logging.getLogger(__name__)
-
-# Инициализация MinIO клиента и сервиса транскриптов
-minio_client = Minio(
-    settings.MINIO_ENDPOINT,
-    access_key=settings.MINIO_ACCESS_KEY,
-    secret_key=settings.MINIO_SECRET_KEY,
-    secure=settings.MINIO_SECURE
-)
-transcript_service = TranscriptService(minio_client)
 
 async def ensure_transcribe_dirs(storage_dir: Path = settings.STORAGE_DIR) -> None:
     """Создает необходимые директории для транскрипций."""

@@ -60,6 +60,9 @@ class BaseConfig(BaseSettings):
     MAX_RETRIES: int = Field(3, ge=1)
     RETRY_DELAY: int = Field(60, ge=1)  # секунд
     
+    # Настройки показа галереи
+    GALLERY_DEBOUNCE_TIMEOUT: int = Field(2, env="GALLERY_DEBOUNCE_TIMEOUT", ge=1)  # секунд
+    
     @validator("ALLOWED_USERS", "ADMIN_IDS", pre=True)
     def parse_int_list(cls, v: str) -> List[int]:
         if isinstance(v, str):

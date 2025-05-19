@@ -1,4 +1,14 @@
+"""
+Клавиатуры для работы с аватарами:
+- avatar_confirm_keyboard
+- avatar_gallery_keyboard
+- avatar_type_keyboard
+- photo_stage_keyboard
+- continue_keyboard
+- only_continue_keyboard
+"""
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
+from frontend_bot.config import settings
 
 
 def avatar_confirm_keyboard() -> InlineKeyboardMarkup:
@@ -11,19 +21,34 @@ def avatar_confirm_keyboard() -> InlineKeyboardMarkup:
     return markup
 
 
-def avatar_gallery_keyboard(
-    current: int, total: int, avatar_id: str, is_main: bool
-) -> InlineKeyboardMarkup:
-    kb = InlineKeyboardMarkup(row_width=3)
-    kb.row(
-        InlineKeyboardButton("⬅️", callback_data="avatar_prev"),
-        InlineKeyboardButton(f"{current} из {total}", callback_data="avatar_page"),
-        InlineKeyboardButton("➡️", callback_data="avatar_next"),
-    )
-    kb.row(
-        InlineKeyboardButton("⭐", callback_data=f"avatar_main_{avatar_id}"),
-        InlineKeyboardButton("✏️", callback_data=f"avatar_rename_{avatar_id}"),
-        InlineKeyboardButton("🗑", callback_data=f"avatar_delete_{avatar_id}"),
-    )
-    kb.add(InlineKeyboardButton("↩️ В меню", callback_data="avatar_back"))
-    return kb
+# Клавиатура выбора типа аватара
+avatar_type_keyboard = InlineKeyboardMarkup()
+avatar_type_keyboard.add(
+    InlineKeyboardButton("👨 Мужчина", callback_data="avatar_type_man"),
+    InlineKeyboardButton("👩 Женщина", callback_data="avatar_type_woman"),
+)
+
+# Клавиатура этапа загрузки фото
+photo_stage_keyboard = InlineKeyboardMarkup()
+photo_stage_keyboard.add(
+    InlineKeyboardButton("📷 Мои фото", callback_data="avatar_show_photos"),
+    InlineKeyboardButton("ℹ️ Требования", callback_data="avatar_show_requirements"),
+    InlineKeyboardButton("👀 Пример фото", callback_data="avatar_show_example"),
+)
+photo_stage_keyboard.add(
+    InlineKeyboardButton("↩️ Отмена", callback_data="avatar_cancel")
+)
+
+# Клавиатура после 16 фото
+continue_keyboard = InlineKeyboardMarkup()
+continue_keyboard.add(InlineKeyboardButton("Продолжить", callback_data="avatar_next"))
+continue_keyboard.add(InlineKeyboardButton("↩️ Отмена", callback_data="avatar_cancel"))
+
+# Клавиатура только для продолжения
+only_continue_keyboard = InlineKeyboardMarkup()
+only_continue_keyboard.add(
+    InlineKeyboardButton("Продолжить", callback_data="avatar_next")
+)
+only_continue_keyboard.add(
+    InlineKeyboardButton("↩️ Отмена", callback_data="avatar_cancel")
+)

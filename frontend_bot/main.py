@@ -22,19 +22,7 @@ print("=== BOT MAIN STARTED ===")
 logging.basicConfig(level=logging.INFO)
 logging.info("=== BOT MAIN STARTED ===")
 
-
 if __name__ == "__main__":
     print("=== POLLING START ===")
     logging.info("=== POLLING START ===")
-    import asyncio
-    try:
-        loop = asyncio.get_running_loop()
-        if loop.is_running():
-            # Если event loop уже запущен (Jupyter, PyCharm и др.)
-            loop.create_task(bot.polling())
-        else:
-            loop.run_until_complete(bot.polling())
-    except RuntimeError:
-        # Нет активного event loop (обычный запуск)
-        asyncio.run(bot.polling())
-
+    asyncio.run(bot.polling())

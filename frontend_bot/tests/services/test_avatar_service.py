@@ -13,7 +13,6 @@ from uuid import uuid4
 from unittest.mock import AsyncMock, MagicMock
 
 from frontend_bot.services.avatar_service import AvatarService
-from frontend_bot.shared.storage_utils import init_storage
 from frontend_bot.config import settings
 from frontend_bot.utils.logger import get_logger
 

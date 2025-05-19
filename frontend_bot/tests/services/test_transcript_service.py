@@ -11,7 +11,6 @@ from uuid import uuid4
 from unittest.mock import AsyncMock, MagicMock
 
 from frontend_bot.services.transcript_service import TranscriptService
-from frontend_bot.shared.storage_utils import init_storage
 from frontend_bot.config import settings
 from frontend_bot.utils.logger import get_logger
 from frontend_bot.services.transcript_service import get_user_transcript_or_error

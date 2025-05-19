@@ -23,13 +23,12 @@ from frontend_bot.GPT_Prompts.transcribe.prompts import (
 )
 from datetime import datetime
 from frontend_bot.services.transcript_service import TranscriptService, get_user_transcript_or_error, send_document_with_caption, send_transcript_error
-from minio import Minio
-from frontend_bot.utils.logger import get_logger
 from frontend_bot.services.transcript_utils import get_user_transcript_or_error, send_document_with_caption, send_transcript_error
 from database.config import AsyncSessionLocal
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from frontend_bot.repositories.user_repository import UserRepository
+from frontend_bot.services.transcript_service_context import transcript_service_context
 
 generate_word_protocol = generate_protocol_word
 
@@ -37,15 +36,6 @@ logger = get_logger("transcribe_protocol")
 
 STORAGE_DIR = os.getenv("STORAGE_DIR", "storage")
 TRANSCRIPTS_DIR = os.path.join(STORAGE_DIR, "transcripts")
-
-# Инициализация MinIO клиента и сервисов
-minio_client = Minio(
-    "localhost:9000",  # TODO: вынести в конфиг
-    access_key="minioadmin",  # TODO: вынести в конфиг
-    secret_key="minioadmin",  # TODO: вынести в конфиг
-    secure=False
-)
-transcript_service = TranscriptService(minio_client)
 
 @bot.message_handler(func=lambda m: m.text == "Протокол заседания (Word)")
 async def send_meeting_protocol(message: Message):
@@ -57,7 +47,8 @@ async def send_meeting_protocol(message: Message):
         if not user:
             return
         uuid_user_id = user.id
-        transcript = await get_user_transcript_or_error(bot, message, logger)
+        async with transcript_service_context as transcript_service:
+            transcript = await get_user_transcript_or_error(bot, message, logger)
         if not transcript:
             return
 
@@ -152,7 +143,8 @@ async def send_short_summary(message: Message):
         if not user:
             return
         uuid_user_id = user.id
-        transcript = await get_user_transcript_or_error(bot, message, logger)
+        async with transcript_service_context as transcript_service:
+            transcript = await get_user_transcript_or_error(bot, message, logger)
         logger.info(f"[DEBUG] transcript: {transcript[:100] if transcript else transcript}")
         if not transcript:
             logger.info("[DEBUG] transcript is None, return")
@@ -211,10 +203,11 @@ async def send_mom(message: Message) -> None:
             if not user:
                 return
             uuid_user_id = user.id
-            # Получаем транскрипт
-            transcript = await get_user_transcript_or_error(bot, message, logger)
-            if not transcript:
-                return
+            async with transcript_service_context as transcript_service:
+                # Получаем транскрипт
+                transcript = await get_user_transcript_or_error(bot, message, logger)
+                if not transcript:
+                    return
             
             await bot.send_chat_action(message.chat.id, "typing")
             await bot.send_message(
@@ -289,7 +282,8 @@ async def send_todo_checklist(message: Message):
         if not user:
             return
         uuid_user_id = user.id
-        transcript = await get_user_transcript_or_error(bot, message, logger)
+        async with transcript_service_context as transcript_service:
+            transcript = await get_user_transcript_or_error(bot, message, logger)
         if not transcript:
             return
         await bot.send_chat_action(message.chat.id, "typing")
@@ -344,7 +338,8 @@ async def send_full_official_transcript(message: Message):
         if not user:
             return
         uuid_user_id = user.id
-        transcript = await get_user_transcript_or_error(bot, message, logger)
+        async with transcript_service_context as transcript_service:
+            transcript = await get_user_transcript_or_error(bot, message, logger)
         logger.info(f"[DEBUG] transcript: {transcript[:100] if transcript else transcript}")
         if not transcript:
             logger.info("[DEBUG] transcript is None, return")
@@ -408,10 +403,11 @@ async def protocol_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -
                 await update.message.reply_text("У вас пока нет транскрипций.")
                 return
             uuid_user_id = user.id
-            transcripts = await transcript_service.list_user_transcripts(
-                user_id=uuid_user_id,
-                limit=1
-            )
+            async with transcript_service_context as transcript_service:
+                transcripts = await transcript_service.list_user_transcripts(
+                    user_id=uuid_user_id,
+                    limit=1
+                )
             
             if not transcripts:
                 await update.message.reply_text("У вас пока нет транскрипций.")

@@ -47,6 +47,7 @@ class UserAvatarRepository:
         Returns:
             Аватар или None, если не найден
         """
+        avatar_id = str(avatar_id)  # Унификация типа
         result = await self.session.execute(
             select(UserAvatar).where(UserAvatar.id == avatar_id)
         )

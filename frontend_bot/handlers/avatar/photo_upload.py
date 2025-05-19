@@ -1,14 +1,11 @@
-# Обработчики загрузки фото для аватара
-# Перенести сюда handle_avatar_photo_upload, flush_single_photo_buffer,
-# flush_media_group
-# Импортировать необходимые зависимости и утилиты из avatar_manager,
-# state_utils, utils, config и т.д.
-
-# ... переносить по аналогии ...
+"""
+Загрузка фото для аватаров.
+"""
 
 import asyncio
 import logging
 from telebot.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
+from telebot.async_telebot import AsyncTeleBot
 from frontend_bot.bot_instance import bot
 from frontend_bot.services.avatar_manager import (
     validate_photo,
@@ -29,13 +26,56 @@ from frontend_bot.handlers.avatar.state import (
     user_media_group_msg_ids,
     get_gallery_key,
     get_media_group_key,
+    safe_dict,
+    user_last_gallery_msg,
+    user_media_group_counter,
 )
 from frontend_bot.services.avatar_manager import get_current_avatar_id
 from sqlalchemy.ext.asyncio import AsyncSession
 from database.config import AsyncSessionLocal
 from frontend_bot.repositories.user_repository import UserRepository
+import hashlib
+from frontend_bot.services.avatar_workflow import check_photo_duplicate, PhotoValidationError
+from frontend_bot.services.avatar_validator import validate_avatar_exists, validate_avatar_photos
+from frontend_bot.repositories.avatar_repository import UserAvatarRepository
+from frontend_bot.shared.redis_client import redis_client
+import base64
+import json
+from typing import Optional, List
+from frontend_bot.handlers.avatar.navigation import show_type_menu
+from frontend_bot.services.photo_buffer import get_buffered_photos_redis, buffer_photo_redis, clear_photo_buffer_redis
 
 logger = logging.getLogger(__name__)
+
+REDIS_PHOTO_TTL = 300  # 5 минут
+
+def get_photo_buffer_key(user_id):
+    return f"photo_buffer:{user_id}"
+
+async def buffer_photo_redis(user_id, photo_bytes, meta):
+    key = get_photo_buffer_key(user_id)
+    data = {
+        "photo": base64.b64encode(photo_bytes).decode(),
+        "meta": meta,
+    }
+    await redis_client.lpush(key, json.dumps(data).encode())
+    await redis_client.expire(key, REDIS_PHOTO_TTL)
+
+async def get_buffered_photos_redis(user_id):
+    key = get_photo_buffer_key(user_id)
+    photos = []
+    while True:
+        data = await redis_client.rpop(key)
+        if not data:
+            break
+        obj = json.loads(data)
+        obj["photo"] = base64.b64decode(obj["photo"])
+        photos.append(obj)
+    return photos
+
+async def clear_photo_buffer_redis(user_id):
+    key = get_photo_buffer_key(user_id)
+    await redis_client.delete(key)
 
 def with_session(handler):
     async def wrapper(message, *args, **kwargs):
@@ -43,15 +83,20 @@ def with_session(handler):
             return await handler(message, session, *args, **kwargs)
     return wrapper
 
+photo_buffer = {}  # user_id -> list of (file_info, downloaded_file, message, media_group_id)
+
 @bot.message_handler(content_types=["photo"])
 @with_session
 async def handle_avatar_photo_upload(message, session) -> None:
     """
-    Обрабатывает загрузку фото пользователем. Валидация user_id, avatar_id.
+    Обрабатывает загрузку фото пользователем.
+    
+    Args:
+        message (Message): Объект сообщения
+        session (AsyncSession): Сессия БД
     """
-    telegram_id = getattr(message.from_user, "id", None)
     user_repo = UserRepository(session)
-    user = await user_repo.get_by_telegram_id(telegram_id)
+    user = await user_repo.get_by_telegram_id(message.from_user.id)
     if not user:
         logger.error("[handle_avatar_photo_upload] Не удалось найти пользователя по Telegram ID")
         await bot.send_message(
@@ -60,7 +105,7 @@ async def handle_avatar_photo_upload(message, session) -> None:
         return
     uuid_user_id = user.id
     state = await get_state(uuid_user_id, session)
-    avatar_id = get_current_avatar_id(uuid_user_id)
+    avatar_id = user_session.get(uuid_user_id, {}).get("avatar_id")
     if not avatar_id:
         logger.error(
             f"[handle_avatar_photo_upload] Не найден avatar_id "
@@ -68,108 +113,157 @@ async def handle_avatar_photo_upload(message, session) -> None:
         )
         await bot.send_message(message.chat.id, "Ошибка: не найден аватар.")
         return
+    # --- NEW: Проверка существования аватара в БД ---
+    avatar_repo = UserAvatarRepository(session)
+    avatar = await avatar_repo.get_by_id(avatar_id)
+    if not avatar:
+        logger.warning(f"[photo_upload] avatar_id {avatar_id} не найден, фото буферизовано в Redis")
+        file_info = await bot.get_file(message.photo[-1].file_id)
+        downloaded_file = await bot.download_file(file_info.file_path)
+        media_group_id = getattr(message, "media_group_id", None)
+        meta = {
+            "file_id": file_info.file_id,
+            "message_id": message.message_id,
+            "media_group_id": media_group_id,
+            "chat_id": message.chat.id,
+        }
+        await buffer_photo_redis(uuid_user_id, downloaded_file, meta)
+        return
+    # --- END NEW ---
     logger.info(
         f"[FSM] handle_avatar_photo_upload: state={state}, " f"avatar_id={avatar_id}"
     )
     if not state or state.get("state") != "avatar_photo_upload" or not avatar_id:
         logger.info("[FSM] handle_avatar_photo_upload: state not valid or no avatar_id")
         return
+    
+    # Валидация аватара
+    is_valid, msg = await validate_avatar_exists(uuid_user_id, avatar_id, session)
+    if not is_valid:
+        await bot.send_message(message.chat.id, f"Ошибка: {msg}")
+        return
+    
+    # Получаем информацию о файле
     file_info = await bot.get_file(message.photo[-1].file_id)
     downloaded_file = await bot.download_file(file_info.file_path)
+    
+    # Проверяем, является ли фото частью группы
     media_group_id = getattr(message, "media_group_id", None)
-    logger.info(
-        f"[FSM] handle_avatar_photo_upload: " f"media_group_id={media_group_id}"
-    )
-    # --- Если это media_group ---
+    
     if media_group_id:
+        # Добавляем фото в буфер группы
         if uuid_user_id not in user_media_group_buffer:
             user_media_group_buffer[uuid_user_id] = {}
         if media_group_id not in user_media_group_buffer[uuid_user_id]:
             user_media_group_buffer[uuid_user_id][media_group_id] = []
+            
         user_media_group_buffer[uuid_user_id][media_group_id].append(
-            (message.photo[-1].file_id, downloaded_file, message.message_id)
+            (file_info.file_id, downloaded_file, message.message_id)
         )
-        # --- Добавляем message_id в общий список для этой группы ---
-        if uuid_user_id not in user_media_group_msg_ids:
-            user_media_group_msg_ids[uuid_user_id] = {}
-        if media_group_id not in user_media_group_msg_ids[uuid_user_id]:
-            user_media_group_msg_ids[uuid_user_id][media_group_id] = []
-        user_media_group_msg_ids[uuid_user_id][media_group_id].append(message.message_id)
-        # Сбросить старый таймер, если был
-        if (
-            uuid_user_id in user_media_group_timers
-            and media_group_id in user_media_group_timers[uuid_user_id]
-        ):
-            user_media_group_timers[uuid_user_id][media_group_id].cancel()
-        # Запустить новый таймер
-        task = asyncio.create_task(
-            flush_media_group(uuid_user_id, media_group_id, message.chat.id, avatar_id, session, db=session)
+        
+        # Запускаем обработку группы
+        asyncio.create_task(
+            flush_media_group(
+                uuid_user_id,
+                message.chat.id,
+                avatar_id,
+                media_group_id,
+                session
+            )
         )
-        if uuid_user_id not in user_media_group_timers:
-            user_media_group_timers[uuid_user_id] = {}
-        user_media_group_timers[uuid_user_id][media_group_id] = task
-        return
-    # --- Если это одиночное фото (или forward пачкой) ---
-    if uuid_user_id not in user_single_photo_buffer:
-        user_single_photo_buffer[uuid_user_id] = []
-    user_single_photo_buffer[uuid_user_id].append(
-        (message.photo[-1].file_id, downloaded_file, message.message_id)
-    )
-    # Запустить таймер только если его нет или он завершён
-    if (
-        uuid_user_id not in user_single_photo_timer
-        or user_single_photo_timer[uuid_user_id].done()
-    ):
-        task = asyncio.create_task(
-            flush_single_photo_buffer(uuid_user_id, message.chat.id, avatar_id, session, db=session)
+    else:
+        # Добавляем фото в буфер одиночных фото
+        if uuid_user_id not in user_single_photo_buffer:
+            user_single_photo_buffer[uuid_user_id] = []
+            
+        user_single_photo_buffer[uuid_user_id].append(
+            (file_info.file_id, downloaded_file, message.message_id)
         )
-        user_single_photo_timer[uuid_user_id] = task
-    return
+        
+        # Запускаем обработку одиночного фото
+        asyncio.create_task(
+            flush_single_photo_buffer(
+                uuid_user_id,
+                message.chat.id,
+                avatar_id,
+                session
+            )
+        )
 
+    # После успешного сохранения фото
+    await schedule_show_gallery(uuid_user_id, message.chat.id, avatar_id, session)
 
-async def flush_single_photo_buffer(user_id, chat_id, avatar_id, session, db: AsyncSession = None):
+user_single_photo_processing = safe_dict()  # user_id -> bool
+user_gallery_show_timer = safe_dict()  # user_id -> asyncio.Task
+user_last_gallery_msg = safe_dict()  # user_id -> message_id
+user_last_gallery_info_msg = safe_dict()  # user_id -> message_id последнего info-сообщения
+
+# Настройки и их влияние на работу:
+# 1. GALLERY_DEBOUNCE_TIMEOUT (6 сек) - время ожидания перед показом галереи:
+#    - < 3 сек: пользователь может не успеть загрузить все фото
+#    - > 10 сек: слишком долгое ожидание
+#    - 6 сек: оптимально для загрузки 5-10 фото
+# 2. user_media_group_counter - счетчик пакетов фото:
+#    - Увеличивается при каждой загрузке
+#    - Сбрасывается при перезапуске бота
+#    - Помогает пользователю отслеживать прогресс
+# 3. user_last_gallery_info_msg - ID последнего сообщения:
+#    - Предотвращает дублирование сообщений
+#    - Автоматически очищается после показа галереи
+#    - Защищает от утечек памяти
+
+async def schedule_show_gallery(user_id, chat_id, avatar_id, session):
+    if user_id in user_gallery_show_timer and not user_gallery_show_timer[user_id].done():
+        user_gallery_show_timer[user_id].cancel()
+    async def show():
+        # Удаляем предыдущее сообщение галереи, если есть
+        msg_id = user_last_gallery_msg.get(user_id)
+        if msg_id:
+            try:
+                await bot.delete_message(chat_id, msg_id)
+            except Exception:
+                pass
+            user_last_gallery_msg[user_id] = None
+        await asyncio.sleep(settings.GALLERY_DEBOUNCE_TIMEOUT)
+        photos = await get_avatar_photos_from_db(user_id, avatar_id, session)
+        # Отправляем новую галерею и сохраняем её message_id
+        sent = await show_wizard_gallery(
+            bot=bot,
+            chat_id=chat_id,
+            user_id=user_id,
+            avatar_id=avatar_id,
+            photos=photos,
+            idx=len(photos)-1 if photos else 0,
+            session=session
+        )
+        if sent and hasattr(sent, 'message_id'):
+            user_last_gallery_msg[user_id] = sent.message_id
+    user_gallery_show_timer[user_id] = asyncio.create_task(show())
+
+async def flush_single_photo_buffer(user_id, chat_id, avatar_id, session):
     """
-    Миграция: сохраняет фото аватара через MinIO/PostgreSQL (save_avatar_minio).
-    Если db не передан — fallback на legacy add_photo_to_avatar.
+    Обрабатывает буфер одиночных фото.
+    
+    Args:
+        user_id (int): ID пользователя
+        chat_id (int): ID чата
+        avatar_id (str): ID аватара
+        session (AsyncSession): Сессия БД
     """
-    user_session.setdefault(
-        user_id,
-        {
-            "wizard_message_ids": [],
-            "last_wizard_state": None,
-            "uploaded_photo_msgs": [],
-            "last_error_msg": None,
-            "last_info_msg_id": None,
-        },
-    )
-    logger.info(
-        f"[DEBUG] flush_single_photo_buffer START: user_id={user_id}, avatar_id={avatar_id}"
-    )
     try:
         if user_id not in user_locks:
             user_locks[user_id] = asyncio.Lock()
+            
         async with user_locks[user_id]:
             await asyncio.sleep(1.5)
             photos = user_single_photo_buffer.pop(user_id, [])
-            logger.info(
-                f"[DEBUG] flush_single_photo_buffer: "
-                f"{len(photos)} photos to process"
-            )
+            
             for file_id, photo_bytes, msg_id in photos:
-                logger.info(
-                    f"[DEBUG] flush_single_photo_buffer: " f"Processing photo {file_id}"
-                )
-                # --- Валидация (оставляем как есть) ---
-                photos = await get_avatar_photos_from_db(user_id, avatar_id, db)
-                logger.info(
-                    f"[FSM] flush_single_photo_buffer: " f"loaded data.json: {photos}"
-                )
-                existing_paths = photos
-                is_valid, result = await validate_photo(photo_bytes, existing_paths)
-                logger.info(
-                    f"[FSM] flush_single_photo_buffer: "
-                    f"validate_photo: {is_valid}, {result}"
-                )
+                # Получаем существующие фото
+                existing_photos = await get_avatar_photos_from_db(user_id, avatar_id, session)
+                
+                # Валидируем фото
+                is_valid, result = await validate_photo(photo_bytes, existing_photos)
                 if not is_valid:
                     await delete_last_error_message(bot, user_session, user_id, chat_id)
                     try:
@@ -179,95 +273,54 @@ async def flush_single_photo_buffer(user_id, chat_id, avatar_id, session, db: As
                     await send_photo_validation_error(bot, chat_id, photo_bytes, result)
                     user_session[user_id]["last_error_msg"] = None
                     continue
-                await delete_last_error_message(bot, user_session, user_id, chat_id)
-                logger.info(
-                    f"[FSM] flush_single_photo_buffer: " f"calling save_avatar_minio"
-                )
-                if db is not None:
-                    await save_avatar_minio(
-                        db=db,
-                        user_id=user_id,
-                        avatar_id=avatar_id,
-                        original=photo_bytes,
-                        metadata={"file_id": file_id}
-                    )
-                    logger.info(f"[FSM] flush_single_photo_buffer: saved to MinIO/PostgreSQL (user_id={user_id}, avatar_id={avatar_id})")
-                    photos = await get_avatar_photos_from_db(user_id, avatar_id, db)
-                    logger.info(f"[FSM] flush_single_photo_buffer: data after save_avatar_minio: {photos}")
-                    logger.info(f"[FSM] flush_single_photo_buffer: data['photos'] after save_avatar_minio: {photos}")
-                else:
-                    logger.error("[FSM] save_avatar_minio: db is None — невозможна работа без БД/MinIO!")
-                    continue
+                    
+                # Сохраняем фото
+                photo_hash = hashlib.md5(photo_bytes).hexdigest()
+                await save_avatar_minio(session, user_id, avatar_id, photo_bytes, {"photo_hash": photo_hash})
+                
+                # Удаляем сообщение с фото
                 try:
                     await bot.delete_message(chat_id, msg_id)
                 except Exception:
                     pass
-            photos = await get_avatar_photos_from_db(user_id, avatar_id, db)
-            logger.info(f"[FSM] flush_single_photo_buffer: data['photos'] after all: {photos}")
-            msg_id = (
-                user_session[user_id]["wizard_message_ids"][-1]
-                if user_id in user_session
-                and user_session[user_id]["wizard_message_ids"]
-                else None
-            )
-            # Показываем галерею после каждого добавления фото
-            await show_wizard_gallery(
-                chat_id,
-                user_id,
-                avatar_id,
-                photos,
-                len(photos) - 1 if photos else 0,
-                db=db
-            )
-            # Если достигнут максимум — меняем состояние
-            if len(photos) >= settings.AVATAR_MAX_PHOTOS:
-                await set_state(user_id, "avatar_gallery_review", session)
-            logger.info(
-                f"[DEBUG] flush_single_photo_buffer END: user_id={user_id}, "
-                f"avatar_id={avatar_id}"
-            )
+                    
     except Exception as e:
-        logger.exception(f"Ошибка в flush_single_photo_buffer: {e}")
+        logger.exception("Ошибка при обработке фото: %s", e)
+        await bot.send_message(
+            chat_id,
+            "Произошла ошибка при обработке фото. Попробуйте позже."
+        )
 
+    # После сохранения всех фото
+    await schedule_show_gallery(user_id, chat_id, avatar_id, session)
 
-async def flush_media_group(user_id, media_group_id, chat_id, avatar_id, session, db: AsyncSession = None):
+user_media_group_processing = safe_dict()  # user_id -> set(media_group_id)
+
+async def flush_media_group(user_id, chat_id, avatar_id, media_group_id, session):
     """
-    Миграция: сохраняет фото аватара через MinIO/PostgreSQL (save_avatar_minio) для media group.
-    Если db не передан — fallback на legacy add_photo_to_avatar.
+    Обрабатывает буфер группы фото.
+    
+    Args:
+        user_id (int): ID пользователя
+        chat_id (int): ID чата
+        avatar_id (str): ID аватара
+        media_group_id (str): ID группы медиа
+        session (AsyncSession): Сессия БД
     """
-    user_session.setdefault(
-        user_id,
-        {
-            "wizard_message_ids": [],
-            "last_wizard_state": None,
-            "uploaded_photo_msgs": [],
-            "last_error_msg": None,
-            "last_info_msg_id": None,
-        },
-    )
-    logger.info(
-        f"[DEBUG] flush_media_group START: user_id={user_id}, media_group_id={media_group_id}, avatar_id={avatar_id}"
-    )
     try:
         if user_id not in user_locks:
             user_locks[user_id] = asyncio.Lock()
+            
         async with user_locks[user_id]:
-            logger.debug(f"[LOCK] user_id={user_id} lock acquired (media group)")
-            await asyncio.sleep(1.5)  # Ждем, пока все фото из группы придут
-            
-            # Собираем все фото из буфера
+            await asyncio.sleep(1.5)
             photos = user_media_group_buffer[user_id].pop(media_group_id, [])
-            logger.info(f"[DEBUG] flush_media_group: {len(photos)} photos to process")
             
-            # Список для хранения успешно загруженных фото
-            uploaded_photos = []
-            
-            # Загружаем все фото в MinIO
             for file_id, photo_bytes, msg_id in photos:
-                logger.info(f"[DEBUG] flush_media_group: Processing photo {file_id}")
-                photos = await get_avatar_photos_from_db(user_id, avatar_id, db)
-                existing_paths = photos
-                is_valid, result = await validate_photo(photo_bytes, existing_paths)
+                # Получаем существующие фото
+                existing_photos = await get_avatar_photos_from_db(user_id, avatar_id, session)
+                
+                # Валидируем фото
+                is_valid, result = await validate_photo(photo_bytes, existing_photos)
                 if not is_valid:
                     await delete_last_error_message(bot, user_session, user_id, chat_id)
                     try:
@@ -278,95 +331,29 @@ async def flush_media_group(user_id, media_group_id, chat_id, avatar_id, session
                     user_session[user_id]["last_error_msg"] = None
                     continue
                     
-                await delete_last_error_message(bot, user_session, user_id, chat_id)
-                if db is not None:
-                    try:
-                        await save_avatar_minio(
-                            db=db,
-                            user_id=user_id,
-                            avatar_id=avatar_id,
-                            original=photo_bytes,
-                            metadata={"file_id": file_id}
-                        )
-                        uploaded_photos.append((file_id, msg_id))
-                        logger.info(f"[FSM] flush_media_group: saved to MinIO/PostgreSQL (user_id={user_id}, avatar_id={avatar_id})")
-                    except Exception as e:
-                        logger.error(f"[FSM] flush_media_group: error saving photo {file_id}: {e}")
-                        continue
-                else:
-                    logger.error("[FSM] save_avatar_minio: db is None — невозможна работа без БД/MinIO!")
-                    continue
-                    
-            # Удаляем все сообщения с фото
-            for _, msg_id in uploaded_photos:
+                # Сохраняем фото
+                photo_hash = hashlib.md5(photo_bytes).hexdigest()
+                await save_avatar_minio(session, user_id, avatar_id, photo_bytes, {"photo_hash": photo_hash})
+                
+                # Удаляем сообщение с фото
                 try:
                     await bot.delete_message(chat_id, msg_id)
                 except Exception:
                     pass
                     
-            # --- После обработки удаляем все сообщения этой группы ---
-            msg_ids = user_media_group_msg_ids.get(user_id, {}).get(media_group_id, [])
-            for mid in msg_ids:
-                try:
-                    await bot.delete_message(chat_id, mid)
-                except Exception:
-                    pass
-                    
-            # Очищаем список message_id для этой группы
-            if (
-                user_id in user_media_group_msg_ids
-                and media_group_id in user_media_group_msg_ids[user_id]
-            ):
-                user_media_group_msg_ids[user_id][media_group_id] = []
-                
-            # --- Проверяем, не появились ли новые фото с этим media_group_id ---
-            if (
-                user_id in user_media_group_buffer
-                and media_group_id in user_media_group_buffer[user_id]
-                and user_media_group_buffer[user_id][media_group_id]
-            ):
-                logger.info(
-                    f"[DEBUG] flush_media_group: обнаружены новые фото, "
-                    f"повторный запуск через 0.5 сек"
-                )
-                await asyncio.sleep(0.5)
-                await flush_media_group(user_id, media_group_id, chat_id, avatar_id, session, db=db)
-                
-            # Ждем немного, чтобы все операции с БД завершились
-            await asyncio.sleep(1.0)
-            
-            # Загружаем финальное состояние и показываем галерею
-            photos = await get_avatar_photos_from_db(user_id, avatar_id, db)
-            logger.info(f"[FSM] flush_media_group: data['photos'] after all: {photos}")
-            msg_id = (
-                user_session[user_id]["wizard_message_ids"][-1]
-                if user_id in user_session
-                and user_session[user_id]["wizard_message_ids"]
-                else None
-            )
-            
-            # Показываем галерею после загрузки всех фото
-            await show_wizard_gallery(
-                chat_id,
-                user_id,
-                avatar_id,
-                photos,
-                len(photos) - 1 if photos else 0,
-                db=db
-            )
-            
-            # Если достигнут максимум — меняем состояние
-            if len(photos) >= settings.AVATAR_MAX_PHOTOS:
-                await set_state(user_id, "avatar_gallery_review", session)
-                
-            logger.info(
-                f"[DEBUG] flush_media_group END: user_id={user_id}, "
-                f"media_group_id={media_group_id}, avatar_id={avatar_id}"
-            )
     except Exception as e:
-        logger.exception(f"Ошибка в flush_media_group: {e}")
-    logger.debug(f"[LOCK] user_id={user_id} lock released (media group)")
+        logger.exception("Ошибка при обработке группы фото: %s", e)
+        await bot.send_message(
+            chat_id,
+            "Произошла ошибка при обработке группы фото. Попробуйте позже."
+        )
+    finally:
+        # Очищаем флаг обработки
+        if user_id in user_media_group_processing:
+            user_media_group_processing[user_id].discard(media_group_id)
 
+    # После сохранения всех фото
+    await schedule_show_gallery(user_id, chat_id, avatar_id, session)
 
 @bot.callback_query_handler(func=lambda call: call.data == "delete_error")
 async def handle_delete_error(call):
@@ -375,3 +362,76 @@ async def handle_delete_error(call):
     except Exception:
         pass
     await bot.answer_callback_query(call.id)
+
+@bot.callback_query_handler(func=lambda call: call.data == "photo_duplicate_ack")
+async def handle_duplicate_ack(call):
+    try:
+        await bot.delete_message(call.message.chat.id, call.message.message_id)
+    except Exception:
+        pass
+    await bot.answer_callback_query(call.id)
+
+# --- Кнопка 'Отменить' в галерее ---
+def get_full_gallery_keyboard(idx, total, avatar_id, photos):
+    markup = InlineKeyboardMarkup()
+    # ... существующий код ...
+    markup.row(
+        InlineKeyboardButton("◀️ Назад", callback_data=f"avatar_gallery_prev:{avatar_id}"),
+        InlineKeyboardButton("❌ Удалить", callback_data=f"avatar_gallery_delete:{photos[idx]['id']}"),
+        InlineKeyboardButton("Вперёд ▶️", callback_data=f"avatar_gallery_next:{avatar_id}"),
+    )
+    markup.row(
+        InlineKeyboardButton("❌ Отменить", callback_data=f"avatar_gallery_cancel:{avatar_id}")
+    )
+    if total >= settings.AVATAR_MIN_PHOTOS:
+        markup.row(
+            InlineKeyboardButton(
+                "✅ Продолжить", callback_data=f"avatar_gallery_continue:{avatar_id}"
+            )
+        )
+    return markup
+
+# --- NEW: функция для обработки буфера после создания аватара ---
+async def process_photo_buffer(user_id, avatar_id, session):
+    if user_id in photo_buffer:
+        logger.info(f"[photo_buffer] Обрабатываю {len(photo_buffer[user_id])} фото из буфера для user_id={user_id}")
+        for file_info, downloaded_file, message, media_group_id in photo_buffer[user_id]:
+            # Можно вызвать flush_single_photo_buffer или аналогичный код
+            # Здесь пример для одиночных фото:
+            await flush_single_photo_buffer(user_id, message.chat.id, avatar_id, session)
+        del photo_buffer[user_id]
+
+# --- Вызов process_photo_buffer после создания аватара ---
+# В месте, где создаётся аватар (например, после create_draft_avatar):
+# await process_photo_buffer(uuid_user_id, avatar_id, session)
+
+# --- Очистка буфера при отмене визарда или завершении сессии ---
+def clear_photo_buffer(user_id):
+    if user_id in photo_buffer:
+        del photo_buffer[user_id]
+
+# --- ВНИМАНИЕ ---
+# Эта функция НЕ занимается загрузкой фото! Она просто вызывает галерею после буферизации фото.
+# Для бизнес-логики загрузки фото используйте сервисную функцию из avatar_workflow.py
+async def handle_photo_upload_show_menu(
+    bot: AsyncTeleBot,
+    chat_id: int,
+    user_id: int,
+    avatar_id: Optional[str] = None,
+    session: Optional[AsyncSession] = None
+) -> None:
+    """
+    Показывает галерею после загрузки фото (НЕ сохраняет фото!).
+    Используется только как шаг визарда.
+    """
+    # Получаем фото из буфера
+    photos = await get_buffered_photos_redis(user_id)
+    
+    if not photos:
+        await bot.send_message(
+            chat_id,
+            "❌ Не удалось получить фото из буфера."
+        )
+        return
+        
+    # Показываем галерею

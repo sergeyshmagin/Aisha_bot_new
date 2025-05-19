@@ -20,7 +20,7 @@ from datetime import datetime
 from frontend_bot.repositories.user_repository import UserRepository
 from database.config import AsyncSessionLocal
 from frontend_bot.config import settings
-from shared_storage.storage_utils import download_file, upload_file
+from frontend_bot.services.minio_client import upload_file, download_file
 from frontend_bot.services import transcript_cache as user_transcripts_store
 import aiofiles
 

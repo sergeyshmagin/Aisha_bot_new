@@ -12,8 +12,7 @@ from frontend_bot.utils.logger import get_logger
 from typing import List, Dict, Any
 from pathlib import Path
 from frontend_bot.services.transcribe_service import delete_user_transcripts
-from frontend_bot.services.transcript_service import TranscriptService
-from minio import Minio
+from frontend_bot.services.transcript_service_context import transcript_service_context
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from database.config import AsyncSessionLocal
@@ -23,15 +22,6 @@ logger = get_logger("transcribe_history")
 
 STORAGE_DIR = os.getenv("STORAGE_DIR", "storage")
 TRANSCRIPTS_DIR = os.path.join(STORAGE_DIR, "transcripts")
-
-# Инициализация MinIO клиента и сервисов
-minio_client = Minio(
-    "localhost:9000",  # TODO: вынести в конфиг
-    access_key="minioadmin",  # TODO: вынести в конфиг
-    secret_key="minioadmin",  # TODO: вынести в конфиг
-    secure=False
-)
-transcript_service = TranscriptService(minio_client)
 
 @bot.message_handler(commands=["history"])
 async def show_history(message: Message):
@@ -86,28 +76,29 @@ async def delete_my_file(message: Message):
             )
             return
         uuid_user_id = user.id
-        transcript_path = await transcript_cache.get(uuid_user_id)
-        if transcript_path and await async_exists(transcript_path):
-            await async_remove(transcript_path)
-            await transcript_cache.remove(uuid_user_id)
-            
-            # Очищаем историю через HistoryService
-            async with AsyncSessionLocal() as session:
-                history_service = HistoryService(session)
-                await history_service.clear_user_history(session, str(uuid_user_id))
+        async with transcript_service_context as transcript_service:
+            transcript_path = await transcript_service.get_transcript_path(uuid_user_id)
+            if transcript_path and await async_exists(transcript_path):
+                await async_remove(transcript_path)
+                await transcript_service.clear_transcript_cache(uuid_user_id)
                 
-            await delete_user_transcripts(str(uuid_user_id), STORAGE_DIR)
-            await bot.send_message(
-                message.chat.id,
-                "Ваш последний файл удалён.",
-                reply_markup=history_keyboard(),
-            )
-        else:
-            await bot.send_message(
-                message.chat.id,
-                "Нет файла для удаления.",
-                reply_markup=history_keyboard(),
-            )
+                # Очищаем историю через HistoryService
+                async with AsyncSessionLocal() as session:
+                    history_service = HistoryService(session)
+                    await history_service.clear_user_history(session, str(uuid_user_id))
+                    
+                await delete_user_transcripts(str(uuid_user_id), STORAGE_DIR)
+                await bot.send_message(
+                    message.chat.id,
+                    "Ваш последний файл удалён.",
+                    reply_markup=history_keyboard(),
+                )
+            else:
+                await bot.send_message(
+                    message.chat.id,
+                    "Нет файла для удаления.",
+                    reply_markup=history_keyboard(),
+                )
 
 
 async def get_history(user_id: str) -> List[Dict[str, Any]]:

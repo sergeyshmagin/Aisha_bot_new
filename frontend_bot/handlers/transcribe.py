@@ -28,7 +28,7 @@ from frontend_bot.config import settings
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from frontend_bot.services.transcript_service import TranscriptService
-from minio import Minio
+from frontend_bot.services.minio_client import upload_file, download_file
 from datetime import datetime
 from database.config import AsyncSessionLocal
 import aiofiles
@@ -42,7 +42,6 @@ from frontend_bot.texts.transcribe.texts import (
     PROTOCOL_ERROR_TEXT,
 )
 from frontend_bot.repositories.user_repository import UserRepository
-from shared_storage.storage_utils import upload_file, download_file
 from frontend_bot.services import transcript_cache as user_transcripts_store
 
 logger = get_logger("transcribe")
@@ -53,15 +52,6 @@ settings.OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 STORAGE_DIR = os.getenv("STORAGE_DIR", "storage")
 
 MAX_CHUNK_SIZE = 24 * 1024 * 1024  # 24 МБ
-
-# Инициализация MinIO клиента и сервисов
-minio_client = Minio(
-    settings.MINIO_ENDPOINT,
-    access_key=settings.MINIO_ACCESS_KEY,
-    secret_key=settings.MINIO_SECRET_KEY,
-    secure=settings.MINIO_SECURE
-)
-transcript_service = TranscriptService(minio_client)
 
 def protocol_error_keyboard() -> ReplyKeyboardMarkup:
     """Клавиатура для ошибок при генерации протокола."""

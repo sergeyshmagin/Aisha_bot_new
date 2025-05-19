@@ -99,19 +99,25 @@ async def handle_avatar_photo(message, user_id, avatar_id, session):
     downloaded_file = await bot.download_file(file_info.file_path)
     
     # Обрабатываем загрузку фото
-    await handle_photo_upload(user_id, avatar_id, downloaded_file, photo.file_id, session)
+    await handle_photo_upload(bot, message.chat.id, user_id, avatar_id, session)
     
     # Получаем текущее количество фото
     photos_count = len(data.get("photos", []))
     
-    # Отправляем сообщение о статусе
-    await bot.send_message(
-        message.chat.id,
-        f"Фото успешно загружено! Загружено фото: {photos_count}/{AVATAR_MAX_PHOTOS}\n"
-        f"Минимум требуется: {AVATAR_MIN_PHOTOS} фото.\n"
-        "Продолжайте загружать фото или нажмите 'Далее' для перехода к следующему шагу.",
-        reply_markup=avatar_photo_keyboard()
-    )
+    # Формируем сообщение только если фото больше одного
+    if photos_count > 1:
+        message_text = (
+            f"Фото успешно загружено! Загружено фото: {photos_count}/{AVATAR_MAX_PHOTOS}\n"
+            f"Минимум требуется: {AVATAR_MIN_PHOTOS} фото.\n"
+            "Продолжайте загружать фото или нажмите 'Далее' для перехода к следующему шагу."
+        )
+        # Отправляем сообщение о статусе
+        await bot.send_message(
+            message.chat.id,
+            message_text,
+            reply_markup=avatar_photo_keyboard()
+        )
+    
     await set_state(user_id, "avatar_photo_upload", session)
 
 @bot.message_handler(func=check_photo_next_state)

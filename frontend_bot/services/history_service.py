@@ -11,16 +11,9 @@ from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, delete
 
-from shared_storage.storage_utils import (
-    init_storage,
-    upload_file,
-    download_file,
-    delete_file,
-    generate_presigned_url,
-    get_file_metadata
-)
 from database.models import UserHistory
 from frontend_bot.config import settings
+from frontend_bot.services.minio_client import upload_file, download_file, delete_file, generate_presigned_url, check_file_exists
 
 class HistoryService:
     """Сервис для работы с историей пользователя"""

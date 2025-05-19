@@ -37,6 +37,8 @@ user_media_groups = safe_dict()  # f"{user_id}:{media_group_id}" -> [(file_id, p
 user_gallery_index = safe_dict()  # f"{user_id}:{avatar_id}" -> int
 user_gallery_last_switch = safe_dict()  # f"{user_id}:{avatar_id}" -> timestamp
 user_media_group_msg_ids = safe_dict()  # user_id -> media_group_id -> [message_id, ...]
+user_last_gallery_msg = safe_dict()  # user_id -> message_id
+user_media_group_counter = safe_dict()  # user_id -> int (счетчик media groups)
 
 def get_gallery_key(user_id: int, avatar_id: str) -> str:
     """Получает ключ для галереи."""

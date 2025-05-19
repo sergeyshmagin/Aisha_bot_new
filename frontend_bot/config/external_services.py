@@ -163,7 +163,10 @@ class ExternalServicesConfig(BaseSettings):
             raise ValueError("FAL_LORA_RANK must be between 1 and 128")
         return v
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-        use_enum_values = True 
+    @property
+    def redis_url(self) -> str:
+        protocol = "rediss" if self.REDIS_SSL else "redis"
+        auth = f":{self.REDIS_PASSWORD}@" if self.REDIS_PASSWORD else ""
+        return f"{protocol}://{auth}{self.REDIS_HOST}:{self.REDIS_PORT}/{self.REDIS_DB}"
+    
+    model_config = {"extra": "allow"} 

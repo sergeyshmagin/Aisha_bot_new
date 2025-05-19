@@ -24,34 +24,6 @@ def get_gallery_key(user_id: int, avatar_id: str) -> str:
     return f"{user_id}:{avatar_id}"
 
 
-async def start_avatar_wizard_for_user(user_id, chat_id):
-    from uuid import uuid4
-    from frontend_bot.texts.avatar.texts import PHOTO_REQUIREMENTS_TEXT
-
-    avatar_id = str(uuid4())
-    user_session[user_id] = {
-        "wizard_message_ids": [],
-        "last_wizard_state": None,
-        "uploaded_photo_msgs": [],
-        "last_error_msg": None,
-        "last_info_msg_id": None,
-    }
-    gallery_key = get_gallery_key(user_id, avatar_id)
-    user_gallery[gallery_key] = {"index": 0, "last_switch": 0}
-    from frontend_bot.services.avatar_manager import init_avatar_fsm
-
-    init_avatar_fsm(user_id, avatar_id)
-    await set_state(user_id, "avatar_photo_upload", session)
-    set_current_avatar_id(user_id, avatar_id)
-    requirements = PHOTO_REQUIREMENTS_TEXT
-
-    async def send_requirements():
-        msg = await bot.send_message(chat_id, requirements, parse_mode="HTML")
-        user_session[user_id]["wizard_message_ids"].append(msg.message_id)
-
-    asyncio.create_task(send_requirements())
-
-
 def get_photo_hint_text(current, min_photos, max_photos):
     requirements = (
         f"Требования: фото должны быть разными, без фильтров, хорошее освещение. "
@@ -108,5 +80,5 @@ async def delete_last_info_message(user_id, chat_id):
         user_session[user_id]["last_info_msg_id"] = None
 
 
-# Остальные утилиты (reset, start_wizard_for_user, get_photo_hint_text, update_photo_hint, delete_last_error_message, delete_last_info_message)
+# Остальные утилиты (reset, get_photo_hint_text, update_photo_hint, delete_last_error_message, delete_last_info_message)
 # ... переносить по аналогии ...

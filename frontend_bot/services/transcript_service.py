@@ -13,17 +13,10 @@ from sqlalchemy import select, update, delete
 from telebot.async_telebot import AsyncTeleBot
 from telebot.types import Message
 
-from shared_storage.storage_utils import (
-    init_storage,
-    upload_file,
-    download_file,
-    delete_file,
-    generate_presigned_url,
-    get_file_metadata
-)
-from database.models import UserTranscript
+from database.models import UserTranscript, UserTranscriptCache
 from frontend_bot.config import settings
 from frontend_bot.utils.logger import get_logger
+from frontend_bot.services.minio_client import upload_file, download_file, delete_file, generate_presigned_url, check_file_exists
 
 logger = get_logger(__name__)
 
@@ -36,7 +29,7 @@ class TranscriptService:
         
     async def init(self):
         """Инициализирует хранилище"""
-        await init_storage()
+        # await init_storage()
         
     async def save_transcript(
         self,
@@ -83,6 +76,14 @@ class TranscriptService:
             created_at=datetime.utcnow()
         )
         self.session.add(transcript)
+        await self.session.commit()
+        
+        # Обновляем кэш
+        cache = UserTranscriptCache(
+            user_id=user_id,
+            path=transcript_key
+        )
+        self.session.add(cache)
         await self.session.commit()
         
         return {
@@ -189,6 +190,36 @@ class TranscriptService:
             "created_at": transcript.created_at
         } for transcript in transcripts]
 
+    async def get_transcript_path(self, user_id: int) -> Optional[str]:
+        """
+        Получает путь к последнему транскрипту пользователя.
+        
+        Args:
+            user_id (int): ID пользователя
+            
+        Returns:
+            Optional[str]: Путь к транскрипту или None
+        """
+        query = select(UserTranscriptCache).where(
+            UserTranscriptCache.user_id == user_id
+        )
+        result = await self.session.execute(query)
+        cache = result.scalar_one_or_none()
+        return cache.path if cache else None
+
+    async def clear_transcript_cache(self, user_id: int) -> None:
+        """
+        Очищает кэш транскриптов пользователя.
+        
+        Args:
+            user_id (int): ID пользователя
+        """
+        query = delete(UserTranscriptCache).where(
+            UserTranscriptCache.user_id == user_id
+        )
+        await self.session.execute(query)
+        await self.session.commit()
+
 async def get_user_transcript_or_error(
     user_id: int,
     transcript_id: int,
@@ -217,10 +248,8 @@ async def get_user_transcript_or_error(
 async def send_document_with_caption(
     bot: AsyncTeleBot,
     chat_id: int,
-    filename: str,
-    data: bytes,
-    caption: str,
-    reply_markup: Optional[Any] = None
+    file_path: str,
+    caption: str
 ) -> None:
     """
     Отправляет документ с подписью.
@@ -228,21 +257,15 @@ async def send_document_with_caption(
     Args:
         bot (AsyncTeleBot): Экземпляр бота
         chat_id (int): ID чата
-        filename (str): Имя файла
-        data (bytes): Данные файла
-        caption (str): Подпись к файлу
-        reply_markup (Any, optional): Клавиатура
+        file_path (str): Путь к файлу
+        caption (str): Подпись
     """
-    try:
+    with open(file_path, "rb") as f:
         await bot.send_document(
             chat_id,
-            data,
-            caption=caption,
-            reply_markup=reply_markup
+            f,
+            caption=caption
         )
-    except Exception as e:
-        logger.error(f"Ошибка при отправке документа: {e}")
-        raise
 
 async def send_transcript_error(
     bot: AsyncTeleBot,

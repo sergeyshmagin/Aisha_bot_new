@@ -179,6 +179,7 @@ class UserAvatarPhoto(Base):
     avatar_id = Column(UUID(as_uuid=True), ForeignKey("user_avatars.id"), nullable=False)
     photo_key = Column(String(255), nullable=False)  # путь в MinIO
     photo_metadata = Column(JSON, nullable=True)  # метаданные фото (размер, формат и т.д.)
+    photo_hash = Column(String(32), nullable=False, index=True)  # md5-хеш фото
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     
     user = relationship("User", back_populates="avatar_photos")

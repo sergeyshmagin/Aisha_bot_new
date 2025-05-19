@@ -2,12 +2,11 @@
 Модуль FSM для создания аватаров.
 """
 
-# ... импортировать обработчики явно по мере декомпозиции ...
-
 import logging
 import asyncio
 from uuid import uuid4
 from telebot.types import Message
+from telebot.async_telebot import AsyncTeleBot
 from frontend_bot.bot_instance import bot
 from frontend_bot.services.avatar_manager import (
     init_avatar_fsm,
@@ -15,8 +14,8 @@ from frontend_bot.services.avatar_manager import (
     set_current_avatar_id,
 )
 from frontend_bot.services.state_utils import set_state_pg as set_state, get_state_pg as get_state, clear_state_pg as clear_state
-from frontend_bot.texts.avatar.texts import PHOTO_REQUIREMENTS_TEXT
-from frontend_bot.keyboards.common import avatar_type_keyboard
+from frontend_bot.texts.avatar.texts import PHOTO_REQUIREMENTS_TEXT, PHOTO_TYPE_PROMPT
+from frontend_bot.keyboards.avatar import avatar_type_keyboard
 from frontend_bot.texts.common import PROMPT_TYPE_MENU
 from frontend_bot.shared.utils import clear_old_wizard_messages, send_and_track
 from frontend_bot.config import settings
@@ -25,48 +24,21 @@ from frontend_bot.services.avatar_workflow import create_draft_avatar, update_dr
 from sqlalchemy import select
 from database.models import UserAvatar
 from frontend_bot.repositories.user_repository import UserRepository
+from frontend_bot.services.avatar_validator import validate_avatar_exists, validate_avatar_photos
+from frontend_bot.keyboards.avatar import avatar_type_keyboard
+from frontend_bot.shared.utils import clear_old_wizard_messages
+from frontend_bot.handlers.avatar.state import user_session
+from database.config import AsyncSessionLocal
+from frontend_bot.services.photo_buffer import get_buffered_photos_redis, clear_photo_buffer_redis
+from frontend_bot.repositories.state_repository import StateRepository
+from frontend_bot.handlers.avatar.navigation import start_avatar_wizard
+from sqlalchemy.ext.asyncio import AsyncSession
 
 logger = logging.getLogger(__name__)
 
 def get_gallery_key(user_id: int, avatar_id: str) -> str:
     """Получает ключ для галереи."""
     return f"{user_id}:{avatar_id}"
-
-
-async def start_avatar_wizard(message: Message, session):
-    """
-    Запускает визард создания аватара для пользователя.
-    """
-    logger.info(f"[AVATAR FSM] Запуск визарда для user_id={message.from_user.id}")
-    telegram_id = message.from_user.id
-    user_repo = UserRepository(session)
-    user = await user_repo.get_by_telegram_id(telegram_id)
-    if not user:
-        await bot.send_message(message.chat.id, "Пользователь не найден. Пожалуйста, /start.")
-        return
-    uuid_user_id = user.id
-    avatar_id = str(uuid4())
-    user_session[uuid_user_id] = {
-        "wizard_message_ids": [],
-        "last_wizard_state": None,
-        "uploaded_photo_msgs": [],
-        "last_error_msg": None,
-        "last_info_msg_id": None,
-        "edit_mode": "create",
-    }
-    gallery_key = get_gallery_key(uuid_user_id, avatar_id)
-    user_gallery[gallery_key] = {"index": 0, "last_switch": 0}
-    await create_draft_avatar(uuid_user_id, session, {"photo_key": "", "preview_key": "", "avatar_data": {"step": 0}})
-    await set_state(uuid_user_id, "avatar_photo_upload", session)
-    set_current_avatar_id(uuid_user_id, avatar_id)
-    requirements = PHOTO_REQUIREMENTS_TEXT
-    await send_and_track(bot, user_session, uuid_user_id, message.chat.id, requirements, parse_mode="HTML")
-    state = await get_state(uuid_user_id, session)
-    logger.info(
-        f"[DEBUG] После запуска визарда: user_id={uuid_user_id}, "
-        f"state={state}, "
-        f"avatar_id={get_current_avatar_id(uuid_user_id)}"
-    )
 
 
 def reset_avatar_fsm(user_id, session):
@@ -76,18 +48,8 @@ def reset_avatar_fsm(user_id, session):
             user_gallery.pop(key, None)
     asyncio.create_task(clear_state(user_id, session))
     set_current_avatar_id(user_id, None)
-
-
-async def show_type_menu(chat_id, user_id):
-    await clear_old_wizard_messages(
-        bot, user_session, chat_id, user_id, keep_msg_id=None
-    )
-    msg = await send_and_track(
-        bot, user_session, user_id, chat_id,
-        PROMPT_TYPE_MENU,
-        reply_markup=avatar_type_keyboard,
-    )
-    return msg
+    from frontend_bot.handlers.avatar.photo_upload import clear_photo_buffer_redis
+    asyncio.create_task(clear_photo_buffer_redis(user_id))
 
 
 def get_photo_hint_text(current, min_photos, max_photos):
@@ -130,3 +92,49 @@ async def update_photo_hint(user_id, chat_id, avatar_id, session):
     text = get_photo_hint_text(count, settings.AVATAR_MIN_PHOTOS, settings.AVATAR_MAX_PHOTOS)
     msg = await bot.send_message(chat_id, text)
     user_session[user_id]["last_info_msg_id"] = msg.message_id
+
+
+async def handle_avatar_name_input(message, session):
+    """
+    Обрабатывает ввод имени аватара.
+    
+    Args:
+        message (Message): Объект сообщения
+        session (AsyncSession): Сессия БД
+    """
+    user_id = message.from_user.id
+    state = await get_state(user_id, session)
+    
+    if not state or state.get("state") != "avatar_enter_name":
+        return
+        
+    avatar_id = state.get("avatar_id")
+    if not avatar_id:
+        await bot.send_message(message.chat.id, "Аватар не найден")
+        return
+        
+    # Валидация аватара
+    is_valid, msg = await validate_avatar_exists(user_id, avatar_id, session)
+    if not is_valid:
+        await bot.send_message(message.chat.id, f"Ошибка: {msg}")
+        return
+        
+    name = message.text.strip()
+    if not name:
+        await bot.send_message(message.chat.id, "Имя не может быть пустым")
+        return
+        
+    # Обновляем имя аватара
+    await update_draft_avatar(user_id, session, {
+        "avatar_data": {"title": name}
+    })
+    
+    # Переходим к подтверждению
+    await set_state(user_id, {
+        "state": "avatar_confirm",
+        "avatar_id": avatar_id
+    }, session)
+    
+    # Показываем подтверждение
+    from frontend_bot.handlers.avatar.confirm import show_avatar_confirm
+    await show_avatar_confirm(message.chat.id, user_id, avatar_id, session)
