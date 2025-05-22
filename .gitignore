@@ -133,3 +133,6 @@ archive/
 # Исключаем временные и служебные папки
 htmlcov/
 data/
+
+# windsurf rules
+.windsurfrules
