@@ -1,0 +1,23 @@
+# Зависимости для интеграционных тестов
+
+# Основные зависимости тестирования
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+pytest-cov>=4.0.0
+
+# База данных
+asyncpg>=0.28.0
+sqlalchemy[asyncio]>=2.0.0
+
+# Redis
+redis[hiredis]>=4.5.0
+
+# MinIO / S3
+minio>=7.1.0
+
+# Файлы
+aiofiles>=23.0.0
+
+# Дополнительные утилиты
+faker>=18.0.0
+factory-boy>=3.2.0 

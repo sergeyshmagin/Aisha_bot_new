@@ -50,6 +50,15 @@ class Settings(BaseSettings):
     FAL_MAX_RETRIES: int = Field(3, env="FAL_MAX_RETRIES")
     FAL_AUTO_MODEL_SELECTION: bool = Field(True, env="FAL_AUTO_MODEL_SELECTION")  # Автовыбор модели
     
+    # 🧪 FAL AI - Debug & Development Settings
+    FAL_MOCK_TRAINING_DURATION: int = Field(30, env="FAL_MOCK_TRAINING_DURATION")  # секунд
+    FAL_ENABLE_WEBHOOK_SIMULATION: bool = Field(True, env="FAL_ENABLE_WEBHOOK_SIMULATION") 
+    FAL_TEST_REQUEST_PREFIX: str = Field("test_", env="FAL_TEST_REQUEST_PREFIX")
+    
+    # Webhook endpoints для разных типов (опционально)
+    FAL_WEBHOOK_PORTRAIT_URL: Optional[str] = Field(None, env="FAL_WEBHOOK_PORTRAIT_URL")
+    FAL_WEBHOOK_STYLE_URL: Optional[str] = Field(None, env="FAL_WEBHOOK_STYLE_URL")
+    
     # FAL AI - Quality Presets
     FAL_PRESET_FAST: Dict[str, Any] = {
         "portrait": {"steps": 500, "learning_rate": 0.0003},

@@ -3,7 +3,7 @@
 """
 from typing import List, Optional
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-from app.database.models import AvatarType, AvatarStatus
+from app.database.models import AvatarType, AvatarStatus, AvatarTrainingType
 
 
 def get_avatar_main_menu(avatars_count: int = 0) -> InlineKeyboardMarkup:
@@ -440,5 +440,139 @@ def avatar_inline_keyboard():
 
 
 def get_avatar_menu() -> InlineKeyboardMarkup:
-    """Legacy функция - использовать get_avatar_main_menu"""
-    return get_avatar_main_menu() 
+    """Простое меню аватаров"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🆕 Создать аватар", callback_data="create_avatar")],
+        [InlineKeyboardButton(text="📁 Мои аватары", callback_data="my_avatars")],
+        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_main")]
+    ])
+
+# ==================== КЛАВИАТУРЫ ВЫБОРА ТИПА ОБУЧЕНИЯ ====================
+
+def get_training_type_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура выбора типа обучения аватара"""
+    
+    return InlineKeyboardMarkup(inline_keyboard=[
+        # Портретный тип (рекомендуемый)
+        [
+            InlineKeyboardButton(
+                text="🎭 Портретный ⭐ (Рекомендуется)",
+                callback_data="training_type_portrait"
+            )
+        ],
+        # Универсальный тип
+        [
+            InlineKeyboardButton(
+                text="🎨 Художественный",
+                callback_data="training_type_style"
+            )
+        ],
+        # Сравнение типов
+        [
+            InlineKeyboardButton(
+                text="📊 Сравнить типы",
+                callback_data="compare_training_types"
+            )
+        ],
+        # Назад
+        [
+            InlineKeyboardButton(
+                text="◀️ Назад",
+                callback_data="back_to_avatar_menu"
+            )
+        ]
+    ])
+
+def get_training_type_confirmation_keyboard(training_type: str) -> InlineKeyboardMarkup:
+    """Клавиатура подтверждения выбора типа обучения"""
+    
+    # Подтверждение
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text="✅ Выбрать этот тип",
+                callback_data=f"confirm_training_{training_type}"
+            )
+        ]
+    ]
+    
+    # Посмотреть другой тип
+    other_type = "style" if training_type == "portrait" else "portrait"
+    other_name = "Художественный" if training_type == "portrait" else "Портретный"
+    
+    buttons.append([
+        InlineKeyboardButton(
+            text=f"🔄 Посмотреть {other_name}",
+            callback_data=f"training_type_{other_type}"
+        )
+    ])
+    
+    # Сравнение
+    buttons.append([
+        InlineKeyboardButton(
+            text="📊 Подробное сравнение",
+            callback_data="detailed_comparison"
+        )
+    ])
+    
+    # Назад к выбору
+    buttons.append([
+        InlineKeyboardButton(
+            text="◀️ К выбору типа",
+            callback_data="select_training_type"
+        )
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def get_comparison_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура для сравнения типов обучения"""
+    
+    return InlineKeyboardMarkup(inline_keyboard=[
+        # Выбор после сравнения
+        [
+            InlineKeyboardButton(
+                text="🎭 Выбрать Портретный",
+                callback_data="confirm_training_portrait"
+            ),
+            InlineKeyboardButton(
+                text="🎨 Выбрать Художественный", 
+                callback_data="confirm_training_style"
+            )
+        ],
+        # Назад
+        [
+            InlineKeyboardButton(
+                text="◀️ К выбору типа",
+                callback_data="select_training_type"
+            )
+        ]
+    ])
+
+def get_avatar_gender_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура выбора пола аватара (обновленная для нового workflow)"""
+    
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="👨 Мужской",
+                callback_data="avatar_gender_male"
+            ),
+            InlineKeyboardButton(
+                text="👩 Женский",
+                callback_data="avatar_gender_female"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🤖 Другое",
+                callback_data="avatar_gender_other"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="◀️ К выбору типа",
+                callback_data="select_training_type"
+            )
+        ]
+    ]) 

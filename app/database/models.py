@@ -36,6 +36,25 @@ class AvatarType(str, Enum):
     CUSTOM = "custom"                 # Кастомный
 
 
+class AvatarTrainingType(str, Enum):
+    """Тип обучения аватара (новый enum для выбора алгоритма)"""
+    PORTRAIT = "portrait"             # Портретный тип (Flux LoRA Portrait Trainer)
+    STYLE = "style"                   # Художественный тип (Flux Pro Trainer)
+
+
+class FALFinetuneType(str, Enum):
+    """Тип файнтюнинга FAL AI"""
+    FULL = "full"                     # Полное обучение (только flux-pro-trainer)
+    LORA = "lora"                     # LoRA обучение (оба тренера)
+
+
+class FALPriority(str, Enum):
+    """Приоритет обучения FAL AI"""
+    SPEED = "speed"                   # Скорость
+    QUALITY = "quality"               # Качество (по умолчанию)
+    HIGH_RES_ONLY = "high_res_only"   # Только высокое разрешение
+
+
 class PhotoValidationStatus(str, Enum):
     PENDING = "pending"               # Ожидает валидации
     VALID = "valid"                   # Валидно
@@ -120,24 +139,52 @@ class Avatar(Base):
     name: Mapped[str] = mapped_column(String(100))
     gender: Mapped[AvatarGender] = mapped_column(SQLEnum(AvatarGender))
     avatar_type: Mapped[AvatarType] = mapped_column(SQLEnum(AvatarType), default=AvatarType.CHARACTER)
+    training_type: Mapped[AvatarTrainingType] = mapped_column(SQLEnum(AvatarTrainingType), default=AvatarTrainingType.PORTRAIT)
     status: Mapped[AvatarStatus] = mapped_column(SQLEnum(AvatarStatus), default=AvatarStatus.DRAFT)
     
     # FAL AI интеграция
     finetune_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
+    fal_request_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)  # 🆕 Request ID для отслеживания
     training_progress: Mapped[int] = mapped_column(Integer, default=0)  # 0-100
     training_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     training_completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
-    # Настройки обучения
+    # Настройки обучения - универсальные
     fal_mode: Mapped[str] = mapped_column(String(20), default="character")  # character, style, custom
     fal_iterations: Mapped[int] = mapped_column(Integer, default=500)
-    fal_priority: Mapped[str] = mapped_column(String(20), default="quality")  # quality, speed, balanced
+    fal_priority: Mapped[FALPriority] = mapped_column(SQLEnum(FALPriority), default=FALPriority.QUALITY)  # 🔄 Обновлено на enum
     trigger_word: Mapped[str] = mapped_column(String(50), default="TOK")
     lora_rank: Mapped[int] = mapped_column(Integer, default=32)
+    
+    # 🆕 Настройки обучения - специфичные для FAL AI
+    learning_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Скорость обучения
+    finetune_type: Mapped[FALFinetuneType] = mapped_column(SQLEnum(FALFinetuneType), default=FALFinetuneType.LORA)  # 🔄 Обновлено на enum
+    finetune_comment: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Комментарий к обучению
+    
+    # 🆕 Portrait-specific настройки (flux-lora-portrait-trainer)
+    trigger_phrase: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # Для портретного тренера
+    steps: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # Шаги для портретного тренера (вместо iterations)
+    multiresolution_training: Mapped[bool] = mapped_column(Boolean, default=True)  # Мультиразрешающее обучение
+    subject_crop: Mapped[bool] = mapped_column(Boolean, default=True)  # Автообрезка субъекта
+    create_masks: Mapped[bool] = mapped_column(Boolean, default=False)  # Создание масок
+    
+    # 🆕 Style-specific настройки (flux-pro-trainer)
+    captioning: Mapped[bool] = mapped_column(Boolean, default=True)  # Автогенерация подписей
+    
+    # 🆕 Результаты обучения
+    diffusers_lora_file_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # URL LoRA файла
+    config_file_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # URL конфигурации
+    training_logs: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Логи обучения
+    training_error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # Ошибки обучения
+    
+    # 🆕 Webhook и отслеживание
+    webhook_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # URL для уведомлений
+    last_status_check: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)  # Последняя проверка статуса
     
     # Хранение данных
     avatar_data: Mapped[Dict] = mapped_column(JSON, default=dict)
     training_config: Mapped[Dict] = mapped_column(JSON, default=dict)
+    fal_response_data: Mapped[Dict] = mapped_column(JSON, default=dict)  # 🆕 Полный ответ FAL AI
     
     # Статистика
     photos_count: Mapped[int] = mapped_column(Integer, default=0)

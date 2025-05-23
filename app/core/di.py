@@ -121,9 +121,27 @@ def get_user_service_with_session(session: AsyncSession) -> UserService:
     return UserService(session)
 
 
-def get_avatar_service(session: AsyncSession) -> AvatarService:
+@asynccontextmanager
+async def get_avatar_service():
     """
-    Получение сервиса для работы с аватарами
+    Контекстный менеджер для получения сервиса аватаров с автоматическим управлением сессией
+    """
+    session = get_db_session()
+    try:
+        avatar_service = AvatarService(session)
+        yield avatar_service
+        # Если дошли до этой точки без исключений, выполняем commit
+        await session.commit()
+    except Exception as e:
+        await session.rollback()
+        raise
+    finally:
+        await session.close()
+
+
+def get_avatar_service_with_session(session: AsyncSession) -> AvatarService:
+    """
+    Получение сервиса для работы с аватарами с переданной сессией
     """
     return AvatarService(session)
 

@@ -18,7 +18,7 @@ from app.handlers import (
     transcript_processing_handler,
 )
 from app.handlers.gallery import router as gallery_router
-from app.handlers.avatar import avatar_handler, register_avatar_handlers
+from app.handlers.avatar import register_avatar_handlers
 from app.handlers.fallback import fallback_router
 from app.keyboards.main import get_main_menu
 

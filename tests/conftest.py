@@ -1,84 +1,71 @@
 """
-Конфигурация для тестов
+Конфигурация pytest для интеграционных тестов
 """
 import asyncio
-import os
-from typing import AsyncGenerator, Generator
-
 import pytest
 import pytest_asyncio
-from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
-from sqlalchemy.orm import sessionmaker
-
-from app.core.config import settings
-from app.database.models import Base
-
-# Переопределяем URL базы данных для тестов
-TEST_DATABASE_URL = settings.DATABASE_URL.replace(
-    f"/{settings.POSTGRES_DB}", f"/{settings.POSTGRES_DB}_test"
-)
-
-# Создаем тестовый движок
-test_async_engine = create_async_engine(
-    TEST_DATABASE_URL,
-    pool_size=5,
-    max_overflow=10,
-    pool_timeout=30,
-    pool_recycle=1800,
-    echo=False
-)
-
-# Создаем тестовую фабрику сессий
-TestAsyncSessionLocal = sessionmaker(
-    test_async_engine,
-    class_=AsyncSession,
-    expire_on_commit=False
-)
+from typing import Generator
 
 
 @pytest.fixture(scope="session")
-def event_loop() -> Generator:
-    """
-    Создает event loop для тестов.
-    Нужен для корректной работы pytest-asyncio.
-    """
+def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
+    """Создает event loop для всей сессии тестов"""
     try:
         loop = asyncio.get_running_loop()
     except RuntimeError:
         loop = asyncio.new_event_loop()
+    
     yield loop
-    loop.close()
-
-
-@pytest_asyncio.fixture(scope="session")
-async def test_db_setup() -> AsyncGenerator:
-    """
-    Создает тестовую базу данных и таблицы перед тестами,
-    удаляет их после завершения тестов.
-    """
-    # Создаем таблицы
-    async with test_async_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
     
-    yield
-    
-    # Удаляем таблицы
-    async with test_async_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+    # Очистка после завершения тестов
+    try:
+        _cancel_all_tasks(loop)
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.run_until_complete(loop.shutdown_default_executor())
+    finally:
+        asyncio.set_event_loop(None)
+        loop.close()
 
 
-@pytest_asyncio.fixture
-async def db_session(test_db_setup) -> AsyncGenerator[AsyncSession, None]:
-    """
-    Создает новую сессию для каждого теста.
-    """
-    async with TestAsyncSessionLocal() as session:
-        try:
-            yield session
-            await session.commit()
-        except Exception:
-            await session.rollback()
-            raise
-        finally:
-            await session.close()
+def _cancel_all_tasks(loop: asyncio.AbstractEventLoop) -> None:
+    """Отменяет все pending задачи в event loop"""
+    to_cancel = asyncio.all_tasks(loop)
+    if not to_cancel:
+        return
+
+    for task in to_cancel:
+        task.cancel()
+
+    loop.run_until_complete(
+        asyncio.gather(*to_cancel, return_exceptions=True)
+    )
+
+    for task in to_cancel:
+        if task.cancelled():
+            continue
+        if task.exception() is not None:
+            loop.call_exception_handler({
+                'message': 'unhandled exception during asyncio.run() shutdown',
+                'exception': task.exception(),
+                'task': task,
+            })
+
+
+# Маркеры для разных типов тестов
+pytest_markers = [
+    "database: marks tests as database integration tests",
+    "redis: marks tests as redis integration tests", 
+    "minio: marks tests as minio integration tests",
+    "integration: marks tests as full integration tests",
+    "slow: marks tests as slow running tests"
+]
+
+
+def pytest_configure(config):
+    """Конфигурация pytest"""
+    for marker in pytest_markers:
+        config.addinivalue_line("markers", marker)
+
+
+# Настройки asyncio для pytest
+pytest_plugins = ('pytest_asyncio',) 

@@ -17,6 +17,11 @@ class TranscribeStates(StatesGroup):
 class AvatarStates(StatesGroup):
     """Состояния для создания и управления аватарами"""
     
+    # Выбор типа обучения (новые состояния)
+    selecting_training_type = State()     # Выбор типа обучения (portrait/style)
+    viewing_training_info = State()       # Просмотр информации о типе
+    viewing_training_comparison = State() # Сравнение типов обучения
+    
     # Основные состояния
     menu = State()                    # Главное меню аватаров
     selecting_type = State()          # Выбор типа аватара (character/style/custom)

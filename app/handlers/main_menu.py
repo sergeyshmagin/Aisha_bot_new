@@ -81,12 +81,11 @@ async def show_avatar_menu(call: CallbackQuery, state: FSMContext):
     """
     Показывает меню аватаров - перенаправляет на правильный обработчик.
     """
-    # Импортируем обработчик аватаров
-    from app.handlers.avatar import AvatarHandler
+    # Импортируем новый обработчик аватаров
+    from app.handlers.avatar import avatar_main_handler
     
-    # Создаем экземпляр обработчика и вызываем напрямую
-    avatar_handler = AvatarHandler()
-    await avatar_handler.show_avatar_menu(call, state)
+    # Вызываем метод нового обработчика
+    await avatar_main_handler.show_avatar_menu(call, state)
 
 @router.callback_query(F.data == "back_to_main")
 async def back_to_main(call: CallbackQuery):
