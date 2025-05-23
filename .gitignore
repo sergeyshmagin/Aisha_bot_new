@@ -79,10 +79,11 @@ ipython_config.py
 
 # pipenv
 Pipfile.lock
+aisha_v1/
 
 # poetry
 poetry.lock
-
+*_venv/
 # mypy
 .mypy_cache/
 .dmypy.json
