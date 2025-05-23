@@ -158,7 +158,7 @@ def get_transcript_actions_keyboard(transcript_id: str | UUID) -> InlineKeyboard
         ),
         InlineKeyboardButton(
             text="⬅️ Назад",
-            callback_data=f"transcript_back_{transcript_id_str}"
+            callback_data="transcribe_back_to_menu"
         )
     )
     return builder.as_markup()
@@ -166,24 +166,19 @@ def get_transcript_actions_keyboard(transcript_id: str | UUID) -> InlineKeyboard
 
 def get_back_to_transcript_keyboard(transcript_id: str | UUID) -> InlineKeyboardMarkup:
     """
-    Клавиатура возврата к карточке транскрипта
+    Клавиатура возврата в главное меню транскрипции
     
     Args:
-        transcript_id: ID транскрипта
+        transcript_id: ID транскрипта (не используется, оставлен для совместимости)
         
     Returns:
-        InlineKeyboardMarkup с кнопкой возврата
+        InlineKeyboardMarkup с кнопкой возврата в меню
     """
-    uuid_obj = safe_uuid(transcript_id)
-    if not uuid_obj:
-        raise ValueError(f"Invalid UUID: {transcript_id}")
-    transcript_id_str = str(uuid_obj)
-    
     builder = InlineKeyboardBuilder()
     builder.row(
         InlineKeyboardButton(
-            text="⬅️ Назад к транскрипту",
-            callback_data=f"transcript_back_{transcript_id_str}"
+            text="⬅️ Назад в меню",
+            callback_data="transcribe_back_to_menu"
         )
     )
     return builder.as_markup()

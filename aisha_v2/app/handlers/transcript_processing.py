@@ -62,7 +62,17 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
         """
         logger.info("Регистрация обработчиков транскриптов")
         
+        # ВАЖНО: Специфичные обработчики должны быть зарегистрированы РАНЬШЕ универсальных!
+        
+        # Обработка текста (специфичная - только в состоянии waiting_text)
+        self.router.message.register(
+            self._handle_text_processing,
+            F.document,
+            StateFilter(TranscribeStates.waiting_text)
+        )
+        
         # Универсальные обработчики аудио (работают в любом состоянии)
+        # Регистрируем ПОСЛЕ специфичных обработчиков
         self.router.message.register(
             self._handle_audio_universal,
             F.audio
@@ -73,11 +83,10 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
             F.voice
         )
         
-        # Обработка текста
-        self.router.message.register(
-            self._handle_text_processing,
-            F.text,
-            StateFilter(TranscribeStates.waiting_text)
+        # Обработка старых callback данных "назад к транскрипту" для совместимости
+        self.router.callback_query.register(
+            self._handle_legacy_back_to_transcript,
+            F.data.startswith("transcript_back_")
         )
         
         # Обработка форматирования транскрипта (legacy)
@@ -456,7 +465,7 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
 
     async def _handle_transcript_actions(self, call: CallbackQuery, state: FSMContext) -> None:
         """
-        Обработка действий с транскриптом: summary, todo, protocol, back
+        Обработка действий с транскриптом: summary, todo, protocol
         """
         try:
             # Разбираем callback data: transcript_summary_<id>, transcript_todo_<id>, etc.
@@ -465,46 +474,16 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                 await call.answer("❌ Неверный формат данных")
                 return
             
-            action = parts[1]  # summary, todo, protocol, back
+            action = parts[1]  # summary, todo, protocol
             transcript_id = safe_uuid(parts[2])
             
             if not transcript_id:
                 await call.answer("❌ Неверный ID транскрипта")
                 return
-                
-            if action == "back":
-                # Возврат к карточке транскрипта
-                async with self.get_session() as session:
-                    transcript_service = get_transcript_service(session)
-                    user_service = get_user_service(session)
-                    user = await user_service.get_user_by_telegram_id(call.from_user.id)
-                    
-                    if not user:
-                        await call.answer("❌ Ошибка: пользователь не найден")
-                        return
-                        
-                    transcript = await transcript_service.get_transcript(user.id, transcript_id)
-                    if not transcript:
-                        await call.answer("❌ Транскрипт не найден")
-                        return
-                    
-                    # Получаем preview текста
-                    content = await transcript_service.get_transcript_content(user.id, transcript_id)
-                    if content:
-                        try:
-                            text = content.decode("utf-8")
-                            transcript["preview"] = text[:300]
-                        except Exception:
-                            pass
-                    
-                    card_text = self.render_transcript_card(transcript)
-                    keyboard = get_transcript_actions_keyboard(str(transcript_id))
-                    await call.message.edit_text(card_text, reply_markup=keyboard, parse_mode="HTML")
-                return
             
             # Обработка форматирования через GPT
             await state.set_state(TranscribeStates.format_selection)
-            # Отправляем новое сообщение вместо редактирования (нельзя edit_text для документа)
+            # Отправляем новое сообщение вместо редактирования
             processing_msg = await call.message.answer("⏳ Обрабатываю транскрипт с помощью GPT...")
 
             async with self.get_session() as session:
@@ -519,7 +498,7 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                 content = await transcript_service.get_transcript_content(user.id, transcript_id)
                 if not content:
                     logger.error(f"[GPT] Не удалось получить текст транскрипта: {transcript_id}")
-                    await call.message.edit_text("❌ Ошибка: не удалось получить текст транскрипта")
+                    await processing_msg.edit_text("❌ Ошибка: не удалось получить текст транскрипта")
                     return
 
                 text = content.decode('utf-8')
@@ -540,7 +519,7 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                     file_prefix = "protocol"
                 else:
                     logger.error(f"[GPT] Неизвестный формат: {action}")
-                    await call.message.edit_text("❌ Неизвестный формат")
+                    await processing_msg.edit_text("❌ Неизвестный формат")
                     return
 
                 # Отправляем результат как файл
@@ -559,7 +538,70 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
         except Exception as e:
             logger.exception(f"[ACTIONS] Ошибка при обработке действий транскрипта: {e}")
             await state.set_state(TranscribeStates.error)
-            await call.message.edit_text(
+            await call.message.answer(
                 "❌ Произошла ошибка при обработке.\nПожалуйста, попробуйте еще раз.",
+                reply_markup=get_back_to_menu_keyboard()
+            )
+
+    async def _handle_legacy_back_to_transcript(self, call: CallbackQuery, state: FSMContext) -> None:
+        """
+        Обработка старых callback данных "назад к транскрипту" для совместимости
+        """
+        try:
+            # Разбираем callback data: transcript_back_<id>
+            parts = call.data.split("_", 2)
+            if len(parts) < 3:
+                await call.answer("❌ Неверный формат данных")
+                return
+            
+            transcript_id = safe_uuid(parts[2])
+            if not transcript_id:
+                await call.answer("❌ Неверный ID транскрипта")
+                return
+            
+            # Отправляем новое сообщение вместо редактирования
+            processing_msg = await call.message.answer("⏳ Обрабатываю транскрипт с помощью GPT...")
+
+            async with self.get_session() as session:
+                transcript_service = get_transcript_service(session)
+                user_service = get_user_service(session)
+                user = await user_service.get_user_by_telegram_id(call.from_user.id)
+                
+                if not user:
+                    await call.answer("❌ Ошибка: пользователь не найден")
+                    return
+                    
+                content = await transcript_service.get_transcript_content(user.id, transcript_id)
+                if not content:
+                    logger.error(f"[GPT] Не удалось получить текст транскрипта: {transcript_id}")
+                    await processing_msg.edit_text("❌ Ошибка: не удалось получить текст транскрипта")
+                    return
+
+                text = content.decode('utf-8')
+                text_service = get_text_processing_service(session)
+                
+                # Обрабатываем текст через GPT
+                formatted_text = await text_service.format_summary(text)
+                format_name = "Краткое содержание"
+                file_prefix = "summary"
+
+                # Отправляем результат как файл
+                from aiogram.types import BufferedInputFile
+                file_data = formatted_text.encode('utf-8')
+                input_file = BufferedInputFile(file_data, filename=f"{file_prefix}_{transcript_id}.txt")
+                
+                await processing_msg.delete()
+                await call.message.answer_document(
+                    document=input_file,
+                    caption=f"📄 {format_name}",
+                    reply_markup=get_back_to_transcript_keyboard(transcript_id)
+                )
+                await state.set_state(TranscribeStates.result)
+
+        except Exception as e:
+            logger.exception(f"[LEGACY_BACK] Ошибка при обработке старых callback данных: {e}")
+            await state.set_state(TranscribeStates.error)
+            await call.message.answer(
+                "❌ Произошла ошибка при обработке старых callback данных.\nПожалуйста, попробуйте еще раз.",
                 reply_markup=get_back_to_menu_keyboard()
             )

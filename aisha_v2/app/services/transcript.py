@@ -4,7 +4,7 @@
 import io
 import logging
 from datetime import timedelta
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union
 from uuid import UUID
 
 from aisha_v2.app.core.config import settings
@@ -14,6 +14,20 @@ from aisha_v2.app.services.base import BaseService
 from aisha_v2.app.services.storage import StorageService
 
 logger = logging.getLogger(__name__)
+
+def _normalize_user_id(user_id: Union[int, str, UUID]) -> Union[str, UUID]:
+    """Нормализует user_id в зависимости от того, что ожидает репозиторий"""
+    if isinstance(user_id, UUID):
+        return user_id
+    elif isinstance(user_id, str):
+        # Пытаемся преобразовать в UUID если это строка UUID
+        try:
+            return UUID(user_id)
+        except ValueError:
+            return user_id
+    else:
+        # Если это int, преобразуем в строку
+        return str(user_id)
 
 class TranscriptService(BaseService):
     """
@@ -27,7 +41,7 @@ class TranscriptService(BaseService):
 
     async def save_transcript(
         self,
-        user_id: int,
+        user_id: Union[int, str, UUID],
         audio_data: Optional[bytes] = None,
         transcript_data: bytes = None,
         metadata: Optional[Dict] = None
@@ -35,14 +49,15 @@ class TranscriptService(BaseService):
         """
         Сохраняет транскрипт в MinIO и БД (асинхронно)
         """
-        logger.info(f"[SAVE] Начало сохранения транскрипта для user_id={user_id}")
+        normalized_user_id = _normalize_user_id(user_id)
+        logger.info(f"[SAVE] Начало сохранения транскрипта для user_id={normalized_user_id}")
         
         if not transcript_data:
             logger.error("[SAVE] transcript_data отсутствует")
             return None
             
         transcript = await self.transcript_repo.create({
-            "user_id": user_id,
+            "user_id": normalized_user_id,
             "transcript_metadata": metadata or {}
         })
         transcript_id = transcript.id
@@ -51,7 +66,7 @@ class TranscriptService(BaseService):
         storage = StorageService()
         # Сохраняем аудио, если есть
         if audio_data:
-            audio_key = f"{user_id}/{transcript_id}/audio.mp3"
+            audio_key = f"{normalized_user_id}/{transcript_id}/audio.mp3"
             logger.info(f"[SAVE] Сохранение аудио: {audio_key}")
             success = await storage.upload_file(
                 bucket=self.bucket,
@@ -69,7 +84,7 @@ class TranscriptService(BaseService):
             logger.info(f"[SAVE] Аудио сохранено: {audio_key}")
             
         # Сохраняем текст транскрипта
-        transcript_key = f"{user_id}/{transcript_id}/transcript.txt"
+        transcript_key = f"{normalized_user_id}/{transcript_id}/transcript.txt"
         logger.info(f"[SAVE] Сохранение транскрипта: {transcript_key}")
         success = await storage.upload_file(
             bucket=self.bucket,
@@ -87,7 +102,7 @@ class TranscriptService(BaseService):
         logger.info(f"[SAVE] Транскрипт сохранен: {transcript_key}")
         
         # Получаем актуальный объект из БД
-        transcript = await self.transcript_repo.get_transcript_by_id(user_id, transcript_id)
+        transcript = await self.transcript_repo.get_transcript_by_id(normalized_user_id, transcript_id)
         logger.info(f"[SAVE] Возвращаю актуальный transcript: id={transcript.id}, transcript_key={transcript.transcript_key}")
         
         return {
@@ -100,13 +115,14 @@ class TranscriptService(BaseService):
 
     async def get_transcript(
         self,
-        user_id: int,
+        user_id: Union[int, str, UUID],
         transcript_id: UUID
     ) -> Optional[Dict]:
         """
         Получает транскрипт по ID (с presigned URL)
         """
-        transcript = await self.transcript_repo.get_transcript_by_id(user_id, transcript_id)
+        normalized_user_id = _normalize_user_id(user_id)
+        transcript = await self.transcript_repo.get_transcript_by_id(normalized_user_id, transcript_id)
         if not transcript:
             return None
         expires = settings.MINIO_PRESIGNED_EXPIRES or 3600
@@ -138,16 +154,17 @@ class TranscriptService(BaseService):
             "metadata": transcript.transcript_metadata
         }
 
-    async def get_user_transcripts(self, user_id: int) -> List[Dict]:
+    async def get_user_transcripts(self, user_id: Union[int, str, UUID]) -> List[Dict]:
         """LEGACY: Получает все транскрипты пользователя из БД (без MinIO). Использовать только для миграции."""
         return await self.list_transcripts(user_id, limit=1000, offset=0)
 
     async def list_transcripts(
-        self, user_id: int, limit: int = 10, offset: int = 0
+        self, user_id: Union[int, str, UUID], limit: int = 10, offset: int = 0
     ) -> List[Dict]:
         """LEGACY: Получает список транскриптов пользователя из БД (без MinIO). Использовать только для миграции."""
+        normalized_user_id = _normalize_user_id(user_id)
         transcripts = await self.transcript_repo.get_user_transcripts(
-            user_id, limit, offset
+            normalized_user_id, limit, offset
         )
         result = []
         for transcript in transcripts:
@@ -165,9 +182,10 @@ class TranscriptService(BaseService):
             })
         return result
 
-    async def delete_transcript(self, user_id: int, transcript_id: UUID) -> bool:
+    async def delete_transcript(self, user_id: Union[int, str, UUID], transcript_id: UUID) -> bool:
         """Удаляет транскрипт (и файлы из MinIO)"""
-        transcript = await self.transcript_repo.get_transcript_by_id(user_id, transcript_id)
+        normalized_user_id = _normalize_user_id(user_id)
+        transcript = await self.transcript_repo.get_transcript_by_id(normalized_user_id, transcript_id)
         if not transcript:
             return False
         storage = StorageService()
@@ -182,14 +200,15 @@ class TranscriptService(BaseService):
             logger.exception(f"Ошибка при удалении транскрипта из MinIO: {e}")
         return await self.transcript_repo.delete(transcript_id)
 
-    async def get_transcript_content(self, user_id: int, transcript_id: UUID) -> Optional[bytes]:
+    async def get_transcript_content(self, user_id: Union[int, str, UUID], transcript_id: UUID) -> Optional[bytes]:
         """Получает содержимое транскрипта из MinIO"""
-        logger.info(f"[GET_CONTENT] START: user_id={user_id}, transcript_id={transcript_id}")
+        normalized_user_id = _normalize_user_id(user_id)
+        logger.info(f"[GET_CONTENT] START: user_id={normalized_user_id}, transcript_id={transcript_id}")
         try:
-            transcript = await self.transcript_repo.get_transcript_by_id(user_id, transcript_id)
+            transcript = await self.transcript_repo.get_transcript_by_id(normalized_user_id, transcript_id)
             logger.info(f"[GET_CONTENT] После get_transcript_by_id: transcript найден={transcript is not None}")
             if not transcript:
-                logger.error(f"[GET_CONTENT] Транскрипт не найден в БД: user_id={user_id}, transcript_id={transcript_id}")
+                logger.error(f"[GET_CONTENT] Транскрипт не найден в БД: user_id={normalized_user_id}, transcript_id={transcript_id}")
                 return None
             logger.info(f"[GET_CONTENT] transcript.transcript_key={transcript.transcript_key}")
             storage = StorageService()

@@ -145,21 +145,30 @@ class TranscriptMainHandler(TranscriptBaseHandler):
         """
         async with self.get_session() as session:
             transcript_service = get_transcript_service(session)
-            transcripts = await transcript_service.list_transcripts(user_id, limit=self.PAGE_SIZE, offset=page * self.PAGE_SIZE)
+            # Преобразуем user_id в строку для совместимости с TranscriptService
+            user_id_str = str(user_id) if not isinstance(user_id, str) else user_id
+            transcripts = await transcript_service.list_transcripts(user_id_str, limit=self.PAGE_SIZE, offset=page * self.PAGE_SIZE)
             total = len(transcripts)
             if not transcripts:
                 text = "📜 История транскриптов:\n\nПока пусто"
                 kb = get_back_to_menu_keyboard()
-                if edit and hasattr(message_or_call, 'message'):
-                    await message_or_call.message.edit_text(text, reply_markup=kb)
+                if edit and hasattr(message_or_call, 'message') and message_or_call.message.text:
+                    try:
+                        await message_or_call.message.edit_text(text, reply_markup=kb)
+                    except Exception:
+                        # Если не удалось отредактировать, отправляем новое сообщение
+                        await message_or_call.message.answer(text, reply_markup=kb)
                 else:
                     await message_or_call.answer(text, reply_markup=kb)
                 return
             text = f"📜 <b>История транскриптов</b> (стр. {page+1}):\n\n"
             builder = InlineKeyboardBuilder()
             for t in transcripts:
-                file_name = t.get("metadata", {}).get("file_name") or t.get("id")
+                # Транскрипты уже возвращаются как словари из сервиса
+                file_name = t.get("metadata", {}).get("file_name") or str(t.get("id"))
                 created_at = t.get("created_at", "—")
+                if isinstance(created_at, str):
+                    created_at = created_at.replace('T', ' ')[:16]
                 transcript_type = "Аудио" if t.get("metadata", {}).get("source") == "audio" else "Текст"
                 btn_text = f"{file_name} | {created_at} | {transcript_type}"
                 builder.row(InlineKeyboardButton(text=btn_text, callback_data=f"transcribe_open_{t['id']}"))
@@ -172,8 +181,12 @@ class TranscriptMainHandler(TranscriptBaseHandler):
             if nav_buttons:
                 builder.row(*nav_buttons)
             builder.row(InlineKeyboardButton(text="◀️ Назад в меню", callback_data="transcribe_back_to_menu"))
-            if edit and hasattr(message_or_call, 'message'):
-                await message_or_call.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+            if edit and hasattr(message_or_call, 'message') and message_or_call.message.text:
+                try:
+                    await message_or_call.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+                except Exception:
+                    # Если не удалось отредактировать, отправляем новое сообщение
+                    await message_or_call.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
             else:
                 await message_or_call.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
 
@@ -187,7 +200,7 @@ class TranscriptMainHandler(TranscriptBaseHandler):
             if not user:
                 await message.reply("❌ Ошибка: пользователь не найден")
                 return
-            await self._send_history_page(message, user.id, page=0)
+            await self._send_history_page(message, str(user.id), page=0)
 
     async def _handle_history_page(self, call: CallbackQuery, state: FSMContext):
         """
@@ -201,7 +214,7 @@ class TranscriptMainHandler(TranscriptBaseHandler):
                 if not user:
                     await call.answer("Ошибка: пользователь не найден", show_alert=True)
                     return
-                await self._send_history_page(call, user.id, page=page, edit=True)
+                await self._send_history_page(call, str(user.id), page=page, edit=True)
         except Exception as e:
             logger.exception(f"Ошибка пагинации истории: {e}")
             await call.answer("Ошибка пагинации", show_alert=True)
@@ -222,11 +235,11 @@ class TranscriptMainHandler(TranscriptBaseHandler):
                 if not user:
                     await call.answer("❌ Ошибка: пользователь не найден", show_alert=True)
                     return
-                transcript = await transcript_service.get_transcript(user.id, transcript_id)
+                transcript = await transcript_service.get_transcript(str(user.id), transcript_id)
                 if not transcript:
                     await call.answer("❌ Транскрипт не найден", show_alert=True)
                     return
-                content = await transcript_service.get_transcript_content(user.id, transcript_id)
+                content = await transcript_service.get_transcript_content(str(user.id), transcript_id)
                 if content:
                     try:
                         text = content.decode("utf-8")
@@ -237,7 +250,17 @@ class TranscriptMainHandler(TranscriptBaseHandler):
                 from aisha_v2.app.handlers.transcript_processing import TranscriptProcessingHandler
                 card_text = TranscriptProcessingHandler().render_transcript_card(transcript)
                 keyboard = get_transcript_actions_keyboard(str(transcript["id"]))
-                await call.message.edit_text(card_text, reply_markup=keyboard, parse_mode="HTML")
+                
+                # Проверяем, можно ли редактировать сообщение (есть ли в нем текст)
+                if call.message.text:
+                    try:
+                        await call.message.edit_text(card_text, reply_markup=keyboard, parse_mode="HTML")
+                    except Exception:
+                        # Если не удалось отредактировать, отправляем новое сообщение
+                        await call.message.answer(card_text, reply_markup=keyboard, parse_mode="HTML")
+                else:
+                    # Если сообщение содержит документ или другой контент, отправляем новое
+                    await call.message.answer(card_text, reply_markup=keyboard, parse_mode="HTML")
         except Exception as e:
             logger.exception(f"Ошибка при открытии транскрипта (callback): {e}")
             await call.answer("Ошибка при открытии транскрипта", show_alert=True)
@@ -320,12 +343,12 @@ class TranscriptMainHandler(TranscriptBaseHandler):
                 if not user:
                     await message.answer("❌ Ошибка: пользователь не найден")
                     return
-                transcript = await transcript_service.get_transcript(user.id, transcript_id)
+                transcript = await transcript_service.get_transcript(str(user.id), transcript_id)
                 if not transcript:
                     await message.answer("❌ Транскрипт не найден")
                     return
                 # Получаем preview текста
-                content = await transcript_service.get_transcript_content(user.id, transcript_id)
+                content = await transcript_service.get_transcript_content(str(user.id), transcript_id)
                 if content:
                     try:
                         text = content.decode("utf-8")
@@ -376,7 +399,7 @@ class TranscriptMainHandler(TranscriptBaseHandler):
                     if not user:
                         await call.answer("❌ Ошибка: пользователь не найден", show_alert=True)
                         return
-                    await self._send_history_page(call, user.id, page=0, edit=True)
+                    await self._send_history_page(call, str(user.id), page=0, edit=True)
                 
             elif action == "back":
                 await state.clear()
