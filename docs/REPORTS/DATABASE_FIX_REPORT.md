@@ -29,7 +29,7 @@ def downgrade() -> None:
 ```
 
 ### 3. Проверка модели
-Модель `Avatar` была **правильно определена** в `aisha_v2/app/database/models.py`:
+Модель `Avatar` была **правильно определена** в `app/database/models.py`:
 ```python
 class Avatar(Base):
     """Модель аватара с расширенным функционалом для FAL AI"""
@@ -124,7 +124,7 @@ WHERE table_schema = 'public' AND table_name LIKE '%avatar%';
 
 ### 3. Тесты проходят
 ```bash
-$ python -m pytest aisha_v2/tests/test_avatar_fixes.py::TestBaseServiceConstructors -v
+$ python -m pytest tests/test_avatar_fixes.py::TestBaseServiceConstructors -v
 ================================ 4 passed ================================
 ```
 

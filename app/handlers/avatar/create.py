@@ -1,12 +1,12 @@
 """
-Обработчики создания аватара
-Часть основного workflow создания аватара
+Обработчики создания аватаров
+Workflow: Тип обучения → Пол → Имя → Загрузка фото
 """
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 
-from app.keyboards.avatar import get_avatar_gender_keyboard
+from app.keyboards.avatar_clean import get_avatar_gender_keyboard
 from app.handlers.state import AvatarStates
 from app.core.logger import get_logger
 
@@ -27,16 +27,13 @@ async def start_avatar_creation(callback: CallbackQuery, state: FSMContext):
         logger.exception(f"Ошибка при начале создания аватара: {e}")
         await callback.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True)
 
+@router.callback_query(F.data == "select_gender")
 async def show_gender_selection(callback: CallbackQuery, state: FSMContext):
     """Показывает выбор пола аватара"""
     try:
-        data = await state.get_data()
-        training_type = data.get("training_type", "portrait")
-        
-        text = f"""
+        text = """
 🎯 **Выберите пол аватара**
 
-Тип обучения: {training_type.title()}
 Это поможет настроить оптимальные параметры генерации.
 """
         
@@ -59,10 +56,10 @@ async def show_gender_selection(callback: CallbackQuery, state: FSMContext):
 async def select_avatar_gender(callback: CallbackQuery, state: FSMContext):
     """Обработка выбора пола аватара"""
     try:
-        gender = callback.data.split("_", 2)[2]  # male, female, other
+        gender = callback.data.split("_", 2)[2]  # male, female
         
-        # Валидируем пол
-        if gender not in ["male", "female", "other"]:
+        # Валидируем пол (только мужской и женский)
+        if gender not in ["male", "female"]:
             await callback.answer("❌ Неизвестный пол", show_alert=True)
             return
         
@@ -77,10 +74,10 @@ async def select_avatar_gender(callback: CallbackQuery, state: FSMContext):
 
 ✅ **Требования:**
 • От 2 до 50 символов
-• Буквы, цифры, пробелы
-• Без специальных символов
+• Любые буквы и цифры
+• Пробелы разрешены
 
-💡 **Примеры:** Алексей, Maya, Cyber Alex
+💡 **Примеры:** Алексей, Maya, Cyber Alex, Анна-Мария
 
 ✍️ **Напишите имя:**
 """
@@ -98,43 +95,33 @@ async def select_avatar_gender(callback: CallbackQuery, state: FSMContext):
         logger.exception(f"Ошибка при выборе пола аватара: {e}")
         await callback.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True)
 
-@router.message(F.text, AvatarStates.entering_name)
+@router.message(AvatarStates.entering_name)
 async def process_avatar_name(message: Message, state: FSMContext):
-    """Обработка ввода имени аватара"""
+    """Обработка ввода имени аватара - принимает любые символы"""
     try:
         name = message.text.strip()
         
-        # Валидация имени
+        # Простая валидация - только длина
+        if not name:
+            await message.answer("❌ Имя не может быть пустым. Попробуйте еще раз:")
+            return
+            
         if len(name) < 2:
-            await message.answer("❌ Имя слишком короткое. Минимум 2 символа.")
+            await message.answer("❌ Имя слишком короткое. Минимум 2 символа:")
             return
-        
+            
         if len(name) > 50:
-            await message.answer("❌ Имя слишком длинное. Максимум 50 символов.")
+            await message.answer("❌ Имя слишком длинное. Максимум 50 символов:")
             return
         
-        # Проверка на недопустимые символы
-        allowed_chars = set("абвгдеёжзийклмнопрстуфхцчшщъыьэюяABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789 -_")
-        if not all(c in allowed_chars for c in name):
-            await message.answer("❌ Используйте только буквы, цифры, пробелы и дефисы.")
-            return
+        # ✅ Никаких ограничений на символы - принимаем любые буквы и цифры
+        await state.update_data(avatar_name=name)
         
-        # Сохраняем имя
-        await state.update_data(name=name)
-        
-        # Показываем итоговую информацию и переход к загрузке фото
-        data = await state.get_data()
-        training_type = data.get("training_type", "portrait")
-        gender = data.get("gender", "other")
-        
-        gender_text = {"male": "👨 Мужской", "female": "👩 Женский", "other": "🤖 Другое"}
-        
+        # Показываем успешное сохранение имени и переход к загрузке фото
         text = f"""
-✅ **Аватар настроен!**
+✅ **Имя аватара сохранено!**
 
 🎭 **Имя:** {name}
-🎯 **Тип обучения:** {training_type.title()}
-👥 **Пол:** {gender_text.get(gender, "🤖 Другое")}
 
 📸 **Следующий шаг:** Загрузка фотографий
 
@@ -143,9 +130,6 @@ async def process_avatar_name(message: Message, state: FSMContext):
 
 🚀 **Готовы загружать фото?**
 """
-        
-        # Создаем клавиатуру для перехода к загрузке
-        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
@@ -156,8 +140,8 @@ async def process_avatar_name(message: Message, state: FSMContext):
             ],
             [
                 InlineKeyboardButton(
-                    text="◀️ Изменить настройки",
-                    callback_data="select_training_type"
+                    text="◀️ Изменить имя",
+                    callback_data="select_gender"
                 )
             ]
         ])
@@ -172,27 +156,6 @@ async def process_avatar_name(message: Message, state: FSMContext):
         
     except Exception as e:
         logger.exception(f"Ошибка при обработке имени аватара: {e}")
-        await message.answer("❌ Произошла ошибка. Попробуйте ввести имя еще раз.")
+        await message.answer("❌ Произошла ошибка. Попробуйте еще раз.")
 
-@router.callback_query(F.data == "start_photo_upload")
-async def start_photo_upload(callback: CallbackQuery, state: FSMContext):
-    """Начало загрузки фотографий"""
-    try:
-        await callback.message.edit_text(
-            text="🔄 Подготавливаем загрузку фотографий...",
-            parse_mode="Markdown"
-        )
-        
-        # Здесь будет переход к модулю загрузки фото
-        # TODO: Реализовать в следующем этапе
-        
-        await callback.message.edit_text(
-            text="🚧 Загрузка фотографий в разработке...\n\nВозвращайтесь позже!",
-            parse_mode="Markdown"
-        )
-        
-        logger.info(f"Пользователь {callback.from_user.id} начал загрузку фото")
-        
-    except Exception as e:
-        logger.exception(f"Ошибка при начале загрузки фото: {e}")
-        await callback.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True) 
+# LEGACY - старая заглушка, теперь обработка в photo_upload.py# @router.callback_query(F.data == "start_photo_upload") # async def start_photo_upload_legacy(callback: CallbackQuery, state: FSMContext):#     """LEGACY: Заглушка начала загрузки фотографий - заменена на полнофункциональную систему"""#     pass 

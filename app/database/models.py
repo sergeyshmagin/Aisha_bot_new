@@ -17,7 +17,6 @@ from .base import Base
 class AvatarGender(str, Enum):
     MALE = "male"
     FEMALE = "female"
-    OTHER = "other"
 
 
 class AvatarStatus(str, Enum):

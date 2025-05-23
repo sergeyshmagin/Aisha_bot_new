@@ -21,14 +21,8 @@ from ..storage import StorageService
 logger = get_logger(__name__)
 
 
-class PhotoValidationResult:
-    """Результат валидации фотографии"""
-    
-    def __init__(self, is_valid: bool, errors: List[str] = None):
-        self.is_valid = is_valid
-        self.errors = errors or []
-        self.warnings: List[str] = []
-        self.metadata: Dict[str, Any] = {}
+# Импортируем PhotoValidationResult из нового модуля валидации
+from .photo_validation import PhotoValidationResult
 
 
 class PhotoUploadService(BaseService):
@@ -72,7 +66,7 @@ class PhotoUploadService(BaseService):
         """
         try:
             # Валидируем фотографию
-            validation = await self._validate_photo(photo_data)
+            validation = await self._validate_photo(photo_data, avatar_id)
             if not validation.is_valid:
                 raise ValueError(f"Фото не прошло валидацию: {', '.join(validation.errors)}")
             
@@ -278,80 +272,22 @@ class PhotoUploadService(BaseService):
             logger.exception(f"Ошибка при получении данных фотографии {photo_id}: {e}")
             raise
 
-    async def _validate_photo(self, photo_data: bytes) -> PhotoValidationResult:
+    async def _validate_photo(self, photo_data: bytes, avatar_id: UUID) -> PhotoValidationResult:
         """
-        Валидирует фотографию
+        Валидирует фотографию с использованием улучшенного валидатора
         
         Args:
             photo_data: Данные фотографии
+            avatar_id: ID аватара
             
         Returns:
             PhotoValidationResult: Результат валидации
         """
-        result = PhotoValidationResult(is_valid=True)
+        # Используем новый улучшенный валидатор из legacy проекта
+        from .photo_validation import PhotoValidationService
         
-        try:
-            # Проверяем размер файла
-            if len(photo_data) > settings.PHOTO_MAX_SIZE:
-                result.is_valid = False
-                result.errors.append(
-                    f"Размер файла {len(photo_data)} байт превышает лимит {settings.PHOTO_MAX_SIZE}"
-                )
-            
-            # Анализируем изображение с помощью PIL
-            try:
-                image = Image.open(io.BytesIO(photo_data))
-                width, height = image.size
-                format_name = image.format.lower() if image.format else 'unknown'
-                
-                result.metadata.update({
-                    'width': width,
-                    'height': height,
-                    'format': format_name,
-                    'mode': image.mode,
-                })
-                
-                # Проверяем формат
-                if format_name not in [f.lower() for f in settings.PHOTO_ALLOWED_FORMATS]:
-                    result.is_valid = False
-                    result.errors.append(f"Неподдерживаемый формат: {format_name}")
-                
-                # Проверяем разрешение
-                min_dimension = min(width, height)
-                if min_dimension < settings.PHOTO_MIN_RESOLUTION:
-                    result.is_valid = False
-                    result.errors.append(
-                        f"Разрешение {width}x{height} меньше минимального {settings.PHOTO_MIN_RESOLUTION}"
-                    )
-                
-                max_dimension = max(width, height)
-                if max_dimension > settings.PHOTO_MAX_RESOLUTION:
-                    result.warnings.append(
-                        f"Разрешение {width}x{height} больше рекомендуемого {settings.PHOTO_MAX_RESOLUTION}"
-                    )
-                
-                # TODO: Добавить детекцию лиц и NSFW контента
-                if settings.ENABLE_FACE_DETECTION:
-                    # Заглушка для детекции лиц
-                    result.metadata['has_face'] = True  # Пока всегда True
-                
-                # Простая оценка качества (на основе размера и разрешения)
-                quality_score = min(1.0, (min_dimension / settings.PHOTO_MIN_RESOLUTION) * 0.5 + 0.5)
-                result.metadata['quality_score'] = quality_score
-                
-                if quality_score < settings.QUALITY_THRESHOLD:
-                    result.warnings.append(f"Низкое качество изображения: {quality_score:.2f}")
-                
-            except Exception as e:
-                result.is_valid = False
-                result.errors.append(f"Ошибка анализа изображения: {str(e)}")
-            
-        except Exception as e:
-            logger.exception(f"Ошибка валидации фотографии: {e}")
-            result.is_valid = False
-            result.errors.append(f"Внутренняя ошибка валидации: {str(e)}")
-        
-        return result
+        validator = PhotoValidationService(self.session)
+        return await validator.validate_photo(photo_data, avatar_id)
 
     async def _check_photo_limits(self, avatar_id: UUID) -> None:
         """

@@ -4,7 +4,10 @@
 import asyncio
 import pytest
 import pytest_asyncio
-from typing import Generator
+from typing import Generator, AsyncGenerator
+from unittest.mock import AsyncMock
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @pytest.fixture(scope="session")
@@ -49,6 +52,34 @@ def _cancel_all_tasks(loop: asyncio.AbstractEventLoop) -> None:
                 'exception': task.exception(),
                 'task': task,
             })
+
+
+@pytest.fixture
+async def db_session() -> AsyncGenerator[AsyncSession, None]:
+    """
+    Мок-фикстура для сессии базы данных
+    Для полноценных тестов нужно будет заменить на реальную БД
+    """
+    # Создаем мок сессии
+    session = AsyncMock(spec=AsyncSession)
+    
+    # Настраиваем базовые методы
+    session.add = AsyncMock()
+    session.commit = AsyncMock()
+    session.rollback = AsyncMock()
+    session.refresh = AsyncMock()
+    session.delete = AsyncMock()
+    session.execute = AsyncMock()
+    
+    # Настраиваем execute для возврата результатов
+    mock_result = AsyncMock()
+    mock_result.scalar_one_or_none = AsyncMock(return_value=None)
+    mock_result.scalar = AsyncMock(return_value=0)
+    mock_result.scalars = AsyncMock()
+    mock_result.scalars.return_value.all = AsyncMock(return_value=[])
+    session.execute.return_value = mock_result
+    
+    yield session
 
 
 # Маркеры для разных типов тестов

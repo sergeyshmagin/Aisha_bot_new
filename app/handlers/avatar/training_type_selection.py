@@ -6,11 +6,7 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 
-from app.keyboards.avatar import (
-    get_training_type_keyboard,
-    get_training_type_confirmation_keyboard,
-    get_comparison_keyboard
-)
+from app.keyboards.avatar_clean import (    get_training_type_keyboard,    get_training_type_confirmation_keyboard,    get_comparison_keyboard)
 from app.texts.avatar import TRAINING_TYPE_TEXTS
 from app.handlers.state import AvatarStates
 from app.services.avatar.fal_training_service import FALTrainingService

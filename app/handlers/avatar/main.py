@@ -6,7 +6,7 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 
-from app.keyboards.avatar import get_avatar_main_menu
+from app.keyboards.avatar_clean import get_avatar_main_menu
 from app.texts.avatar import AvatarTexts  
 from app.handlers.state import AvatarStates
 from app.core.di import get_user_service, get_avatar_service

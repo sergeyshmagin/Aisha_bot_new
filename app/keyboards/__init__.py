@@ -2,7 +2,7 @@
 Экспорт клавиатур
 """
 from app.keyboards.main import get_main_menu
-from app.keyboards.avatar import *
+from app.keyboards.avatar_clean import *
 from app.keyboards.transcript import *
 # from app.keyboards.business import business_assistant_inline_keyboard  # Удалено, такой переменной нет
 
