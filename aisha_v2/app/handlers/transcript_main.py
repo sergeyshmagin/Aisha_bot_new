@@ -1,6 +1,10 @@
 """
---- LEGACY: основной обработчик транскриптов, не использовать напрямую ---
-# Используйте TranscriptProcessingHandler для всех новых сценариев
+--- LEGACY: основной обработчик транскриптов, частично устарел ---
+# Современные сценарии используют TranscriptProcessingHandler
+# Данный файл содержит:
+# - История транскриптов (актуально)
+# - Основное меню транскрибации (актуально)
+# - Обработка аудио/текста (LEGACY - перенесено в TranscriptProcessingHandler)
 """
 import logging
 from aiogram import Router, F
@@ -18,7 +22,7 @@ from aisha_v2.app.core.di import (
     get_user_service,
 )
 from aisha_v2.app.utils.uuid_utils import safe_uuid
-from aisha_v2.app.keyboards.transcript import get_transcript_menu_keyboard, get_back_to_menu_keyboard
+from aisha_v2.app.keyboards.transcript import get_transcript_menu_keyboard, get_back_to_menu_keyboard, get_transcript_actions_keyboard
 from aisha_v2.app.handlers.state import TranscribeStates
 
 logger = logging.getLogger(__name__)
@@ -29,18 +33,36 @@ class TranscriptMainHandler(TranscriptBaseHandler):
     Основной обработчик команд для работы с транскриптами (FSM).
     """
 
+    PAGE_SIZE = 5
+
     def __init__(self):
         self.router = Router()
+        # Команды
+        self.router.message.register(self._handle_open_transcript, F.text.regexp(r"^/open_"))  # legacy, можно удалить позже
+        self.router.message.register(self._handle_history_command, Command("history"))
+        
+        # Специфичные callback-обработчики (порядок важен!)
+        self.router.callback_query.register(self._handle_history_page, F.data.startswith("transcribe_history_page_"))
+        self.router.callback_query.register(self._handle_open_transcript_cb, F.data.startswith("transcribe_open_"))
+        
+        # Обработчик основных кнопок меню транскрибации (только transcribe_*)
+        self.router.callback_query.register(
+            self._handle_transcript_callback, 
+            F.data.in_(["transcribe_audio", "transcribe_text", "transcribe_history", "transcribe_back_to_menu"])
+        )
+        
+        # Универсальный обработчик (должен быть последним!)
+        self.router.callback_query.register(self._handle_unknown_callback)
 
     async def register_handlers(self):
         """Регистрация всех хендлеров"""
         self.router.message.register(self._handle_transcribe_command, Command("transcribe"))
         self.router.message.register(self._handle_transcribe_menu, StateFilter(TranscribeStates.menu), F.text == "🎤 Транскрибация")
-        self.router.message.register(self._handle_history_command, Command("history"))
-        self.router.message.register(self._handle_audio, F.audio, StateFilter(TranscribeStates.waiting_audio))
-        self.router.message.register(self._handle_voice, F.voice, StateFilter(TranscribeStates.waiting_audio))
-        self.router.message.register(self._handle_text, F.text, StateFilter(TranscribeStates.waiting_text))
-        self.router.callback_query.register(self._handle_transcript_callback, F.data.startswith("transcribe_"))
+        
+        # --- LEGACY: обработчики аудио/текста закомментированы, используется TranscriptProcessingHandler ---
+        # self.router.message.register(self._handle_audio, F.audio, StateFilter(TranscribeStates.waiting_audio))
+        # self.router.message.register(self._handle_voice, F.voice, StateFilter(TranscribeStates.waiting_audio))
+        # self.router.message.register(self._handle_text, F.text, StateFilter(TranscribeStates.waiting_text))
 
     async def _handle_transcribe_command(self, message: Message, state: FSMContext):
         """
@@ -92,96 +114,212 @@ class TranscriptMainHandler(TranscriptBaseHandler):
             await state.set_state(TranscribeStates.error)
             await message.answer("Произошла ошибка. Попробуйте позже.")
 
+    async def _send_history_page(self, message_or_call, user_id: int, page: int = 0, edit: bool = False):
+        """
+        Отправляет страницу истории транскриптов с inline-кнопками и пагинацией
+        """
+        async with self.get_session() as session:
+            transcript_service = get_transcript_service(session)
+            transcripts = await transcript_service.list_transcripts(user_id, limit=self.PAGE_SIZE, offset=page * self.PAGE_SIZE)
+            total = len(transcripts)
+            if not transcripts:
+                text = "📜 История транскриптов:\n\nПока пусто"
+                kb = get_back_to_menu_keyboard()
+                if edit and hasattr(message_or_call, 'message'):
+                    await message_or_call.message.edit_text(text, reply_markup=kb)
+                else:
+                    await message_or_call.answer(text, reply_markup=kb)
+                return
+            text = f"📜 <b>История транскриптов</b> (стр. {page+1}):\n\n"
+            builder = InlineKeyboardBuilder()
+            for t in transcripts:
+                file_name = t.get("metadata", {}).get("file_name") or t.get("id")
+                created_at = t.get("created_at", "—")
+                transcript_type = "Аудио" if t.get("metadata", {}).get("source") == "audio" else "Текст"
+                btn_text = f"{file_name} | {created_at} | {transcript_type}"
+                builder.row(InlineKeyboardButton(text=btn_text, callback_data=f"transcribe_open_{t['id']}"))
+            # Пагинация
+            nav_buttons = []
+            if page > 0:
+                nav_buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"transcribe_history_page_{page-1}"))
+            if total == self.PAGE_SIZE:
+                nav_buttons.append(InlineKeyboardButton("Вперёд ➡️", callback_data=f"transcribe_history_page_{page+1}"))
+            if nav_buttons:
+                builder.row(*nav_buttons)
+            builder.row(InlineKeyboardButton(text="◀️ Назад в меню", callback_data="transcribe_back_to_menu"))
+            if edit and hasattr(message_or_call, 'message'):
+                await message_or_call.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+            else:
+                await message_or_call.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+
     async def _handle_history_command(self, message: Message, state: FSMContext):
         """
-        LEGACY: История транскриптов через БД (текст хранится в БД). Использовать только для миграции.
+        История транскриптов с inline-кнопками и пагинацией
+        """
+        async with self.get_session() as session:
+            user_service = get_user_service(session)
+            user = await user_service.get_user_by_telegram_id(message.from_user.id)
+            if not user:
+                await message.reply("❌ Ошибка: пользователь не найден")
+                return
+            await self._send_history_page(message, user.id, page=0)
+
+    async def _handle_history_page(self, call: CallbackQuery, state: FSMContext):
+        """
+        Callback для смены страницы истории
         """
         try:
+            page = int(call.data.rsplit("_", 1)[-1])
             async with self.get_session() as session:
+                user_service = get_user_service(session)
+                user = await user_service.get_user_by_telegram_id(call.from_user.id)
+                if not user:
+                    await call.answer("Ошибка: пользователь не найден", show_alert=True)
+                    return
+                await self._send_history_page(call, user.id, page=page, edit=True)
+        except Exception as e:
+            logger.exception(f"Ошибка пагинации истории: {e}")
+            await call.answer("Ошибка пагинации", show_alert=True)
+
+    async def _handle_open_transcript_cb(self, call: CallbackQuery, state: FSMContext):
+        """
+        Callback для открытия карточки транскрипта из истории
+        """
+        try:
+            transcript_id = safe_uuid(call.data.replace("transcribe_open_", "").strip())
+            if not transcript_id:
+                await call.answer("❌ Неверный ID транскрипта", show_alert=True)
+                return
+            async with self.get_session() as session:
+                transcript_service = get_transcript_service(session)
+                user_service = get_user_service(session)
+                user = await user_service.get_user_by_telegram_id(call.from_user.id)
+                if not user:
+                    await call.answer("❌ Ошибка: пользователь не найден", show_alert=True)
+                    return
+                transcript = await transcript_service.get_transcript(user.id, transcript_id)
+                if not transcript:
+                    await call.answer("❌ Транскрипт не найден", show_alert=True)
+                    return
+                content = await transcript_service.get_transcript_content(user.id, transcript_id)
+                if content:
+                    try:
+                        text = content.decode("utf-8")
+                    except Exception:
+                        text = None
+                    if text:
+                        transcript["preview"] = text[:300]
+                from aisha_v2.app.handlers.transcript_processing import TranscriptProcessingHandler
+                card_text = TranscriptProcessingHandler().render_transcript_card(transcript)
+                keyboard = get_transcript_actions_keyboard(str(transcript["id"]))
+                await call.message.edit_text(card_text, reply_markup=keyboard, parse_mode="HTML")
+        except Exception as e:
+            logger.exception(f"Ошибка при открытии транскрипта (callback): {e}")
+            await call.answer("Ошибка при открытии транскрипта", show_alert=True)
+
+    # --- LEGACY: методы обработки аудио/текста перенесены в TranscriptProcessingHandler ---
+    # async def _handle_audio(self, message: Message, state: FSMContext):
+    #     """
+    #     Обработка аудио
+    #     
+    #     Args:
+    #         message: Объект сообщения
+    #         state: Состояние FSM
+    #     """
+    #     try:
+    #         from aisha_v2.app.handlers.transcript_processing import TranscriptProcessingHandler
+    #         
+    #         # Делегируем обработку специализированному обработчику
+    #         processing_handler = TranscriptProcessingHandler()
+    #         await processing_handler._handle_audio_processing(message, state)
+    #     except Exception as e:
+    #         logger.error(f"Ошибка при обработке аудио: {e}")
+    #         await state.set_state(TranscribeStates.error)
+    #         await message.reply("Произошла ошибка при обработке аудио.")
+    
+    # async def _handle_voice(self, message: Message, state: FSMContext):
+    #     """
+    #     Обработка голосового сообщения
+    #     
+    #     Args:
+    #         message: Объект сообщения
+    #         state: Состояние FSM
+    #     """
+    #     try:
+    #         from aisha_v2.app.handlers.transcript_processing import TranscriptProcessingHandler
+    #         
+    #         # Делегируем обработку специализированному обработчику
+    #         processing_handler = TranscriptProcessingHandler()
+    #         await processing_handler._handle_audio_processing(message, state)
+    #     except Exception as e:
+    #         logger.error(f"Ошибка при обработке голосового сообщения: {e}")
+    #         await state.set_state(TranscribeStates.error)
+    #         await message.reply("Произошла ошибка при обработке голосового сообщения.")
+    
+    # async def _handle_text(self, message: Message, state: FSMContext):
+    #     """
+    #     Обработка текстовых сообщений
+    #     
+    #     Args:
+    #         message: Объект сообщения
+    #         state: Состояние FSM
+    #     """
+    #     try:
+    #         from aisha_v2.app.handlers.transcript_processing import TranscriptProcessingHandler
+    #         
+    #         # Делегируем обработку специализированному обработчику
+    #         processing_handler = TranscriptProcessingHandler()
+    #         await processing_handler._handle_text_processing(message, state)
+    #     except Exception as e:
+    #         logger.error(f"Ошибка при обработке текста: {e}")
+    #         await state.set_state(TranscribeStates.error)
+    #         await message.reply("Произошла ошибка при обработке текста.")
+
+    async def _handle_open_transcript(self, message: Message, state: FSMContext):
+        """
+        Открывает карточку транскрипта по команде /open_{id} из истории
+        """
+        try:
+            parts = message.text.strip().split("_", 1)
+            if len(parts) != 2 or not parts[1]:
+                await message.answer("❌ Неверная команда. Пример: /open_<id>")
+                return
+            transcript_id = safe_uuid(parts[1])
+            if not transcript_id:
+                await message.answer("❌ Неверный ID транскрипта")
+                return
+            async with self.get_session() as session:
+                transcript_service = get_transcript_service(session)
                 user_service = get_user_service(session)
                 user = await user_service.get_user_by_telegram_id(message.from_user.id)
                 if not user:
-                    await message.reply("❌ Ошибка: пользователь не найден")
+                    await message.answer("❌ Ошибка: пользователь не найден")
                     return
-                # Получаем историю транскриптов
-                transcripts = await user_service.get_user_transcripts(user.id)
-                if not transcripts:
-                    await message.reply("У вас пока нет транскриптов.")
+                transcript = await transcript_service.get_transcript(user.id, transcript_id)
+                if not transcript:
+                    await message.answer("❌ Транскрипт не найден")
                     return
-                # Формируем сообщение с историей
-                history_text = "📜 История транскриптов:\n\n"
-                for transcript in transcripts:
-                    # LEGACY: transcript['text'] хранится в БД
-                    history_text += f"• {transcript['created_at']}: {transcript['text'][:100]}...\n"
-                await message.reply(history_text)
+                # Получаем preview текста
+                content = await transcript_service.get_transcript_content(user.id, transcript_id)
+                if content:
+                    try:
+                        text = content.decode("utf-8")
+                    except Exception:
+                        text = None
+                    if text:
+                        transcript["preview"] = text[:300]
+                # Используем функцию рендера карточки из processing handler
+                from aisha_v2.app.handlers.transcript_processing import TranscriptProcessingHandler
+                card_text = TranscriptProcessingHandler().render_transcript_card(transcript)
+                keyboard = get_transcript_actions_keyboard(str(transcript["id"]))
+                await message.answer(card_text, reply_markup=keyboard, parse_mode="HTML")
         except Exception as e:
-            logger.error(f"Ошибка при получении истории: {e}")
-            await message.reply("Произошла ошибка при получении истории.")
-    
-    async def _handle_audio(self, message: Message, state: FSMContext):
-        """
-        Обработка аудио
-        
-        Args:
-            message: Объект сообщения
-            state: Состояние FSM
-        """
-        try:
-            from aisha_v2.app.handlers.transcript_processing import TranscriptProcessingHandler
-            
-            # Делегируем обработку специализированному обработчику
-            processing_handler = TranscriptProcessingHandler()
-            await processing_handler._handle_audio_processing(message, state)
-        except Exception as e:
-            logger.error(f"Ошибка при обработке аудио: {e}")
-            await state.set_state(TranscribeStates.error)
-            await message.reply("Произошла ошибка при обработке аудио.")
-    
-    async def _handle_voice(self, message: Message, state: FSMContext):
-        """
-        Обработка голосового сообщения
-        
-        Args:
-            message: Объект сообщения
-            state: Состояние FSM
-        """
-        try:
-            from aisha_v2.app.handlers.transcript_processing import TranscriptProcessingHandler
-            
-            # Делегируем обработку специализированному обработчику
-            processing_handler = TranscriptProcessingHandler()
-            await processing_handler._handle_audio_processing(message, state)
-        except Exception as e:
-            logger.error(f"Ошибка при обработке голосового сообщения: {e}")
-            await state.set_state(TranscribeStates.error)
-            await message.reply("Произошла ошибка при обработке голосового сообщения.")
-    
-    async def _handle_text(self, message: Message, state: FSMContext):
-        """
-        Обработка текстовых сообщений
-        
-        Args:
-            message: Объект сообщения
-            state: Состояние FSM
-        """
-        try:
-            from aisha_v2.app.handlers.transcript_processing import TranscriptProcessingHandler
-            
-            # Делегируем обработку специализированному обработчику
-            processing_handler = TranscriptProcessingHandler()
-            await processing_handler._handle_text_processing(message, state)
-        except Exception as e:
-            logger.error(f"Ошибка при обработке текста: {e}")
-            await state.set_state(TranscribeStates.error)
-            await message.reply("Произошла ошибка при обработке текста.")
-    
+            logger.exception(f"Ошибка при открытии транскрипта: {e}")
+            await message.answer("Произошла ошибка при открытии транскрипта.")
+
     async def _handle_transcript_callback(self, call: CallbackQuery, state: FSMContext):
         """
-        Обработка callback-запросов для транскриптов
-        
-        Args:
-            call: Объект CallbackQuery
-            state: Состояние FSM
+        Обработка callback-запросов для основного меню транскриптов
         """
         try:
             action = call.data.split("_")[1]
@@ -202,33 +340,25 @@ class TranscriptMainHandler(TranscriptBaseHandler):
                 builder.row(InlineKeyboardButton(text="◀️ Назад в меню", callback_data="transcribe_back_to_menu"))
                 
                 await call.message.edit_text(
-                    "📝 Отправьте текст для обработки:",
+                    "📝 Отправьте текстовый файл (.txt) для обработки:",
                     reply_markup=builder.as_markup()
                 )
                 
             elif action == "history":
-                builder = InlineKeyboardBuilder()
-                builder.row(InlineKeyboardButton(text="◀️ Назад в меню", callback_data="transcribe_back_to_menu"))
-                
-                await call.message.edit_text(
-                    "📜 История транскриптов:\n\nПока пусто",
-                    reply_markup=builder.as_markup()
-                )
+                async with self.get_session() as session:
+                    user_service = get_user_service(session)
+                    user = await user_service.get_user_by_telegram_id(call.from_user.id)
+                    if not user:
+                        await call.answer("❌ Ошибка: пользователь не найден", show_alert=True)
+                        return
+                    await self._send_history_page(call, user.id, page=0, edit=True)
                 
             elif action == "back":
                 await state.clear()
-                builder = InlineKeyboardBuilder()
-                builder.row(
-                    InlineKeyboardButton(text="🎤 Аудио", callback_data="transcribe_audio"),
-                    InlineKeyboardButton(text="📝 Текст", callback_data="transcribe_text")
-                )
-                builder.row(InlineKeyboardButton(text="📜 История", callback_data="transcribe_history"))
-                builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="transcribe_back_to_menu"))
-                
                 await call.message.edit_text(
                     "🎙 <b>Транскрибация</b>\n\nВыберите действие:",
                     parse_mode="HTML",
-                    reply_markup=builder.as_markup()
+                    reply_markup=get_transcript_menu_keyboard()
                 )
             
             else:
@@ -238,3 +368,10 @@ class TranscriptMainHandler(TranscriptBaseHandler):
         except Exception as e:
             logger.error(f"Ошибка при обработке callback: {e}")
             await call.answer("Произошла ошибка")
+
+    async def _handle_unknown_callback(self, call: CallbackQuery, state: FSMContext):
+        """
+        Универсальный обработчик для устаревших или неизвестных callback-кнопок
+        """
+        await call.answer("Это действие устарело. Пожалуйста, используйте новое меню.", show_alert=True)
+        await call.message.answer("Выберите действие:", reply_markup=get_transcript_menu_keyboard())

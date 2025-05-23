@@ -58,14 +58,19 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
         - Обработки аудио
         - Обработки текста
         - Форматирования транскрипта
+        - Действий с транскриптом
         """
         logger.info("Регистрация обработчиков транскриптов")
         
-        # Обработка аудио
+        # Универсальные обработчики аудио (работают в любом состоянии)
         self.router.message.register(
-            self._handle_audio_processing,
-            F.audio,
-            StateFilter(TranscribeStates.waiting_audio)
+            self._handle_audio_universal,
+            F.audio
+        )
+        
+        self.router.message.register(
+            self._handle_audio_universal,
+            F.voice
         )
         
         # Обработка текста
@@ -75,64 +80,74 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
             StateFilter(TranscribeStates.waiting_text)
         )
         
-        # Обработка форматирования транскрипта
+        # Обработка форматирования транскрипта (legacy)
         self.router.callback_query.register(
             self._handle_format_transcript,
             F.data.startswith("transcribe_format_")
         )
+        
+        # Обработка действий с транскриптом (новое)
+        self.router.callback_query.register(
+            self._handle_transcript_actions,
+            F.data.startswith("transcript_")
+        )
 
-    async def _handle_audio_processing(self, message: Message, state: FSMContext) -> None:
+    async def _handle_audio_universal(self, message: Message, state: FSMContext) -> None:
         """
-        Обработка аудио и голосовых сообщений.
+        Универсальный обработчик аудио и голосовых сообщений.
+        Работает в любом состоянии и автоматически начинает обработку.
         
         Args:
             message: Входящее сообщение с аудио
             state: Контекст состояния FSM
         """
-        logger.info(f"[AUDIO] Получено аудио/voice от user_id={message.from_user.id}, state={await state.get_state()}")
+        current_state = await state.get_state()
+        logger.info(f"[AUDIO_UNIVERSAL] Получено аудио/voice от user_id={message.from_user.id}, current_state={current_state}")
+        
+        # Если уже в процессе обработки, пропускаем
+        if current_state in [TranscribeStates.processing, TranscribeStates.result]:
+            logger.info(f"[AUDIO_UNIVERSAL] Пользователь уже в процессе обработки, пропускаем")
+            return
+            
+        # Начинаем обработку
+        logger.info(f"[AUDIO_UNIVERSAL] Начинаем обработку аудио")
+        
+        # Выполняем обработку аудио напрямую
         try:
             processing_msg = await message.answer("🎵 Начинаю обработку аудио...")
             await state.set_state(TranscribeStates.processing)
 
-            # Определяем тип аудио
-            if message.audio:
-                file_id = message.audio.file_id
-                duration = message.audio.duration
-            elif message.voice:
+            # Скачиваем файл
+            if message.voice:
                 file_id = message.voice.file_id
                 duration = message.voice.duration
+                file_name = f"voice_{message.message_id}.ogg"
             else:
-                await message.reply("❌ Не удалось определить тип аудиосообщения.")
-                return
-
-            # Получаем файл
+                file_id = message.audio.file_id  
+                duration = message.audio.duration
+                file_name = message.audio.file_name or f"audio_{message.message_id}.mp3"
+            
             file = await message.bot.get_file(file_id)
             downloaded_file = await message.bot.download_file(file.file_path)
 
-            # Обрабатываем аудио
+            # Транскрибируем
             async with (await self.get_session()) as session:
                 audio_service = get_audio_processing_service(session)
-                result = await audio_service.process_audio(
-                    audio_data=downloaded_file.getvalue(),
-                    language="ru", 
-                    save_original=True,
-                    normalize=True,
-                    remove_silence=True
-                )
+                result = await audio_service.process_audio(downloaded_file.getvalue())
                 
                 if not result.success:
-                    logger.error(f"[AUDIO] Ошибка транскрибации: {result.error}")
+                    logger.error(f"[AUDIO_UNIVERSAL] Ошибка транскрибации: {result.error}")
                     await message.reply("❌ Ошибка транскрибации аудио.")
                     return
-
+                
                 text = result.text
-                logger.info(f"[AUDIO] Получен текст транскрипта, длина: {len(text)}")
-
+                logger.info(f"[AUDIO_UNIVERSAL] Получен текст транскрипта, длина: {len(text)}")
+                
                 # Сохраняем транскрипт
                 user_service = get_user_service(session)
                 user = await user_service.get_user_by_telegram_id(message.from_user.id)
                 if not user:
-                    logger.error(f"[AUDIO] Пользователь не найден: {message.from_user.id}")
+                    logger.error(f"[AUDIO_UNIVERSAL] Пользователь не найден: {message.from_user.id}")
                     await message.reply("❌ Ошибка: пользователь не найден")
                     return
 
@@ -144,22 +159,24 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                     metadata={
                         "source": "audio",
                         "duration": duration,
-                        "file_id": file_id
+                        "file_id": file_id,
+                        "file_name": file_name,
+                        "word_count": len(text.split()) if text else 0
                     }
                 )
                 
                 if not transcript or not transcript.get("transcript_key"):
-                    logger.error(f"[AUDIO] Ошибка сохранения транскрипта: {transcript}")
+                    logger.error(f"[AUDIO_UNIVERSAL] Ошибка сохранения транскрипта: {transcript}")
                     await message.reply("❌ Ошибка при сохранении транскрипта")
                     return
                     
-                logger.info(f"[AUDIO] Транскрипт сохранен: {transcript}")
+                logger.info(f"[AUDIO_UNIVERSAL] Транскрипт сохранен: {transcript}")
 
                 await self._send_transcript_result(message, transcript, processing_msg)
                 await state.set_state(TranscribeStates.result)
 
         except Exception as e:
-            logger.exception(f"[AUDIO] Ошибка при обработке аудио: {e}")
+            logger.exception(f"[AUDIO_UNIVERSAL] Ошибка при обработке аудио: {e}")
             await state.set_state(TranscribeStates.error)
             await message.reply(
                 "❌ Произошла ошибка при обработке аудио.\n"
@@ -187,9 +204,10 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
             processing_msg = await message.answer("📝 Обрабатываю текстовый файл...")
             await state.set_state(TranscribeStates.processing)
 
-            file = await message.document.get_file()
-            file_bytes = await message.bot.download_file(file.file_path)
-            text = file_bytes.read().decode("utf-8")
+            file = await message.bot.get_file(message.document.file_id)
+            file_bytes_io = await message.bot.download_file(file.file_path)
+            text = file_bytes_io.read().decode("utf-8")
+            file_name = message.document.file_name
 
             async with (await self.get_session()) as session:
                 text_service = get_text_processing_service(session)
@@ -209,7 +227,9 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                     transcript_data=processed_text.encode('utf-8'),
                     metadata={
                         "source": "text",
-                        "length": len(text)
+                        "length": len(text),
+                        "file_name": file_name,
+                        "word_count": len(processed_text.split()) if processed_text else 0
                     }
                 )
                 
@@ -303,6 +323,54 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                 reply_markup=get_back_to_menu_keyboard()
             )
 
+    def render_transcript_card(self, transcript: dict) -> str:
+        """
+        Формирует текст карточки транскрипта для отправки пользователю.
+        """
+        # Извлекаем имя файла из метаданных
+        metadata = transcript.get("metadata", {})
+        file_name = metadata.get("file_name", "Файл")
+        
+        # Обрабатываем дату создания
+        created_at = transcript.get("created_at")
+        if isinstance(created_at, str):
+            created_at_str = created_at.replace('T', ' ')[:16]
+        elif created_at:
+            created_at_str = created_at.strftime("%Y-%m-%d %H:%M")
+        else:
+            created_at_str = "—"
+        
+        # Определяем тип транскрипта
+        transcript_type = "Аудио" if metadata.get("source") == "audio" else "Текст"
+        
+        # Подсчитываем количество слов
+        word_count = metadata.get("word_count")
+        if not word_count:
+            text = transcript.get("text") or transcript.get("preview")
+            if text:
+                word_count = len(text.split())
+            else:
+                word_count = "—"
+        
+        # Формируем превью текста
+        text_preview = transcript.get("preview")
+        if not text_preview:
+            text = transcript.get("text")
+            if text:
+                text_preview = text[:200] + "..." if len(text) > 200 else text
+            else:
+                text_preview = "—"
+        
+        card = (
+            f"<b>Транскрипт</b>\n"
+            f"📎 Файл: {file_name}\n"
+            f"📅 Создан: {created_at_str}\n"
+            f"📝 Тип: {transcript_type}\n"
+            f"📊 Слов: {word_count}\n\n"
+            f"«{text_preview}»"
+        )
+        return card
+
     async def _send_transcript_result(
         self, 
         message: Message, 
@@ -311,34 +379,152 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
     ) -> None:
         """
         Отправляет результат обработки транскрипта.
-        
-        Args:
-            message: Сообщение для ответа
-            transcript: Данные транскрипта
-            status_message: Сообщение о статусе обработки
         """
         try:
             if status_message:
                 await status_message.delete()
             
-            # Создаем экземпляр TranscriptResult
             transcript_result = TranscriptResult(
                 id=str(transcript["id"]),
                 transcript_key=transcript["transcript_key"],
                 metadata=transcript.get("metadata", {})
             )
             
-            # Получаем клавиатуру с действиями
+            # Получаем текст транскрипта для preview
+            async with (await self.get_session()) as session:
+                transcript_service = get_transcript_service(session)
+                user_service = get_user_service(session)
+                user = await user_service.get_user_by_telegram_id(message.from_user.id)
+                
+                if user:
+                    content = await transcript_service.get_transcript_content(user.id, safe_uuid(transcript["id"]))
+                    if content:
+                        try:
+                            text = content.decode("utf-8")
+                            transcript["preview"] = text[:300] + "..." if len(text) > 300 else text
+                            transcript["text"] = text  # Полный текст для подсчета слов
+                        except Exception as e:
+                            logger.warning(f"Ошибка декодирования текста транскрипта: {e}")
+            
             keyboard = get_transcript_actions_keyboard(transcript_result.id)
+            card_text = self.render_transcript_card(transcript)
             
             await message.answer(
-                "✅ Транскрипт готов!",
-                reply_markup=keyboard
+                card_text,
+                reply_markup=keyboard,
+                parse_mode="HTML"
             )
             
         except Exception as e:
             logger.exception(f"[RESULT] Ошибка при отправке результата: {e}")
             await message.answer(
                 "❌ Произошла ошибка при отправке результата",
+                reply_markup=get_back_to_menu_keyboard()
+            )
+
+    async def _handle_transcript_actions(self, call: CallbackQuery, state: FSMContext) -> None:
+        """
+        Обработка действий с транскриптом: summary, todo, protocol, back
+        """
+        try:
+            # Разбираем callback data: transcript_summary_<id>, transcript_todo_<id>, etc.
+            parts = call.data.split("_", 2)
+            if len(parts) < 3:
+                await call.answer("❌ Неверный формат данных")
+                return
+            
+            action = parts[1]  # summary, todo, protocol, back
+            transcript_id = safe_uuid(parts[2])
+            
+            if not transcript_id:
+                await call.answer("❌ Неверный ID транскрипта")
+                return
+                
+            if action == "back":
+                # Возврат к карточке транскрипта
+                async with (await self.get_session()) as session:
+                    transcript_service = get_transcript_service(session)
+                    user_service = get_user_service(session)
+                    user = await user_service.get_user_by_telegram_id(call.from_user.id)
+                    
+                    if not user:
+                        await call.answer("❌ Ошибка: пользователь не найден")
+                        return
+                        
+                    transcript = await transcript_service.get_transcript(user.id, transcript_id)
+                    if not transcript:
+                        await call.answer("❌ Транскрипт не найден")
+                        return
+                    
+                    # Получаем preview текста
+                    content = await transcript_service.get_transcript_content(user.id, transcript_id)
+                    if content:
+                        try:
+                            text = content.decode("utf-8")
+                            transcript["preview"] = text[:300]
+                        except Exception:
+                            pass
+                    
+                    card_text = self.render_transcript_card(transcript)
+                    keyboard = get_transcript_actions_keyboard(str(transcript_id))
+                    await call.message.edit_text(card_text, reply_markup=keyboard, parse_mode="HTML")
+                return
+            
+            # Обработка форматирования
+            await state.set_state(TranscribeStates.format_selection)
+            processing_msg = await call.message.edit_text("⏳ Форматирую транскрипт...")
+
+            async with (await self.get_session()) as session:
+                transcript_service = get_transcript_service(session)
+                user_service = get_user_service(session)
+                user = await user_service.get_user_by_telegram_id(call.from_user.id)
+                
+                if not user:
+                    await call.answer("❌ Ошибка: пользователь не найден")
+                    return
+                    
+                content = await transcript_service.get_transcript_content(user.id, transcript_id)
+                if not content:
+                    logger.error(f"[FORMAT] Не удалось получить текст транскрипта: {transcript_id}")
+                    await call.message.edit_text("❌ Ошибка: не удалось получить текст транскрипта")
+                    return
+
+                text = content.decode('utf-8')
+                text_service = get_text_processing_service(session)
+                
+                # Форматируем текст
+                if action == "summary":
+                    formatted_text = await text_service.format_summary(text)
+                    format_name = "Краткое содержание"
+                elif action == "todo":
+                    formatted_text = await text_service.format_todo(text)
+                    format_name = "Список задач"
+                elif action == "protocol":
+                    formatted_text = await text_service.format_protocol(text)
+                    format_name = "Протокол"
+                else:
+                    logger.error(f"[FORMAT] Неизвестный формат: {action}")
+                    await call.message.edit_text("❌ Неизвестный формат")
+                    return
+
+                # Отправляем результат как файл
+                from io import BytesIO
+                file_data = formatted_text.encode('utf-8')
+                file = BytesIO(file_data)
+                file.name = f"{action}_{transcript_id}.txt"
+                
+                await call.message.delete()
+                await call.message.answer_document(
+                    document=file,
+                    caption=f"📄 {format_name}",
+                    reply_markup=get_back_to_transcript_keyboard(transcript_id)
+                )
+                await state.set_state(TranscribeStates.result)
+
+        except Exception as e:
+            logger.exception(f"[ACTIONS] Ошибка при обработке действий транскрипта: {e}")
+            await state.set_state(TranscribeStates.error)
+            await call.message.edit_text(
+                "❌ Произошла ошибка при обработке.\nПожалуйста, попробуйте еще раз.",
                 reply_markup=get_back_to_menu_keyboard()
             )
