@@ -38,7 +38,7 @@ class FalAIClient:
         if self.api_key:
             fal_client.api_key = self.api_key
         else:
-            logger.warning("FAL_API_KEY не установлен, работа в тестовом режиме")
+            logger.debug("FAL_API_KEY не установлен, работа в тестовом режиме")
 
     async def train_avatar(
         self,

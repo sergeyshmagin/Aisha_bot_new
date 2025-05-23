@@ -24,8 +24,15 @@ class Settings(BaseSettings):
     ASSISTANT_ID: Optional[str] = None
     
     # Fal AI
-    FAL_KEY: Optional[str] = Field(default="test_key")
-    FAL_TRAINING_TEST_MODE: bool = Field(default=True)
+    FAL_API_KEY: str = Field("", env="FAL_API_KEY")
+    FAL_TRAINING_TEST_MODE: bool = Field(True, env="FAL_TRAINING_TEST_MODE")
+    FAL_WEBHOOK_URL: str = Field("https://aibots.kz/api/avatar/status_update", env="FAL_WEBHOOK_URL")
+    FAL_DEFAULT_MODE: str = Field("character", env="FAL_MODE")
+    FAL_DEFAULT_ITERATIONS: int = Field(500, env="FAL_ITERATIONS")
+    FAL_DEFAULT_PRIORITY: str = Field("quality", env="FAL_PRIORITY")
+    FAL_TRIGGER_WORD: str = Field("TOK", env="FAL_TRIGGER_WORD")
+    FAL_LORA_RANK: int = Field(32, env="FAL_LORA_RANK")
+    FAL_FINETUNE_TYPE: str = Field("full", env="FAL_FINETUNE_TYPE")
     
     # Пути
     BASE_DIR: Path = Path(__file__).parent.parent.parent
@@ -55,17 +62,6 @@ class Settings(BaseSettings):
     PHOTO_MIN_RESOLUTION: int = Field(512, env="PHOTO_MIN_RESOLUTION")
     PHOTO_MAX_RESOLUTION: int = Field(4096, env="PHOTO_MAX_RESOLUTION")
     PHOTO_ALLOWED_FORMATS: List[str] = Field(["jpg", "jpeg", "png", "webp"], env="PHOTO_ALLOWED_FORMATS")
-    
-    # FAL AI интеграция
-    FAL_API_KEY: str = Field("", env="FAL_KEY")
-    FAL_TRAINING_TEST_MODE: bool = Field(True, env="FAL_TRAINING_TEST_MODE")  # 🎯 КЛЮЧЕВОЙ ПАРАМЕТР!
-    FAL_WEBHOOK_URL: str = Field("https://aibots.kz/api/avatar/status_update", env="FAL_WEBHOOK_URL")
-    FAL_DEFAULT_MODE: str = Field("character", env="FAL_MODE")
-    FAL_DEFAULT_ITERATIONS: int = Field(500, env="FAL_ITERATIONS")
-    FAL_DEFAULT_PRIORITY: str = Field("quality", env="FAL_PRIORITY")
-    FAL_TRIGGER_WORD: str = Field("TOK", env="FAL_TRIGGER_WORD")
-    FAL_LORA_RANK: int = Field(32, env="FAL_LORA_RANK")
-    FAL_FINETUNE_TYPE: str = Field("full", env="FAL_FINETUNE_TYPE")
     
     # UX настройки
     PHOTO_UPLOAD_TIMEOUT: int = Field(300, env="PHOTO_UPLOAD_TIMEOUT")  # 5 минут

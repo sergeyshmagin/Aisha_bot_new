@@ -17,7 +17,7 @@ from app.core.di import (
     get_audio_processing_service,
     get_text_processing_service,
     get_transcript_service,
-    get_user_service,
+    get_user_service_with_session,
 )
 from app.utils.uuid_utils import safe_uuid
 from app.keyboards.transcript import get_transcript_menu_keyboard, get_back_to_menu_keyboard, get_transcript_actions_keyboard
@@ -219,11 +219,23 @@ class TranscriptMainHandler(TranscriptBaseHandler):
         История транскриптов с inline-кнопками и пагинацией
         """
         async with self.get_session() as session:
-            user_service = get_user_service(session)
+            user_service = get_user_service_with_session(session)
             user = await user_service.get_user_by_telegram_id(message.from_user.id)
             if not user:
-                await message.reply("❌ Ошибка: пользователь не найден")
-                return
+                # Автоматически регистрируем пользователя
+                user_data = {
+                    "id": message.from_user.id,
+                    "username": message.from_user.username,
+                    "first_name": message.from_user.first_name,
+                    "last_name": message.from_user.last_name,
+                    "language_code": message.from_user.language_code or "ru",
+                    "is_bot": message.from_user.is_bot,
+                    "is_premium": getattr(message.from_user, "is_premium", False)
+                }
+                user = await user_service.register_user(user_data)
+                if not user:
+                    await message.reply("❌ Ошибка регистрации пользователя")
+                    return
             await self._send_history_page(message, str(user.id), page=0)
 
     async def _handle_history_page(self, call: CallbackQuery, state: FSMContext):
@@ -233,11 +245,23 @@ class TranscriptMainHandler(TranscriptBaseHandler):
         try:
             page = int(call.data.rsplit("_", 1)[-1])
             async with self.get_session() as session:
-                user_service = get_user_service(session)
+                user_service = get_user_service_with_session(session)
                 user = await user_service.get_user_by_telegram_id(call.from_user.id)
                 if not user:
-                    await call.answer("Ошибка: пользователь не найден", show_alert=True)
-                    return
+                    # Автоматически регистрируем пользователя
+                    user_data = {
+                        "id": call.from_user.id,
+                        "username": call.from_user.username,
+                        "first_name": call.from_user.first_name,
+                        "last_name": call.from_user.last_name,
+                        "language_code": call.from_user.language_code or "ru",
+                        "is_bot": call.from_user.is_bot,
+                        "is_premium": getattr(call.from_user, "is_premium", False)
+                    }
+                    user = await user_service.register_user(user_data)
+                    if not user:
+                        await call.answer("❌ Ошибка регистрации пользователя", show_alert=True)
+                        return
                 await self._send_history_page(call, str(user.id), page=page, edit=True)
         except Exception as e:
             logger.exception(f"Ошибка пагинации истории: {e}")
@@ -254,11 +278,23 @@ class TranscriptMainHandler(TranscriptBaseHandler):
                 return
             async with self.get_session() as session:
                 transcript_service = get_transcript_service(session)
-                user_service = get_user_service(session)
+                user_service = get_user_service_with_session(session)
                 user = await user_service.get_user_by_telegram_id(call.from_user.id)
                 if not user:
-                    await call.answer("❌ Ошибка: пользователь не найден", show_alert=True)
-                    return
+                    # Автоматически регистрируем пользователя
+                    user_data = {
+                        "id": call.from_user.id,
+                        "username": call.from_user.username,
+                        "first_name": call.from_user.first_name,
+                        "last_name": call.from_user.last_name,
+                        "language_code": call.from_user.language_code or "ru",
+                        "is_bot": call.from_user.is_bot,
+                        "is_premium": getattr(call.from_user, "is_premium", False)
+                    }
+                    user = await user_service.register_user(user_data)
+                    if not user:
+                        await call.answer("❌ Ошибка регистрации пользователя", show_alert=True)
+                        return
                 transcript = await transcript_service.get_transcript(str(user.id), transcript_id)
                 if not transcript:
                     await call.answer("❌ Транскрипт не найден", show_alert=True)
@@ -304,11 +340,23 @@ class TranscriptMainHandler(TranscriptBaseHandler):
                 return
             async with self.get_session() as session:
                 transcript_service = get_transcript_service(session)
-                user_service = get_user_service(session)
+                user_service = get_user_service_with_session(session)
                 user = await user_service.get_user_by_telegram_id(message.from_user.id)
                 if not user:
-                    await message.answer("❌ Ошибка: пользователь не найден")
-                    return
+                    # Автоматически регистрируем пользователя
+                    user_data = {
+                        "id": message.from_user.id,
+                        "username": message.from_user.username,
+                        "first_name": message.from_user.first_name,
+                        "last_name": message.from_user.last_name,
+                        "language_code": message.from_user.language_code or "ru",
+                        "is_bot": message.from_user.is_bot,
+                        "is_premium": getattr(message.from_user, "is_premium", False)
+                    }
+                    user = await user_service.register_user(user_data)
+                    if not user:
+                        await message.answer("❌ Ошибка регистрации пользователя")
+                        return
                 transcript = await transcript_service.get_transcript(str(user.id), transcript_id)
                 if not transcript:
                     await message.answer("❌ Транскрипт не найден")
@@ -368,11 +416,23 @@ class TranscriptMainHandler(TranscriptBaseHandler):
             elif action == "history":
                 try:
                     async with self.get_session() as session:
-                        user_service = get_user_service(session)
+                        user_service = get_user_service_with_session(session)
                         user = await user_service.get_user_by_telegram_id(call.from_user.id)
                         if not user:
-                            await call.answer("❌ Ошибка: пользователь не найден", show_alert=True)
-                            return
+                            # Автоматически регистрируем пользователя
+                            user_data = {
+                                "id": call.from_user.id,
+                                "username": call.from_user.username,
+                                "first_name": call.from_user.first_name,
+                                "last_name": call.from_user.last_name,
+                                "language_code": call.from_user.language_code or "ru",
+                                "is_bot": call.from_user.is_bot,
+                                "is_premium": getattr(call.from_user, "is_premium", False)
+                            }
+                            user = await user_service.register_user(user_data)
+                            if not user:
+                                await call.answer("❌ Ошибка регистрации пользователя", show_alert=True)
+                                return
                         logger.info(f"[HISTORY] Начинаем отправку истории для user_id={user.id}")
                         await self._send_history_page(call, str(user.id), page=0, edit=True)
                         logger.info(f"[HISTORY] История отправлена успешно")

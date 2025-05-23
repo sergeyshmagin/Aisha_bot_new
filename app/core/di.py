@@ -4,6 +4,7 @@ Dependency Injection контейнер
 from functools import lru_cache
 from typing import Optional
 import logging
+from contextlib import asynccontextmanager
 from aiogram.fsm.storage.redis import RedisStorage
 from redis.asyncio import Redis
 from redis.backoff import ExponentialBackoff
@@ -95,9 +96,27 @@ def get_minio_client() -> Minio:
     )
 
 
-def get_user_service(session: AsyncSession) -> UserService:
+@asynccontextmanager
+async def get_user_service():
     """
-    Получение сервиса для работы с пользователями
+    Контекстный менеджер для получения сервиса пользователей с автоматическим управлением сессией
+    """
+    session = get_db_session()
+    try:
+        user_service = UserService(session)
+        yield user_service
+        # Если дошли до этой точки без исключений, выполняем commit
+        await session.commit()
+    except Exception as e:
+        await session.rollback()
+        raise
+    finally:
+        await session.close()
+
+
+def get_user_service_with_session(session: AsyncSession) -> UserService:
+    """
+    Получение сервиса для работы с пользователями с переданной сессией
     """
     return UserService(session)
 

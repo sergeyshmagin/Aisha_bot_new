@@ -23,16 +23,22 @@ async def cmd_start(message: Message, state: FSMContext):
             user = await user_service.get_user_by_telegram_id(message.from_user.id)
             
             if not user:
-                user = await user_service.create_user(
-                    telegram_id=message.from_user.id,
-                    username=message.from_user.username,
-                    first_name=message.from_user.first_name,
-                    last_name=message.from_user.last_name,
-                    language_code=message.from_user.language_code,
-                    is_bot=message.from_user.is_bot,
-                    is_premium=getattr(message.from_user, "is_premium", False)
-                )
-                logger.info(f"Создан новый пользователь: {user.telegram_id}")
+                user_data = {
+                    "id": message.from_user.id,
+                    "username": message.from_user.username,
+                    "first_name": message.from_user.first_name,
+                    "last_name": message.from_user.last_name,
+                    "language_code": message.from_user.language_code or "ru",
+                    "is_bot": message.from_user.is_bot,
+                    "is_premium": getattr(message.from_user, "is_premium", False)
+                }
+                user = await user_service.register_user(user_data)
+                if user:
+                    logger.info(f"Создан новый пользователь: {user.telegram_id}")
+                else:
+                    logger.error("Не удалось создать пользователя")
+                    await message.answer("❌ Ошибка при регистрации. Попробуйте позже.")
+                    return
             
             await message.answer(
                 "👋 Добро пожаловать! Выберите действие:",

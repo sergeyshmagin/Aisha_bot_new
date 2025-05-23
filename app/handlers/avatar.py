@@ -72,9 +72,15 @@ class AvatarHandler:
             F.data == "avatar_create"
         )
         
+        # Добавляем специальный обработчик для возврата к выбору типа аватара
+        router.callback_query.register(
+            self.start_avatar_creation,  # Используем тот же метод для показа типов
+            F.data == "avatar_type_selection"
+        )
+        
         router.callback_query.register(
             self.select_avatar_type,
-            F.data.startswith("avatar_type_")
+            F.data.startswith("avatar_type_") & (~F.data.in_(["avatar_type_selection"]))
         )
         
         router.callback_query.register(
@@ -189,7 +195,20 @@ class AvatarHandler:
     async def select_avatar_type(self, call: CallbackQuery, state: FSMContext):
         """Обрабатывает выбор типа аватара"""
         try:
+            # Проверяем формат callback_data
+            if not call.data.startswith("avatar_type_") or call.data == "avatar_type_selection":
+                logger.warning(f"Неверный callback_data для select_avatar_type: {call.data}")
+                await call.answer("❌ Неверные данные")
+                return
+                
             avatar_type_str = call.data.split("avatar_type_")[1]
+            
+            # Проверяем, что получен валидный тип
+            if not avatar_type_str or avatar_type_str == "selection":
+                logger.warning(f"Получен пустой или невалидный тип аватара: '{avatar_type_str}'")
+                await call.answer("❌ Выберите тип аватара")
+                return
+                
             avatar_type = AvatarType(avatar_type_str)
             
             # Сохраняем выбранный тип
@@ -204,6 +223,9 @@ class AvatarHandler:
             
             logger.info(f"Выбран тип аватара: {avatar_type.value}")
             
+        except ValueError as e:
+            logger.error(f"Невалидный тип аватара: {call.data} -> {e}")
+            await call.answer("❌ Неверный тип аватара", show_alert=True)
         except Exception as e:
             logger.exception(f"Ошибка при выборе типа аватара: {e}")
             await call.answer("❌ Произошла ошибка", show_alert=True)

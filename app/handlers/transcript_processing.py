@@ -21,7 +21,7 @@ from app.core.di import (
     get_audio_processing_service,
     get_text_processing_service,
     get_transcript_service,
-    get_user_service,
+    get_user_service_with_session,
 )
 from app.keyboards.transcript import (
     get_transcript_actions_keyboard,
@@ -154,12 +154,24 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                 logger.info(f"[AUDIO_UNIVERSAL] Получен текст транскрипта, длина: {len(text)}")
                 
                 # Сохраняем транскрипт
-                user_service = get_user_service(session)
+                user_service = get_user_service_with_session(session)
                 user = await user_service.get_user_by_telegram_id(message.from_user.id)
                 if not user:
-                    logger.error(f"[AUDIO_UNIVERSAL] Пользователь не найден: {message.from_user.id}")
-                    await message.reply("❌ Ошибка: пользователь не найден")
-                    return
+                    # Автоматически регистрируем пользователя
+                    user_data = {
+                        "id": message.from_user.id,
+                        "username": message.from_user.username,
+                        "first_name": message.from_user.first_name,
+                        "last_name": message.from_user.last_name,
+                        "language_code": message.from_user.language_code or "ru",
+                        "is_bot": message.from_user.is_bot,
+                        "is_premium": getattr(message.from_user, "is_premium", False)
+                    }
+                    user = await user_service.register_user(user_data)
+                    if not user:
+                        logger.error(f"[AUDIO_UNIVERSAL] Не удалось зарегистрировать пользователя: {message.from_user.id}")
+                        await message.reply("❌ Ошибка регистрации пользователя")
+                        return
 
                 transcript_service = get_transcript_service(session)
                 transcript = await transcript_service.save_transcript(
@@ -224,13 +236,25 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                 processed_text = await text_service.process_text(text)
                 
                 transcript_service = get_transcript_service(session)
-                user_service = get_user_service(session)
+                user_service = get_user_service_with_session(session)
                 user = await user_service.get_user_by_telegram_id(message.from_user.id)
                 
                 if not user:
-                    logger.error(f"[TEXT] Пользователь не найден: {message.from_user.id}")
-                    await message.reply("❌ Ошибка: пользователь не найден")
-                    return
+                    # Автоматически регистрируем пользователя
+                    user_data = {
+                        "id": message.from_user.id,
+                        "username": message.from_user.username,
+                        "first_name": message.from_user.first_name,
+                        "last_name": message.from_user.last_name,
+                        "language_code": message.from_user.language_code or "ru",
+                        "is_bot": message.from_user.is_bot,
+                        "is_premium": getattr(message.from_user, "is_premium", False)
+                    }
+                    user = await user_service.register_user(user_data)
+                    if not user:
+                        logger.error(f"[TEXT] Не удалось зарегистрировать пользователя: {message.from_user.id}")
+                        await message.reply("❌ Ошибка регистрации пользователя")
+                        return
 
                 transcript = await transcript_service.save_transcript(
                     user_id=user.id,
@@ -280,7 +304,7 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
             async with self.get_session() as session:
                 # Получаем транскрипт
                 transcript_service = get_transcript_service(session)
-                user_service = get_user_service(session)
+                user_service = get_user_service_with_session(session)
                 user = await user_service.get_user_by_telegram_id(call.from_user.id)
                 
                 if not user:
@@ -403,7 +427,7 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
             # Получаем текст транскрипта для preview и отправки файла
             async with self.get_session() as session:
                 transcript_service = get_transcript_service(session)
-                user_service = get_user_service(session)
+                user_service = get_user_service_with_session(session)
                 user = await user_service.get_user_by_telegram_id(message.from_user.id)
                 
                 if not user:
@@ -489,7 +513,7 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
 
             async with self.get_session() as session:
                 transcript_service = get_transcript_service(session)
-                user_service = get_user_service(session)
+                user_service = get_user_service_with_session(session)
                 user = await user_service.get_user_by_telegram_id(call.from_user.id)
                 
                 if not user:
@@ -570,7 +594,7 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
             async with self.get_session() as session:
                 # Получаем транскрипт
                 transcript_service = get_transcript_service(session)
-                user_service = get_user_service(session)
+                user_service = get_user_service_with_session(session)
                 user = await user_service.get_user_by_telegram_id(call.from_user.id)
                 
                 if not user:

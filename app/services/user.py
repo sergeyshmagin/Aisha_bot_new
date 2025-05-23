@@ -30,10 +30,8 @@ class UserService(BaseService):
         # Получаем telegram_id из данных
         if "id" in telegram_data:
             telegram_id = str(telegram_data["id"])  # Преобразуем в строку
-            logging.warning(f"Получен telegram_id из id: {telegram_id}")
         elif "telegram_id" in telegram_data:
             telegram_id = str(telegram_data["telegram_id"])  # Преобразуем в строку
-            logging.warning(f"Получен telegram_id из telegram_id: {telegram_id}")
         else:
             # Если нет ни id, ни telegram_id, возвращаем None
             logging.error(f"Невозможно зарегистрировать пользователя без telegram_id: {telegram_data}")
@@ -112,9 +110,6 @@ class UserService(BaseService):
 
     async def set_user_state(self, telegram_id, state_data: Dict) -> None:
         """Установить состояние пользователя"""
-        import logging
-        logging.debug(f"set_user_state вызван с telegram_id={telegram_id}, тип: {type(telegram_id)}")
-        
         # Преобразуем telegram_id в строку для работы с базой данных
         telegram_id_str = str(telegram_id)
         
@@ -146,9 +141,6 @@ class UserService(BaseService):
 
     async def get_user_state(self, telegram_id) -> Optional[Dict]:
         """Получить состояние пользователя"""
-        import logging
-        logging.debug(f"get_user_state вызван с telegram_id={telegram_id}, тип: {type(telegram_id)}")
-        
         # Преобразуем telegram_id в строку для работы с базой данных
         telegram_id_str = str(telegram_id)
         
@@ -163,9 +155,6 @@ class UserService(BaseService):
 
     async def clear_user_state(self, telegram_id) -> None:
         """Очистить состояние пользователя"""
-        import logging
-        logging.debug(f"clear_user_state вызван с telegram_id={telegram_id}, тип: {type(telegram_id)}")
-        
         # Преобразуем telegram_id в строку для работы с базой данных
         telegram_id_str = str(telegram_id)
         

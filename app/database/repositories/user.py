@@ -20,14 +20,10 @@ class UserRepository(BaseRepository[User]):
 
     async def get_by_telegram_id(self, telegram_id: str) -> Optional[User]:
         """Получить пользователя по Telegram ID"""
-        import logging
-        logging.warning(f"get_by_telegram_id вызван с telegram_id={telegram_id}, тип: {type(telegram_id)}")
-        
         # Убеждаемся, что telegram_id является строкой
         if not isinstance(telegram_id, str):
             # Если это не строка, преобразуем в строку
             telegram_id = str(telegram_id)
-            logging.warning(f"Преобразование telegram_id в строку: {telegram_id}")
         
         stmt = select(self.model).where(self.model.telegram_id == telegram_id)
         result = await self.session.execute(stmt)
