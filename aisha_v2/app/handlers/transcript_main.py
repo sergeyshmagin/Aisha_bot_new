@@ -51,13 +51,38 @@ class TranscriptMainHandler(TranscriptBaseHandler):
             F.data.in_(["transcribe_audio", "transcribe_text", "transcribe_history", "transcribe_back_to_menu"])
         )
         
-        # Универсальный обработчик (должен быть последним!)
-        self.router.callback_query.register(self._handle_unknown_callback)
+        # Команды открытия транскрипта (legacy)
+        self.router.message.register(
+            self._handle_open_transcript,
+            F.text.regexp(r'^/open_[a-f0-9\-]+$')
+        )
 
     async def register_handlers(self):
         """Регистрация всех хендлеров"""
         self.router.message.register(self._handle_transcribe_command, Command("transcribe"))
         self.router.message.register(self._handle_transcribe_menu, StateFilter(TranscribeStates.menu), F.text == "🎤 Транскрибация")
+        
+        # Callback-обработчики
+        self.router.callback_query.register(
+            self._handle_history_page,
+            F.data.startswith("transcribe_history_page_")
+        )
+        
+        self.router.callback_query.register(
+            self._handle_open_transcript_cb,
+            F.data.startswith("transcribe_open_")
+        )
+        
+        self.router.callback_query.register(
+            self._handle_transcript_callback,
+            F.data.startswith("transcribe_")
+        )
+        
+        # --- УНИВЕРСАЛЬНЫЙ ОБРАБОТЧИК ОТКЛЮЧЕН: мешает работе transcript_* действий ---
+        # self.router.callback_query.register(
+        #     self._handle_unknown_callback,
+        #     F.data.regexp(r'.*')
+        # )
         
         # --- LEGACY: обработчики аудио/текста закомментированы, используется TranscriptProcessingHandler ---
         # self.router.message.register(self._handle_audio, F.audio, StateFilter(TranscribeStates.waiting_audio))
@@ -368,10 +393,3 @@ class TranscriptMainHandler(TranscriptBaseHandler):
         except Exception as e:
             logger.error(f"Ошибка при обработке callback: {e}")
             await call.answer("Произошла ошибка")
-
-    async def _handle_unknown_callback(self, call: CallbackQuery, state: FSMContext):
-        """
-        Универсальный обработчик для устаревших или неизвестных callback-кнопок
-        """
-        await call.answer("Это действие устарело. Пожалуйста, используйте новое меню.", show_alert=True)
-        await call.message.answer("Выберите действие:", reply_markup=get_transcript_menu_keyboard())

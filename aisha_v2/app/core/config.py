@@ -90,6 +90,7 @@ class Settings(BaseSettings):
     MINIO_BUCKET_AVATARS: Optional[str] = Field(default="avatars")
     MINIO_BUCKET_PHOTOS: Optional[str] = Field(default="photos")
     MINIO_BUCKET_TEMP: Optional[str] = Field(default="temp")
+    MINIO_PRESIGNED_EXPIRES: int = Field(default=3600)  # Время истечения presigned URL в секундах
     TEMP_DIR: Path = Path("temp")
     
     # Настройки алертов

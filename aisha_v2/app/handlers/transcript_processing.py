@@ -131,7 +131,7 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
             downloaded_file = await message.bot.download_file(file.file_path)
 
             # Транскрибируем
-            async with (await self.get_session()) as session:
+            async with self.get_session() as session:
                 audio_service = get_audio_processing_service(session)
                 result = await audio_service.process_audio(downloaded_file.getvalue())
                 
@@ -209,7 +209,7 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
             text = file_bytes_io.read().decode("utf-8")
             file_name = message.document.file_name
 
-            async with (await self.get_session()) as session:
+            async with self.get_session() as session:
                 text_service = get_text_processing_service(session)
                 processed_text = await text_service.process_text(text)
                 
@@ -267,7 +267,7 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
             format_type = data[3]
             await state.set_state(TranscribeStates.format_selection)
 
-            async with (await self.get_session()) as session:
+            async with self.get_session() as session:
                 # Получаем транскрипт
                 transcript_service = get_transcript_service(session)
                 user_service = get_user_service(session)
@@ -378,7 +378,7 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
         status_message: Optional[Message] = None
     ) -> None:
         """
-        Отправляет результат обработки транскрипта.
+        Отправляет результат обработки транскрипта с файлом.
         """
         try:
             if status_message:
@@ -390,31 +390,63 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                 metadata=transcript.get("metadata", {})
             )
             
-            # Получаем текст транскрипта для preview
-            async with (await self.get_session()) as session:
+            # Получаем текст транскрипта для preview и отправки файла
+            async with self.get_session() as session:
                 transcript_service = get_transcript_service(session)
                 user_service = get_user_service(session)
                 user = await user_service.get_user_by_telegram_id(message.from_user.id)
                 
-                if user:
-                    content = await transcript_service.get_transcript_content(user.id, safe_uuid(transcript["id"]))
-                    if content:
-                        try:
-                            text = content.decode("utf-8")
-                            transcript["preview"] = text[:300] + "..." if len(text) > 300 else text
-                            transcript["text"] = text  # Полный текст для подсчета слов
-                        except Exception as e:
-                            logger.warning(f"Ошибка декодирования текста транскрипта: {e}")
-            
-            keyboard = get_transcript_actions_keyboard(transcript_result.id)
-            card_text = self.render_transcript_card(transcript)
-            
-            await message.answer(
-                card_text,
-                reply_markup=keyboard,
-                parse_mode="HTML"
-            )
-            
+                if not user:
+                    await message.reply("❌ Ошибка: пользователь не найден")
+                    return
+                    
+                content = await transcript_service.get_transcript_content(user.id, safe_uuid(transcript["id"]))
+                if not content:
+                    await message.reply("❌ Не удалось получить содержимое транскрипта")
+                    return
+                
+                try:
+                    text = content.decode("utf-8")
+                    transcript["preview"] = text[:300] + "..." if len(text) > 300 else text
+                    transcript["text"] = text  # Полный текст для подсчета слов
+                except Exception as e:
+                    logger.warning(f"Ошибка декодирования текста транскрипта: {e}")
+                    await message.reply("❌ Ошибка при декодировании транскрипта")
+                    return
+                
+                # Формируем имя файла для отправки
+                metadata = transcript.get("metadata", {})
+                original_file_name = metadata.get("file_name")
+                if original_file_name:
+                    # Используем оригинальное имя файла
+                    file_name = original_file_name
+                    if not file_name.endswith('.txt'):
+                        file_name += '.txt'
+                else:
+                    # Генерируем имя на основе даты и ID
+                    created_at = transcript.get("created_at", "")
+                    if isinstance(created_at, str):
+                        date_part = created_at[:10]  # YYYY-MM-DD
+                    else:
+                        date_part = "unknown"
+                    file_name = f"{date_part}_transcript_{transcript['id'][:8]}.txt"
+                
+                # Создаем файл для отправки с помощью BufferedInputFile
+                from aiogram.types import BufferedInputFile
+                input_file = BufferedInputFile(content, filename=file_name)
+                
+                # Формируем карточку транскрипта
+                keyboard = get_transcript_actions_keyboard(transcript_result.id)
+                card_text = self.render_transcript_card(transcript)
+                
+                # Отправляем файл с карточкой как caption
+                await message.answer_document(
+                    document=input_file,
+                    caption=card_text,
+                    reply_markup=keyboard,
+                    parse_mode="HTML"
+                )
+                
         except Exception as e:
             logger.exception(f"[RESULT] Ошибка при отправке результата: {e}")
             await message.answer(
@@ -442,7 +474,7 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                 
             if action == "back":
                 # Возврат к карточке транскрипта
-                async with (await self.get_session()) as session:
+                async with self.get_session() as session:
                     transcript_service = get_transcript_service(session)
                     user_service = get_user_service(session)
                     user = await user_service.get_user_by_telegram_id(call.from_user.id)
@@ -470,11 +502,12 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                     await call.message.edit_text(card_text, reply_markup=keyboard, parse_mode="HTML")
                 return
             
-            # Обработка форматирования
+            # Обработка форматирования через GPT
             await state.set_state(TranscribeStates.format_selection)
-            processing_msg = await call.message.edit_text("⏳ Форматирую транскрипт...")
+            # Отправляем новое сообщение вместо редактирования (нельзя edit_text для документа)
+            processing_msg = await call.message.answer("⏳ Обрабатываю транскрипт с помощью GPT...")
 
-            async with (await self.get_session()) as session:
+            async with self.get_session() as session:
                 transcript_service = get_transcript_service(session)
                 user_service = get_user_service(session)
                 user = await user_service.get_user_by_telegram_id(call.from_user.id)
@@ -485,37 +518,39 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                     
                 content = await transcript_service.get_transcript_content(user.id, transcript_id)
                 if not content:
-                    logger.error(f"[FORMAT] Не удалось получить текст транскрипта: {transcript_id}")
+                    logger.error(f"[GPT] Не удалось получить текст транскрипта: {transcript_id}")
                     await call.message.edit_text("❌ Ошибка: не удалось получить текст транскрипта")
                     return
 
                 text = content.decode('utf-8')
                 text_service = get_text_processing_service(session)
                 
-                # Форматируем текст
+                # Обрабатываем текст через GPT
                 if action == "summary":
                     formatted_text = await text_service.format_summary(text)
                     format_name = "Краткое содержание"
+                    file_prefix = "summary"
                 elif action == "todo":
                     formatted_text = await text_service.format_todo(text)
                     format_name = "Список задач"
+                    file_prefix = "todo"
                 elif action == "protocol":
                     formatted_text = await text_service.format_protocol(text)
                     format_name = "Протокол"
+                    file_prefix = "protocol"
                 else:
-                    logger.error(f"[FORMAT] Неизвестный формат: {action}")
+                    logger.error(f"[GPT] Неизвестный формат: {action}")
                     await call.message.edit_text("❌ Неизвестный формат")
                     return
 
                 # Отправляем результат как файл
-                from io import BytesIO
+                from aiogram.types import BufferedInputFile
                 file_data = formatted_text.encode('utf-8')
-                file = BytesIO(file_data)
-                file.name = f"{action}_{transcript_id}.txt"
+                input_file = BufferedInputFile(file_data, filename=f"{file_prefix}_{transcript_id}.txt")
                 
-                await call.message.delete()
+                await processing_msg.delete()
                 await call.message.answer_document(
-                    document=file,
+                    document=input_file,
                     caption=f"📄 {format_name}",
                     reply_markup=get_back_to_transcript_keyboard(transcript_id)
                 )

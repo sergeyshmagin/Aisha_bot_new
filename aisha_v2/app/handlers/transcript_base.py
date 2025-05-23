@@ -22,7 +22,7 @@ class TranscriptBaseHandler:
         """Инициализация базового обработчика"""
         pass  # self.session больше не нужен
     
-    async def get_session(self):
+    def get_session(self):
         """Получение сессии базы данных"""
         return get_session()
     
