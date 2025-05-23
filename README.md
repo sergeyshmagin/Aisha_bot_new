@@ -186,6 +186,16 @@ isort aisha_v2/
 - [`docs/async_and_safety.md`](docs/async_and_safety.md) - Async Python и безопасность
 - [`docs/navigation_transcript.md`](docs/navigation_transcript.md) - Архитектура навигации
 
+### 🎨 Система аватаров
+- [`docs/avatars_architecture.md`](docs/avatars_architecture.md) - Архитектура системы аватаров
+- [`docs/avatar_implementation_plan.md`](docs/avatar_implementation_plan.md) - План реализации аватаров
+
+### 🤖 FAL AI Knowledge Base
+- [`docs/fal_knowlege_base/README.md`](docs/fal_knowlege_base/README.md) - Полная база знаний FAL AI
+- [`docs/fal_knowlege_base/flux-lora-portrait-trainer-api.md`](docs/fal_knowlege_base/flux-lora-portrait-trainer-api.md) - Portrait Trainer API
+- [`docs/fal_knowlege_base/flux-pro-trainer.md`](docs/fal_knowlege_base/flux-pro-trainer.md) - Pro Trainer API
+- [`docs/fal_knowlege_base/fal-ai-models-comparison.md`](docs/fal_knowlege_base/fal-ai-models-comparison.md) - Сравнение моделей
+
 ## 🐛 Отладка
 
 ### Логирование

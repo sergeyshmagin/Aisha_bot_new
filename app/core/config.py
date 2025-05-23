@@ -27,12 +27,42 @@ class Settings(BaseSettings):
     FAL_API_KEY: str = Field("", env="FAL_API_KEY")
     FAL_TRAINING_TEST_MODE: bool = Field(True, env="FAL_TRAINING_TEST_MODE")
     FAL_WEBHOOK_URL: str = Field("https://aibots.kz/api/avatar/status_update", env="FAL_WEBHOOK_URL")
+    
+    # FAL AI - Pro Trainer Settings
     FAL_DEFAULT_MODE: str = Field("character", env="FAL_MODE")
     FAL_DEFAULT_ITERATIONS: int = Field(500, env="FAL_ITERATIONS")
     FAL_DEFAULT_PRIORITY: str = Field("quality", env="FAL_PRIORITY")
     FAL_TRIGGER_WORD: str = Field("TOK", env="FAL_TRIGGER_WORD")
     FAL_LORA_RANK: int = Field(32, env="FAL_LORA_RANK")
-    FAL_FINETUNE_TYPE: str = Field("full", env="FAL_FINETUNE_TYPE")
+    FAL_FINETUNE_TYPE: str = Field("lora", env="FAL_FINETUNE_TYPE")  # "full" или "lora"
+    FAL_CAPTIONING: bool = Field(True, env="FAL_CAPTIONING")
+    
+    # FAL AI - Portrait Trainer Settings  
+    FAL_PORTRAIT_STEPS: int = Field(1000, env="FAL_PORTRAIT_STEPS")
+    FAL_PORTRAIT_LEARNING_RATE: float = Field(0.0002, env="FAL_PORTRAIT_LEARNING_RATE")
+    FAL_PORTRAIT_SUBJECT_CROP: bool = Field(True, env="FAL_PORTRAIT_SUBJECT_CROP")
+    FAL_PORTRAIT_CREATE_MASKS: bool = Field(True, env="FAL_PORTRAIT_CREATE_MASKS")
+    FAL_PORTRAIT_MULTIRESOLUTION: bool = Field(True, env="FAL_PORTRAIT_MULTIRESOLUTION")
+    
+    # FAL AI - Advanced Settings
+    FAL_TRAINING_TIMEOUT: int = Field(1800, env="FAL_TRAINING_TIMEOUT")  # 30 минут
+    FAL_STATUS_CHECK_INTERVAL: int = Field(30, env="FAL_STATUS_CHECK_INTERVAL")  # секунд
+    FAL_MAX_RETRIES: int = Field(3, env="FAL_MAX_RETRIES")
+    FAL_AUTO_MODEL_SELECTION: bool = Field(True, env="FAL_AUTO_MODEL_SELECTION")  # Автовыбор модели
+    
+    # FAL AI - Quality Presets
+    FAL_PRESET_FAST: Dict[str, Any] = {
+        "portrait": {"steps": 500, "learning_rate": 0.0003},
+        "general": {"iterations": 200, "learning_rate": 2e-4, "priority": "speed"}
+    }
+    FAL_PRESET_BALANCED: Dict[str, Any] = {
+        "portrait": {"steps": 1000, "learning_rate": 0.0002},
+        "general": {"iterations": 500, "learning_rate": 1e-4, "priority": "quality"}
+    }
+    FAL_PRESET_QUALITY: Dict[str, Any] = {
+        "portrait": {"steps": 2500, "learning_rate": 0.0001},
+        "general": {"iterations": 1000, "learning_rate": 5e-5, "priority": "quality"}
+    }
     
     # Пути
     BASE_DIR: Path = Path(__file__).parent.parent.parent
