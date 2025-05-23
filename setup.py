@@ -1,9 +1,9 @@
 from setuptools import setup, find_packages
 
 setup(
-    name="aisha_v2",
-    version="0.1.0",
-    packages=find_packages(),
+    name="aisha_bot",
+    version="2.0.0",
+    packages=find_packages(include=['app*']),
     install_requires=[
         "aiogram>=3.0.0",
         "redis>=5.0.0",
