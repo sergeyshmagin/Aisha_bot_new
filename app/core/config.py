@@ -121,6 +121,13 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: Optional[str] = Field(default="KbZZGJHX09KSH7r9ev4m")
     DATABASE_URL: Optional[str] = None
     
+    # Настройки пула соединений БД
+    DB_ECHO: bool = Field(default=False)  # Логирование SQL запросов
+    DB_POOL_SIZE: int = Field(default=5)  # Размер пула соединений
+    DB_MAX_OVERFLOW: int = Field(default=10)  # Максимальное переполнение пула
+    DB_POOL_TIMEOUT: int = Field(default=30)  # Таймаут получения соединения из пула
+    DB_POOL_RECYCLE: int = Field(default=3600)  # Время жизни соединения в секундах
+    
     @validator("DATABASE_URL", pre=True)
     def assemble_db_url(cls, v: Optional[str], values: Dict[str, Any]) -> str:
         """Автоматически собираем DATABASE_URL из переменных PostgreSQL"""
@@ -129,11 +136,11 @@ class Settings(BaseSettings):
         return f"postgresql+asyncpg://{values.get('POSTGRES_USER')}:{values.get('POSTGRES_PASSWORD')}@{values.get('POSTGRES_HOST')}:{values.get('POSTGRES_PORT')}/{values.get('POSTGRES_DB')}"
     
     # MinIO
-    MINIO_ENDPOINT: Optional[str] = Field(default="localhost:9000")
+    MINIO_ENDPOINT: Optional[str] = Field(default="192.168.0.4:9000")
     MINIO_ACCESS_KEY: Optional[str] = Field(default="minioadmin")
-    MINIO_SECRET_KEY: Optional[str] = Field(default="minioadmin")
+    MINIO_SECRET_KEY: Optional[str] = Field(default="")
     MINIO_BUCKET_NAME: Optional[str] = Field(default="aisha")
-    MINIO_SECURE: bool = Field(default=False)
+    MINIO_SECURE: bool = Field(default=False)  # 🎯 ВАЖНО: отключаем SSL для локального сервера
     MINIO_BUCKET_AVATARS: Optional[str] = Field(default="avatars")
     MINIO_BUCKET_PHOTOS: Optional[str] = Field(default="photos")
     MINIO_BUCKET_TEMP: Optional[str] = Field(default="temp")
