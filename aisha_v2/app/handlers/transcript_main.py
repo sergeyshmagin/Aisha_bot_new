@@ -14,6 +14,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import StateFilter
+from datetime import datetime
 
 from aisha_v2.app.handlers.transcript_base import TranscriptBaseHandler
 from aisha_v2.app.core.di import (
@@ -179,13 +180,8 @@ class TranscriptMainHandler(TranscriptBaseHandler):
             
             # Добавляем кнопки транскриптов
             for t in transcripts:
-                # Транскрипты уже возвращаются как словари из сервиса
-                file_name = t.get("metadata", {}).get("file_name") or str(t.get("id"))
-                created_at = t.get("created_at", "—")
-                if isinstance(created_at, str):
-                    created_at = created_at.replace('T', ' ')[:16]
-                transcript_type = "Аудио" if t.get("metadata", {}).get("source") == "audio" else "Текст"
-                btn_text = f"{file_name} | {created_at} | {transcript_type}"
+                # Используем новую функцию для дружелюбного отображения
+                btn_text = self._format_friendly_filename(t)
                 
                 # Явное создание кнопки с проверкой типа
                 try:
@@ -506,3 +502,66 @@ class TranscriptMainHandler(TranscriptBaseHandler):
         except Exception as e:
             logger.error(f"Ошибка при возврате в меню транскрибации: {e}")
             await call.answer("Ошибка при возврате в меню транскрибации")
+
+    def _format_friendly_filename(self, transcript_data: dict) -> str:
+        """
+        Форматирует название файла для дружелюбного отображения пользователю
+        
+        Args:
+            transcript_data: Данные транскрипта с метаданными
+            
+        Returns:
+            Дружелюбное название файла
+        """
+        metadata = transcript_data.get("metadata", {})
+        source = metadata.get("source", "unknown")
+        created_at = transcript_data.get("created_at", "")
+        
+        # Получаем исходное название файла
+        original_filename = metadata.get("file_name", "")
+        
+        # Парсим дату создания
+        try:
+            if isinstance(created_at, str):
+                # Убираем микросекунды и временную зону для упрощения
+                clean_date = created_at.split('.')[0].replace('T', ' ')
+                dt = datetime.fromisoformat(clean_date)
+                date_str = dt.strftime("%d.%m %H:%M")
+            else:
+                date_str = "—"
+        except Exception:
+            date_str = "—"
+        
+        # Определяем тип и иконку
+        if source == "audio":
+            type_icon = "🎵"
+            type_name = "Аудио"
+        else:
+            type_icon = "📝"
+            type_name = "Текст"
+        
+        # Пытаемся извлечь осмысленное название из оригинального файла
+        if original_filename:
+            # Убираем расширение
+            name_without_ext = original_filename.rsplit('.', 1)[0]
+            
+            # Если это техническое название вроде "2025-05-21_10-01_file_362"
+            if '_file_' in name_without_ext or name_without_ext.count('_') >= 2:
+                # Используем просто тип и дату
+                friendly_name = f"{type_icon} {type_name}"
+            else:
+                # Используем оригинальное название, но сокращаем если длинное
+                if len(name_without_ext) > 20:
+                    friendly_name = f"{type_icon} {name_without_ext[:17]}..."
+                else:
+                    friendly_name = f"{type_icon} {name_without_ext}"
+        else:
+            # Fallback к типу файла
+            friendly_name = f"{type_icon} {type_name}"
+        
+        # Добавляем количество слов для текстовых файлов
+        word_count = metadata.get("word_count")
+        if word_count and source == "text":
+            friendly_name += f" ({word_count} сл.)"
+        
+        return f"{friendly_name} • {date_str}"
