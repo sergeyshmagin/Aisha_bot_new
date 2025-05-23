@@ -3,6 +3,9 @@
 """
 import logging
 from typing import Optional
+import tempfile
+import os
+import uuid
 
 from aisha_v2.app.core.config import settings
 from aisha_v2.app.services.audio_processing.types import (
@@ -40,54 +43,51 @@ class AudioService:
         remove_silence: bool = True
     ) -> TranscribeResult:
         """
-        Обрабатывает аудио и транскрибирует его
-        
-        Args:
-            audio_data: Аудио данные
-            language: Язык аудио
-            save_original: Сохранять ли оригинальный файл
-            normalize: Нормализовать ли громкость
-            remove_silence: Удалять ли тишину
-            
-        Returns:
-            TranscribeResult: Результат транскрибации
-            
-        Raises:
-            AudioProcessingError: При ошибке обработки
+        Обрабатывает аудио и транскрибирует его (через ffmpeg, как в v1)
         """
         try:
-            # Сохраняем оригинальный файл, если нужно
-            original_path = None
-            if save_original:
-                original_path = await self.storage.save(audio_data)
-                logger.info(f"Оригинальный файл сохранен: {original_path}")
-            
-            # Конвертируем в MP3
-            audio_data = await self.converter.convert_to_mp3(audio_data)
-            logger.info("Аудио конвертировано в MP3")
-            
-            # Нормализуем громкость, если нужно
-            if normalize:
-                audio_data = await self.processor.normalize_audio(audio_data)
-                logger.info("Громкость нормализована")
-            
-            # Удаляем тишину, если нужно
-            if remove_silence:
-                audio_data = await self.processor.remove_silence(audio_data)
-                logger.info("Тишина удалена")
-            
-            # Транскрибируем
-            result = await self.recognizer.transcribe(audio_data, language)
-            
-            # Если транскрибация успешна, сохраняем обработанный файл
-            if result.success:
-                processed_path = await self.storage.save(audio_data)
-                logger.info(f"Обработанный файл сохранен: {processed_path}")
-            
-            return result
-            
+            logger.info("[AudioService] Начало process_audio (ffmpeg pipeline)")
+            temp_dir = os.path.join(os.getcwd(), "storage", "temp")
+            os.makedirs(temp_dir, exist_ok=True)
+            ogg_path = os.path.join(temp_dir, f"{uuid.uuid4()}.ogg")
+            mp3_path = os.path.join(temp_dir, f"{uuid.uuid4()}.mp3")
+            # 1. Сохраняем исходный файл в storage/temp
+            with open(ogg_path, "wb") as f:
+                f.write(audio_data)
+            try:
+                # 2. Конвертируем в mp3 через ffmpeg
+                logger.info(f"[AudioService] Конвертация {ogg_path} в mp3 через ffmpeg")
+                mp3_bytes = await self.converter.convert_to_mp3(audio_data, use_ffmpeg=True)
+                with open(mp3_path, "wb") as f:
+                    f.write(mp3_bytes)
+                logger.info(f"[AudioService] mp3-файл создан: {mp3_path}")
+                # 3. Разбиваем mp3 на чанки через ffmpeg
+                logger.info(f"[AudioService] Нарезка {mp3_path} на чанки через ffmpeg")
+                chunks = await self.processor.split_audio(mp3_bytes, use_ffmpeg=True)
+                logger.info(f"[AudioService] Получено чанков: {len(chunks)}")
+                if not chunks:
+                    logger.error(f"[AudioService] Не удалось нарезать аудио на чанки. mp3_path={mp3_path}")
+                    raise AudioProcessingError(f"Не удалось нарезать аудио на чанки. mp3_path={mp3_path}")
+                # 4. Транскрибируем каждый chunk
+                texts = []
+                for idx, chunk in enumerate(chunks):
+                    logger.info(f"[AudioService] Транскрибация чанка {idx+1}/{len(chunks)}")
+                    result = await self.recognizer.transcribe_chunk(chunk, language)
+                    if result.success:
+                        texts.append(result.text)
+                    else:
+                        logger.warning(f"[AudioService] Ошибка транскрибации чанка {idx+1}: {result.error}")
+                final_text = "\n".join(texts)
+                success = bool(texts)
+                logger.info(f"[AudioService] Итоговая транскрибация: success={success}, чанков={len(chunks)}")
+                return TranscribeResult(success=success, text=final_text, error=None if success else "transcribe_error")
+            finally:
+                if os.path.exists(ogg_path):
+                    os.unlink(ogg_path)
+                if os.path.exists(mp3_path):
+                    os.unlink(mp3_path)
         except Exception as e:
-            logger.error(f"Ошибка при обработке аудио: {e}")
+            logger.error(f"[AudioService] Ошибка при обработке аудио (ffmpeg pipeline): {e}", exc_info=True)
             raise AudioProcessingError(f"Ошибка обработки: {str(e)}")
     
     async def transcribe_file(

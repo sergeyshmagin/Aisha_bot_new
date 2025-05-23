@@ -8,12 +8,8 @@ def get_main_menu() -> InlineKeyboardMarkup:
         InlineKeyboardMarkup: Клавиатура главного меню
     """
     return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="🤖 Бизнес-ассистент",
-                callback_data="business_menu"
-            )
-        ],
+        [InlineKeyboardButton(text="🎤 Транскрибация", callback_data="transcribe_menu")],
+        # [InlineKeyboardButton(text="🤖 Бизнес-ассистент", callback_data="business_menu")],  # LEGACY
         [
             InlineKeyboardButton(
                 text="🖼 Галерея",
@@ -29,7 +25,7 @@ def get_main_menu() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text="❓ Помощь",
-                callback_data="main_help"
+                callback_data="help"
             )
         ]
     ]) 

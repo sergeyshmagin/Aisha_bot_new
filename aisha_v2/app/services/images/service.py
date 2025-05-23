@@ -70,19 +70,37 @@ class ImageProcessingService(BaseService):
             thumbnail_path = await self._create_thumbnail(file_path)
             
             # 3. Сохраняем в MinIO
-            async with StorageService() as storage:
-                minio_path = await storage.upload_file(
-                    bucket="images",
-                    file_path=file_path,
-                    user_id=user_id,
-                    metadata={"tags": ",".join(tags) if tags else ""}
-                )
+            storage = StorageService()
+            
+            # Читаем данные из файла
+            async with aiofiles.open(file_path, 'rb') as f:
+                file_data = await f.read()
                 
-                thumbnail_minio_path = await storage.upload_file(
-                    bucket="thumbnails",
-                    file_path=thumbnail_path,
-                    user_id=user_id
-                )
+            # Имя объекта в MinIO
+            object_name = f"{user_id}/{Path(file_path).name}"
+            
+            # Загружаем в MinIO
+            minio_path = await storage.upload_file(
+                bucket="images",
+                object_name=object_name,
+                data=file_data,
+                content_type="image/jpeg"
+            )
+            
+            # Читаем данные превью
+            async with aiofiles.open(thumbnail_path, 'rb') as f:
+                thumbnail_data = await f.read()
+                
+            # Имя объекта для превью
+            thumbnail_object_name = f"{user_id}/thumbnails/{Path(thumbnail_path).name}"
+            
+            # Загружаем превью
+            thumbnail_minio_path = await storage.upload_file(
+                bucket="thumbnails",
+                object_name=thumbnail_object_name,
+                data=thumbnail_data,
+                content_type="image/jpeg"
+            )
             
             return ImageResult(
                 file_id=photo.file_id,
@@ -118,9 +136,9 @@ class ImageProcessingService(BaseService):
             List[ImageResult]: Список найденных изображений
         """
         try:
-            async with StorageService() as storage:
-                # TODO: Реализовать поиск по тегам в MinIO
-                return []
+            storage = StorageService()
+            # TODO: Реализовать поиск по тегам в MinIO
+            return []
                 
         except Exception as e:
             logger.exception("Ошибка при поиске изображений")

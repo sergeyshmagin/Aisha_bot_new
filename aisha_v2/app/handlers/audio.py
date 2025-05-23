@@ -1,3 +1,8 @@
+# --- LEGACY: устаревший обработчик аудио, не использовать ---
+# Вся логика перенесена в TranscriptProcessingHandler
+# Файл сохранён для истории, не импортировать!
+# ...
+
 from typing import Optional
 from aiogram import Bot, Router, F
 from aiogram.types import Message, FSInputFile
@@ -6,12 +11,6 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 from aisha_v2.app.core.logger import logger
-from aisha_v2.app.services.audio.service import AudioProcessingService
-from aisha_v2.app.texts.audio_errors import (
-    AUDIO_PROCESSING_ERROR,
-    AUDIO_PROCESSING_START,
-    AUDIO_PROCESSING_DONE
-)
 from aisha_v2.app.services.storage.minio import MinioStorage
 
 # Определяем состояния FSM
@@ -25,11 +24,9 @@ class AudioHandler:
     def __init__(
         self,
         bot: Bot,
-        audio_service: AudioProcessingService,
         minio_storage: MinioStorage
     ):
         self.bot = bot
-        self.audio_service = audio_service
         self.minio_storage = minio_storage
 
     async def handle_audio_start(self, message: Message, state: FSMContext) -> None:
@@ -86,17 +83,18 @@ class AudioHandler:
                 return
 
             # Отправляем транскрипт
-            if transcript_path:
-                with open(transcript_path, "r", encoding="utf-8") as f:
-                    transcript_text = f.read()
-                
-                # Отправляем файл
-                await message.answer_document(
-                    document=FSInputFile(transcript_path),
-                    caption=AUDIO_PROCESSING_DONE.format(
-                        snippet=transcript_text[:200]
-                    )
-                )
+            # --- LEGACY: отправка технических деталей/сырого транскрипта пользователю ---
+            # if transcript_path:
+            #     with open(transcript_path, "r", encoding="utf-8") as f:
+            #         transcript_text = f.read()
+            #     await message.answer_document(
+            #         document=FSInputFile(transcript_path),
+            #         caption=AUDIO_PROCESSING_DONE.format(
+            #             snippet=transcript_text[:200]
+            #         )
+            #     )
+            # --- END LEGACY ---
+            # Используйте TranscriptProcessingHandler для корректного UX
 
         except Exception as e:
             logger.exception(f"[handle_audio] Ошибка: {e}")

@@ -173,3 +173,79 @@ class TextProcessingService(BaseService):
         except Exception as e:
             logger.error(f"Error calling GPT API: {e}")
             return "Ошибка при обработке текста."
+
+    async def process_text(self, text: str) -> str:
+        """
+        Обрабатывает текст (основной метод для TranscriptProcessingHandler)
+        
+        Args:
+            text: Исходный текст
+            
+        Returns:
+            str: Обработанный текст
+        """
+        try:
+            # Очищаем текст от лишних пробелов и переносов строк
+            text = "\n".join(line.strip() for line in text.split("\n") if line.strip())
+            
+            # Удаляем множественные пробелы
+            text = " ".join(text.split())
+            
+            # Добавляем переносы строк после точек
+            text = text.replace(". ", ".\n")
+            
+            # Форматируем абзацы
+            paragraphs = text.split("\n\n")
+            formatted_paragraphs = []
+            for p in paragraphs:
+                if p.strip():
+                    # Добавляем отступ в начале абзаца
+                    formatted_paragraphs.append("    " + p.strip())
+            
+            # Собираем текст обратно
+            processed_text = "\n\n".join(formatted_paragraphs)
+            
+            logger.info(f"[TEXT] Текст обработан, длина: {len(processed_text)}")
+            return processed_text
+            
+        except Exception as e:
+            logger.error(f"[TEXT] Ошибка при обработке текста: {e}")
+            return text  # В случае ошибки возвращаем исходный текст
+    
+    async def format_summary(self, text: str) -> str:
+        """
+        Создает краткое содержание из транскрипта
+        
+        Args:
+            text: Исходный текст транскрипта
+            
+        Returns:
+            str: Краткое содержание
+        """
+        return await self.generate_summary(text)
+    
+    async def format_todo(self, text: str) -> str:
+        """
+        Создает список задач из транскрипта
+        
+        Args:
+            text: Исходный текст транскрипта
+            
+        Returns:
+            str: Список задач в текстовом формате
+        """
+        tasks = await self.generate_todo_list(text)
+        return "\n".join([f"- {task}" for task in tasks])
+    
+    async def format_protocol(self, text: str) -> str:
+        """
+        Создает протокол встречи из транскрипта
+        
+        Args:
+            text: Исходный текст транскрипта
+            
+        Returns:
+            str: Протокол в текстовом формате
+        """
+        prompt = f"{PROTOCOL_PROMPT}\n\nТранскрипция:\n{text[:4000]}"
+        return await self._process_with_gpt(prompt)

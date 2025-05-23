@@ -17,6 +17,7 @@ from redis.backoff import ExponentialBackoff
 from redis.retry import Retry
 from aiogram.types import Message
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
 
 import aiohttp
 from telebot.async_telebot import AsyncTeleBot
@@ -25,7 +26,7 @@ from aisha_v2.app.core.config import settings
 from aisha_v2.app.core.redis import acquire_lock, release_lock, refresh_lock
 from aisha_v2.app.handlers import (
     main_router,
-    business_router,
+    # business_router,  # LEGACY: удалено
     gallery_router,
     handler,
     TranscriptMainHandler,
@@ -33,7 +34,7 @@ from aisha_v2.app.handlers import (
     TranscriptViewHandler,
     TranscriptManagementHandler,
 )
-from aisha_v2.app.services.audio.service import AudioProcessingService
+# from aisha_v2.app.services.audio.service import AudioProcessingService  # LEGACY: удалено
 from aisha_v2.app.services.storage.minio import MinioStorage
 from aisha_v2.app.handlers.audio import AudioHandler, register_handlers, router as audio_router
 from aisha_v2.app.handlers.menu import router as menu_router, setup_menu_handlers
@@ -114,22 +115,29 @@ async def main():
     # Регистрация роутеров
     routers = [
         main_router,
-        business_router,
+        # business_router,  # LEGACY: отключено, используйте TranscriptProcessingHandler
         gallery_router,
         handler.router,
         menu_router,
-        audio_router,
+        # audio_router,  # LEGACY: отключено, используйте TranscriptProcessingHandler
     ]
     for router in routers:
         dp.include_router(router)
-    # Регистрируем fallback_router последним
-    dp.include_router(fallback_router)
-
+    
     # Регистрация legacy-хендлеров (если нужно)
     transcript_main_handler = TranscriptMainHandler()
     transcript_processing_handler = TranscriptProcessingHandler()
     transcript_view_handler = TranscriptViewHandler()
     transcript_management_handler = TranscriptManagementHandler()
+    
+    # Регистрируем хендлеры в роутерах (асинхронно)
+    await asyncio.gather(
+        transcript_main_handler.register_handlers(),
+        transcript_processing_handler.register_handlers(),
+        transcript_view_handler.register_handlers(),
+        transcript_management_handler.register_handlers()
+    )
+    
     legacy_handlers = [
         transcript_main_handler,
         transcript_processing_handler,
@@ -139,19 +147,32 @@ async def main():
     for legacy_handler in legacy_handlers:
         dp.include_router(legacy_handler.router)
 
+    # Регистрируем fallback_router последним
+    dp.include_router(fallback_router)
+
     minio_storage = MinioStorage()
-    audio_service = AudioProcessingService()
+    # audio_service = AudioProcessingService()
     audio_handler = AudioHandler(
         bot=bot,
-        audio_service=audio_service,
+        # audio_service=audio_service,
         minio_storage=minio_storage
     )
     register_handlers(audio_handler)
     setup_menu_handlers(audio_handler)
 
     @dp.message(Command("start"))
-    async def cmd_start(message: Message):
-        await message.answer("Выберите действие:", reply_markup=get_main_menu())
+    async def cmd_start(message: Message, state: FSMContext):
+        # Попробовать удалить старое меню, если message_id сохранён в state
+        data = await state.get_data()
+        old_menu_id = data.get("menu_message_id")
+        if old_menu_id and old_menu_id != message.message_id:
+            try:
+                await message.bot.delete_message(chat_id=message.chat.id, message_id=old_menu_id)
+            except Exception:
+                pass
+        # Отправить новое меню и сохранить его message_id
+        sent = await message.answer("Выберите действие:", reply_markup=get_main_menu())
+        await state.update_data(menu_message_id=sent.message_id)
 
     # Запуск бота
     try:

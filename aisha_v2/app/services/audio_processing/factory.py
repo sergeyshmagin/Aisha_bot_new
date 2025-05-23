@@ -14,6 +14,17 @@ from aisha_v2.app.services.audio_processing.converter import PydubAudioConverter
 from aisha_v2.app.services.audio_processing.recognizer import WhisperRecognizer
 from aisha_v2.app.services.audio_processing.processor import AudioProcessor
 from aisha_v2.app.services.audio_processing.storage import LocalAudioStorage
+from aisha_v2.app.services.audio_processing.service import AudioService
+
+def get_audio_service() -> AudioService:
+    """
+    Получить сервис обработки аудио с настройками по умолчанию
+    
+    Returns:
+        AudioService: Сервис обработки аудио
+    """
+    converter, recognizer, processor, storage = AudioServiceFactory.create_all()
+    return AudioService(converter, recognizer, processor, storage)
 
 class AudioServiceFactory:
     """Фабрика для создания сервисов обработки аудио"""

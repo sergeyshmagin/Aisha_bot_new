@@ -26,6 +26,10 @@ from aisha_v2.app.utils.uuid_utils import safe_uuid
 
 logger = logging.getLogger(__name__)
 
+# --- LEGACY: обработчик просмотра транскриптов, не использовать напрямую ---
+# Используйте TranscriptProcessingHandler и сервисы для получения транскриптов
+# ...
+
 class TranscriptViewHandler(TranscriptBaseHandler):
     """
     Обработчик для просмотра транскриптов.
@@ -59,12 +63,7 @@ class TranscriptViewHandler(TranscriptBaseHandler):
     
     async def _view_transcript(self, call: CallbackQuery, state: FSMContext, telegram_id: int, transcript_id):
         """
-        Просмотр транскрипта
-        
-        Args:
-            call: CallbackQuery
-            telegram_id: Telegram ID пользователя
-            transcript_id: UUID транскрипта
+        LEGACY: Получение транскрипта через старый сервис (до полной миграции на MinIO). Использовать только для миграции.
         """
         async with self.get_session() as session:
             transcript_service = get_transcript_service(session)

@@ -10,21 +10,47 @@ from redis.backoff import ExponentialBackoff
 from redis.retry import Retry
 
 from minio import Minio
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 
 from aisha_v2.app.core.config import settings
-from aisha_v2.app.services.audio.service import AudioProcessingService
+from aisha_v2.app.services.audio_processing.service import AudioService as AudioProcessingService
 from aisha_v2.app.services.avatar_db import AvatarService
 from aisha_v2.app.services.backend import BackendService
 from aisha_v2.app.services.text_processing import TextProcessingService
 from aisha_v2.app.services.transcript import TranscriptService
 from aisha_v2.app.services.user import UserService
+from aisha_v2.app.services.audio_processing.factory import get_audio_service
 
 logger = logging.getLogger(__name__)
 
 # Глобальные экземпляры сервисов
 _redis_client: Optional[Redis] = None
 _state_storage: Optional[RedisStorage] = None
+_engine = None
+_async_session = None
+
+def get_db_session() -> AsyncSession:
+    """
+    Получить сессию БД
+    """
+    global _engine, _async_session
+    if _engine is None:
+        _engine = create_async_engine(
+            settings.DATABASE_URL,
+            echo=settings.DB_ECHO,
+            pool_size=settings.DB_POOL_SIZE,
+            max_overflow=settings.DB_MAX_OVERFLOW,
+            pool_timeout=settings.DB_POOL_TIMEOUT,
+            pool_recycle=settings.DB_POOL_RECYCLE,
+        )
+        _async_session = async_sessionmaker(
+            _engine,
+            class_=AsyncSession,
+            expire_on_commit=False,
+            autocommit=False,
+            autoflush=False,
+        )
+    return _async_session()
 
 def get_redis_client() -> Redis:
     """
@@ -101,7 +127,7 @@ def get_audio_processing_service(session: AsyncSession) -> AudioProcessingServic
     """
     Получение сервиса для обработки аудио
     """
-    return AudioProcessingService()
+    return get_audio_service()
 
 
 def get_text_processing_service(session: AsyncSession) -> TextProcessingService:

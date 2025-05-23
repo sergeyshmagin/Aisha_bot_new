@@ -7,6 +7,7 @@ from datetime import datetime
 import logging
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from aisha_v2.app.utils.timezone import TimezoneUtils
 from aisha_v2.app.utils.uuid_utils import safe_uuid
@@ -16,19 +17,16 @@ def get_transcript_menu_keyboard() -> InlineKeyboardMarkup:
     """
     Клавиатура меню транскрибации
     """
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="🎤 Аудио", callback_data="transcribe_audio"),
-                InlineKeyboardButton(text="📝 Текст", callback_data="transcribe_text")
-            ],
-            [
-                InlineKeyboardButton(text="📜 История", callback_data="transcribe_history")
-            ],
-            [
-                InlineKeyboardButton(text="◀️ Назад", callback_data="transcribe_back_to_menu")
-            ]
-        ]
+    keyboard = InlineKeyboardMarkup()
+    keyboard.row(
+        InlineKeyboardButton(text="🎤 Аудио", callback_data="transcribe_audio"),
+        InlineKeyboardButton(text="📝 Текст", callback_data="transcribe_text")
+    )
+    keyboard.row(
+        InlineKeyboardButton(text="📜 История", callback_data="transcribe_history")
+    )
+    keyboard.row(
+        InlineKeyboardButton(text="◀️ Назад", callback_data="transcribe_back_to_menu")
     )
     return keyboard
 
@@ -44,7 +42,7 @@ def get_transcripts_keyboard(transcripts: List[Dict], telegram_id: int) -> Inlin
     Returns:
         Клавиатура с транскриптами
     """
-    keyboard = InlineKeyboardMarkup()
+    builder = InlineKeyboardBuilder()
     
     for transcript in transcripts:
         # Получаем created_at
@@ -84,17 +82,17 @@ def get_transcripts_keyboard(transcripts: List[Dict], telegram_id: int) -> Inlin
             logging.error(f"Invalid UUID in transcript: {transcript['id']}")
             continue
             
-        keyboard.add(
+        builder.add(
             InlineKeyboardButton(
                 label, callback_data=f"transcribe_view_{str(uuid_obj)}"
             )
         )
     
-    keyboard.row(
+    builder.row(
         InlineKeyboardButton("⬅️ Назад", callback_data="transcribe_back_to_menu")
     )
     
-    return keyboard
+    return builder.as_markup()
 
 
 def get_format_keyboard(transcript_id: str | UUID) -> InlineKeyboardMarkup:
@@ -105,8 +103,8 @@ def get_format_keyboard(transcript_id: str | UUID) -> InlineKeyboardMarkup:
         raise ValueError(f"Invalid UUID: {transcript_id}")
     transcript_id_str = str(uuid_obj)
     
-    keyboard = InlineKeyboardMarkup()
-    keyboard.row(
+    builder = InlineKeyboardBuilder()
+    builder.row(
         InlineKeyboardButton(
             "📝 Краткое содержание",
             callback_data=f"transcribe_format_{transcript_id_str}_summary",
@@ -116,59 +114,83 @@ def get_format_keyboard(transcript_id: str | UUID) -> InlineKeyboardMarkup:
             callback_data=f"transcribe_format_{transcript_id_str}_todo",
         ),
     )
-    keyboard.row(
+    builder.row(
         InlineKeyboardButton(
             "📊 Протокол",
             callback_data=f"transcribe_format_{transcript_id_str}_protocol",
         ),
     )
-    keyboard.row(
+    builder.row(
         InlineKeyboardButton(
             "⬅️ Назад", callback_data="transcribe_back_to_menu"
         )
     )
-    return keyboard
+    return builder.as_markup()
 
 
-def get_transcript_actions_keyboard(transcript_id: str) -> InlineKeyboardMarkup:
+def get_transcript_actions_keyboard(transcript_id: str | UUID) -> InlineKeyboardMarkup:
     """
     Клавиатура действий с транскриптом
+    
+    Args:
+        transcript_id: ID транскрипта (строка или UUID)
+        
+    Returns:
+        InlineKeyboardMarkup с кнопками действий
     """
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton("📝 Краткое содержание", callback_data=f"transcript_summary_{transcript_id}"),
-            InlineKeyboardButton("✅ Список задач", callback_data=f"transcript_todo_{transcript_id}")
-        ],
-        [
-            InlineKeyboardButton("📊 Протокол", callback_data=f"transcript_protocol_{transcript_id}"),
-            InlineKeyboardButton("⬅️ Назад", callback_data=f"transcript_back_{transcript_id}")
-        ]
-    ])
+    # Безопасно преобразуем в UUID и обратно в строку
+    uuid_obj = safe_uuid(transcript_id)
+    if not uuid_obj:
+        raise ValueError(f"Invalid UUID: {transcript_id}")
+    transcript_id_str = str(uuid_obj)
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(
+            text="📝 Краткое содержание",
+            callback_data=f"transcript_summary_{transcript_id_str}"
+        ),
+        InlineKeyboardButton(
+            text="✅ Список задач",
+            callback_data=f"transcript_todo_{transcript_id_str}"
+        )
+    )
+    builder.row(
+        InlineKeyboardButton(
+            text="📊 Протокол",
+            callback_data=f"transcript_protocol_{transcript_id_str}"
+        ),
+        InlineKeyboardButton(
+            text="⬅️ Назад",
+            callback_data=f"transcript_back_{transcript_id_str}"
+        )
+    )
+    return builder.as_markup()
 
 
-def get_back_to_transcript_keyboard(transcript_id: str) -> InlineKeyboardMarkup:
+def get_back_to_transcript_keyboard(transcript_id: str | UUID) -> InlineKeyboardMarkup:
     """
     Клавиатура для возврата к транскрипту
     """
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="◀️ К транскрипту", callback_data=f"transcribe_back_to_transcript_{transcript_id}")
-            ]
-        ]
+    # Безопасно преобразуем в UUID и обратно в строку
+    uuid_obj = safe_uuid(transcript_id)
+    if not uuid_obj:
+        raise ValueError(f"Invalid UUID: {transcript_id}")
+    transcript_id_str = str(uuid_obj)
+    
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="◀️ К транскрипту", callback_data=f"transcribe_back_to_transcript_{transcript_id_str}")
     )
-    return keyboard
+    return builder.as_markup()
 
 
 def get_back_to_menu_keyboard() -> InlineKeyboardMarkup:
     """
     Клавиатура для возврата в меню
     """
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="◀️ Назад в меню", callback_data="transcribe_back_to_menu")
-            ]
-        ]
+    builder = InlineKeyboardBuilder()
+    builder.row(
+        InlineKeyboardButton(text="◀️ Назад в меню", callback_data="transcribe_back_to_menu")
     )
-    return keyboard
+    return builder.as_markup()

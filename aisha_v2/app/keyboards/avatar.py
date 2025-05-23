@@ -27,7 +27,7 @@ def avatar_inline_keyboard():
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="➕ Создать аватар", callback_data="avatar_create"),
          InlineKeyboardButton(text="🖼 Мои аватары", callback_data="avatar_list")],
-        [InlineKeyboardButton(text="⬅️ Назад", callback_data="business_menu")]
+        # [InlineKeyboardButton(text="⬅️ Назад", callback_data="business_menu")]  # LEGACY
     ])
     return kb
 

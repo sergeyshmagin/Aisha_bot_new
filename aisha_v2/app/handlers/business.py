@@ -1,4 +1,22 @@
 """
+LEGACY: бизнес-ассистент (устаревший код, не использовать, не импортировать)
+Весь код закомментирован для предотвращения случайного использования.
+"""
+# --- LEGACY: файл переименован в business.py.LEGACY, не использовать ---
+# from aiogram import Router, F
+# from aiogram.types import Message, CallbackQuery
+# from aiogram.fsm.context import FSMContext
+# from aiogram.fsm.state import State, StatesGroup
+# from aisha_v2.app.keyboards.business import get_business_menu
+# from aisha_v2.app.keyboards.main import get_main_menu
+# from aisha_v2.app.core.di import get_user_service
+# from aisha_v2.app.services.audio.service import AudioProcessingService
+# from aisha_v2.app.services.text_processing import TextProcessingService
+# from aisha_v2.app.core.logger import get_logger
+# ...
+# Весь остальной код файла закомментирован как LEGACY
+
+"""
 Обработчики бизнес-ассистента
 """
 from aiogram import Router, F
@@ -9,7 +27,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aisha_v2.app.keyboards.business import get_business_menu
 from aisha_v2.app.keyboards.main import get_main_menu
 from aisha_v2.app.core.di import get_user_service
-from aisha_v2.app.services.audio.service import AudioProcessingService
+# from aisha_v2.app.services.audio.service import AudioProcessingService  # LEGACY: удалено
 from aisha_v2.app.services.text_processing import TextProcessingService
 from aisha_v2.app.core.logger import get_logger
 
@@ -71,16 +89,19 @@ async def handle_audio(message: Message, state: FSMContext):
         await state.set_state(BusinessStates.processing)
         await message.answer("⏳ Обрабатываю аудио...")
 
-        audio_service = AudioProcessingService()
-        # TODO: Реализовать обработку аудио
-        result = await audio_service.process_audio(message.audio or message.voice, message.from_user.id, message.bot)
+        # audio_service = AudioProcessingService()
+        # result = await audio_service.process_audio(message.audio or message.voice, message.from_user.id, message.bot)
+        pass
 
         await state.clear()
-        await message.answer(
-            "✅ Аудио обработано!\n\n"
-            f"Результат: {result}",
-            reply_markup=get_business_menu()
-        )
+        # --- LEGACY: отправка технических деталей результата пользователю ---
+        # await message.answer(
+        #     "✅ Аудио обработано!\n\n"
+        #     f"Результат: {result}",
+        #     reply_markup=get_business_menu()
+        # )
+        # --- END LEGACY ---
+        # Используйте TranscriptProcessingHandler для корректного UX
 
     except Exception as e:
         logger.exception("Ошибка при обработке аудио")
@@ -108,7 +129,8 @@ async def handle_text(message: Message, state: FSMContext):
 
         async with TextProcessingService() as text_service:
             # TODO: Реализовать обработку текста
-            result = await text_service.process_text(message.text)
+            # result = await text_service.process_text(message.text)
+            pass
 
         await state.clear()
         await message.answer(

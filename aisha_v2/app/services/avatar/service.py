@@ -71,13 +71,22 @@ class AvatarService(BaseService):
                 file_path = await self._apply_style(file_path, style)
             
             # 3. Сохраняем в MinIO
-            async with StorageService() as storage:
-                minio_path = await storage.upload_file(
-                    bucket="avatars",
-                    file_path=file_path,
-                    user_id=user_id,
-                    metadata={"style": style} if style else {}
-                )
+            storage = StorageService()
+            
+            # Читаем данные из файла
+            async with aiofiles.open(file_path, 'rb') as f:
+                file_data = await f.read()
+                
+            # Имя объекта в MinIO
+            object_name = f"{user_id}/{Path(file_path).name}"
+            
+            # Загружаем в MinIO
+            minio_path = await storage.upload_file(
+                bucket="avatars",
+                object_name=object_name,
+                data=file_data,
+                content_type="image/jpeg"
+            )
             
             return AvatarResult(
                 file_id=photo.file_id,
@@ -136,9 +145,9 @@ class AvatarService(BaseService):
             List[AvatarResult]: Список аватаров
         """
         try:
-            async with StorageService() as storage:
-                # TODO: Реализовать получение списка аватаров из MinIO
-                return []
+            storage = StorageService()
+            # TODO: Реализовать получение списка аватаров из MinIO
+            return []
                 
         except Exception as e:
             logger.exception("Ошибка при получении списка аватаров")

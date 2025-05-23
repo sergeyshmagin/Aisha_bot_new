@@ -2,7 +2,7 @@
 Обработчики команд
 """
 from aisha_v2.app.handlers.main_menu import router as main_router
-from aisha_v2.app.handlers.business import router as business_router
+# from aisha_v2.app.handlers.business import router as business_router  # LEGACY: отключено, не импортировать
 from aisha_v2.app.handlers.gallery import router as gallery_router
 from aisha_v2.app.handlers.avatar import handler
 
@@ -15,7 +15,7 @@ from aisha_v2.app.handlers.transcript_management import TranscriptManagementHand
 __all__ = [
     # New routers
     "main_router",
-    "business_router",
+    # "business_router",
     "gallery_router",
     "handler",
     

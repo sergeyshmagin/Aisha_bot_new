@@ -20,13 +20,11 @@ class TranscriptBaseHandler:
     
     def __init__(self):
         """Инициализация базового обработчика"""
-        self.session = None
+        pass  # self.session больше не нужен
     
     async def get_session(self):
         """Получение сессии базы данных"""
-        if not self.session:
-            self.session = await get_session()
-        return self.session
+        return get_session()
     
     async def _safe_delete_message(self, message: Message, reason: str = "Удаление сообщения"):
         """

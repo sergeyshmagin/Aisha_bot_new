@@ -4,7 +4,6 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 
 from aisha_v2.app.keyboards.main import get_main_menu
-from aisha_v2.app.keyboards.business import get_business_menu
 from aisha_v2.app.keyboards.gallery import get_gallery_menu
 from aisha_v2.app.keyboards.avatar import get_avatar_menu
 from aisha_v2.app.core.di import get_user_service
@@ -54,23 +53,12 @@ async def show_help(call: CallbackQuery):
     """
     help_text = (
         "ℹ️ Помощь по использованию бота:\n\n"
-        "🤖 Бизнес-ассистент - обработка аудио и текста\n"
-        "🖼 Галерея - просмотр и управление изображениями\n"
-        "🧑‍🎨 Аватары - создание и управление аватарами\n\n"
+        "🎤 Транскрибация — обработка аудио и .txt\n"
+        "🖼 Галерея — просмотр и управление изображениями\n"
+        "🧑‍🎨 Аватары — создание и управление аватарами\n\n"
         "Для возврата в главное меню используйте команду /start"
     )
     await call.answer(help_text, show_alert=True)
-
-@router.callback_query(F.data == "business_menu")
-async def show_business_menu(call: CallbackQuery):
-    """
-    Показывает меню бизнес-ассистента.
-    """
-    await call.answer("🔄 Переход в меню бизнес-ассистента...", show_alert=False)
-    await call.message.edit_text(
-        "🤖 Бизнес-ассистент\n\nВыберите действие:",
-        reply_markup=get_business_menu()
-    )
 
 @router.callback_query(F.data == "business_gallery")
 async def show_gallery(call: CallbackQuery):
@@ -103,4 +91,13 @@ async def back_to_main(call: CallbackQuery):
     await call.message.edit_text(
         "👋 Главное меню\n\nВыберите действие:",
         reply_markup=get_main_menu()
-    ) 
+    )
+
+@router.callback_query(F.data == "transcribe_menu")
+async def show_transcribe_menu(call: CallbackQuery, state: FSMContext):
+    """
+    Показывает меню транскрибации (обработка аудио и текста).
+    """
+    from aisha_v2.app.handlers.transcript_main import TranscriptMainHandler
+    handler = TranscriptMainHandler()
+    await handler._handle_transcribe_command(call.message, state) 

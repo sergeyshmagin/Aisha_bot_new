@@ -6,6 +6,8 @@ import logging
 import tempfile
 from typing import Optional
 from pathlib import Path
+from datetime import datetime
+import io
 
 import aiohttp
 from aisha_v2.app.core.config import settings
@@ -55,18 +57,20 @@ class WhisperRecognizer(AudioRecognizer):
             async with aiohttp.ClientSession() as session:
                 for attempt in range(self.max_retries):
                     try:
+                        form = aiohttp.FormData()
+                        form.add_field(
+                            "file",
+                            io.BytesIO(audio_data),
+                            filename="audio.mp3",
+                            content_type="audio/mpeg"
+                        )
+                        form.add_field("model", "whisper-1")
+                        form.add_field("language", language)
+                        form.add_field("response_format", "json")
                         async with session.post(
                             self.api_url,
-                            headers={
-                                "Authorization": f"Bearer {self.api_key}",
-                                "Content-Type": "multipart/form-data"
-                            },
-                            data={
-                                "file": open(temp_path, "rb"),
-                                "model": "whisper-1",
-                                "language": language,
-                                "response_format": "json"
-                            }
+                            headers={"Authorization": f"Bearer {self.api_key}"},
+                            data=form
                         ) as response:
                             if response.status == 200:
                                 result = await response.json()
@@ -147,13 +151,35 @@ class WhisperRecognizer(AudioRecognizer):
     async def _transcribe_large_file(self, file_path: str, language: str) -> TranscribeResult:
         """
         Транскрибирует большой файл по частям
-        
-        Args:
-            file_path: Путь к файлу
-            language: Язык аудио
-            
-        Returns:
-            TranscribeResult: Результат транскрибации
         """
-        # TODO: Реализовать разбиение на части и транскрибацию
-        raise NotImplementedError("Метод не реализован") 
+        from aisha_v2.app.services.audio_processing.processor import AudioProcessor
+        import aiofiles
+        logger.info(f"[WhisperRecognizer] Начинаю разбиение большого файла: {file_path}")
+        # Читаем байты файла
+        async with aiofiles.open(file_path, 'rb') as f:
+            audio_data = await f.read()
+        processor = AudioProcessor()
+        try:
+            chunks = await processor.split_audio(audio_data)
+            logger.info(f"[WhisperRecognizer] Файл разбит на {len(chunks)} частей")
+        except Exception as e:
+            logger.error(f"[WhisperRecognizer] Ошибка при разбиении: {e}")
+            return TranscribeResult(success=False, text="", error=str(e))
+        texts = []
+        errors = []
+        for idx, chunk in enumerate(chunks):
+            try:
+                logger.info(f"[WhisperRecognizer] Транскрибация части {idx+1}/{len(chunks)}")
+                result = await self.transcribe_chunk(chunk, language)
+                if result.success:
+                    texts.append(result.text)
+                else:
+                    errors.append(result.error or "Unknown error")
+            except Exception as e:
+                logger.error(f"[WhisperRecognizer] Ошибка транскрибации части {idx+1}: {e}")
+                errors.append(str(e))
+        final_text = "\n".join(texts)
+        success = bool(texts)
+        error_msg = "; ".join(errors) if errors else None
+        logger.info(f"[WhisperRecognizer] Итоговая транскрибация: success={success}, ошибок={len(errors)}")
+        return TranscribeResult(success=success, text=final_text, error=error_msg) 

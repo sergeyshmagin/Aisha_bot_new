@@ -1,3 +1,7 @@
+# --- LEGACY: устаревший обработчик меню, не использовать ---
+# Вся логика перенесена в main_menu.py
+# Файл сохранён для истории, не импортировать!
+
 from aiogram import Router, F
 from aiogram.types import Message
 from aiogram.fsm.context import FSMContext

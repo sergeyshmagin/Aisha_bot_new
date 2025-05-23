@@ -1,10 +1,11 @@
 """
-Основной обработчик команд для работы с транскриптами.
-Делегирует задачи специализированным обработчикам.
+--- LEGACY: основной обработчик транскриптов, не использовать напрямую ---
+# Используйте TranscriptProcessingHandler для всех новых сценариев
 """
 import logging
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import StateFilter
@@ -51,10 +52,18 @@ class TranscriptMainHandler(TranscriptBaseHandler):
         """
         try:
             await state.set_state(TranscribeStates.menu)
+            builder = InlineKeyboardBuilder()
+            builder.row(
+                InlineKeyboardButton(text="🎤 Аудио", callback_data="transcribe_audio"),
+                InlineKeyboardButton(text="📝 Текст", callback_data="transcribe_text")
+            )
+            builder.row(InlineKeyboardButton(text="📜 История", callback_data="transcribe_history"))
+            builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="transcribe_back_to_menu"))
+            
             await message.answer(
                 "🎙 <b>Транскрибация</b>\n\nВыберите действие:",
                 parse_mode="HTML",
-                reply_markup=get_transcript_menu_keyboard()
+                reply_markup=builder.as_markup()
             )
         except Exception as e:
             logger.error(f"Ошибка при обработке команды /transcribe: {e}")
@@ -65,10 +74,18 @@ class TranscriptMainHandler(TranscriptBaseHandler):
         """Обработка входа в меню транскрибации"""
         try:
             await state.set_state(TranscribeStates.menu)
+            builder = InlineKeyboardBuilder()
+            builder.row(
+                InlineKeyboardButton(text="🎤 Аудио", callback_data="transcribe_audio"),
+                InlineKeyboardButton(text="📝 Текст", callback_data="transcribe_text")
+            )
+            builder.row(InlineKeyboardButton(text="📜 История", callback_data="transcribe_history"))
+            builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="transcribe_back_to_menu"))
+            
             await message.answer(
                 "🎙 <b>Транскрибация</b>\n\nВыберите действие:",
                 parse_mode="HTML",
-                reply_markup=get_transcript_menu_keyboard()
+                reply_markup=builder.as_markup()
             )
         except Exception as e:
             logger.error(f"Ошибка при входе в меню транскрибации: {e}")
@@ -77,11 +94,7 @@ class TranscriptMainHandler(TranscriptBaseHandler):
 
     async def _handle_history_command(self, message: Message, state: FSMContext):
         """
-        Обработка команды /history
-        
-        Args:
-            message: Объект сообщения
-            state: Состояние FSM
+        LEGACY: История транскриптов через БД (текст хранится в БД). Использовать только для миграции.
         """
         try:
             async with self.get_session() as session:
@@ -90,19 +103,16 @@ class TranscriptMainHandler(TranscriptBaseHandler):
                 if not user:
                     await message.reply("❌ Ошибка: пользователь не найден")
                     return
-                
                 # Получаем историю транскриптов
                 transcripts = await user_service.get_user_transcripts(user.id)
-                
                 if not transcripts:
                     await message.reply("У вас пока нет транскриптов.")
                     return
-                
                 # Формируем сообщение с историей
                 history_text = "📜 История транскриптов:\n\n"
                 for transcript in transcripts:
+                    # LEGACY: transcript['text'] хранится в БД
                     history_text += f"• {transcript['created_at']}: {transcript['text'][:100]}...\n"
-                
                 await message.reply(history_text)
         except Exception as e:
             logger.error(f"Ошибка при получении истории: {e}")
@@ -178,39 +188,53 @@ class TranscriptMainHandler(TranscriptBaseHandler):
             
             if action == "audio":
                 await state.set_state(TranscribeStates.waiting_audio)
+                builder = InlineKeyboardBuilder()
+                builder.row(InlineKeyboardButton(text="◀️ Назад в меню", callback_data="transcribe_back_to_menu"))
+                
                 await call.message.edit_text(
                     "🎤 Отправьте аудио или голосовое сообщение для транскрибации:",
-                    reply_markup=get_back_to_menu_keyboard()
+                    reply_markup=builder.as_markup()
                 )
                 
             elif action == "text":
                 await state.set_state(TranscribeStates.waiting_text)
+                builder = InlineKeyboardBuilder()
+                builder.row(InlineKeyboardButton(text="◀️ Назад в меню", callback_data="transcribe_back_to_menu"))
+                
                 await call.message.edit_text(
                     "📝 Отправьте текст для обработки:",
-                    reply_markup=get_back_to_menu_keyboard()
+                    reply_markup=builder.as_markup()
                 )
                 
             elif action == "history":
+                builder = InlineKeyboardBuilder()
+                builder.row(InlineKeyboardButton(text="◀️ Назад в меню", callback_data="transcribe_back_to_menu"))
+                
                 await call.message.edit_text(
                     "📜 История транскриптов:\n\nПока пусто",
-                    reply_markup=get_back_to_menu_keyboard()
+                    reply_markup=builder.as_markup()
                 )
                 
             elif action == "back":
                 await state.clear()
+                builder = InlineKeyboardBuilder()
+                builder.row(
+                    InlineKeyboardButton(text="🎤 Аудио", callback_data="transcribe_audio"),
+                    InlineKeyboardButton(text="📝 Текст", callback_data="transcribe_text")
+                )
+                builder.row(InlineKeyboardButton(text="📜 История", callback_data="transcribe_history"))
+                builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="transcribe_back_to_menu"))
+                
                 await call.message.edit_text(
                     "🎙 <b>Транскрибация</b>\n\nВыберите действие:",
                     parse_mode="HTML",
-                    reply_markup=get_transcript_menu_keyboard()
+                    reply_markup=builder.as_markup()
                 )
             
             else:
-                logger.warning(f"Неизвестное действие в callback: {action}")
+                logger.warning(f"Неизвестное действие: {action}")
                 await call.answer("Неизвестное действие")
                 
-            await call.answer()
-            
         except Exception as e:
             logger.error(f"Ошибка при обработке callback: {e}")
-            await state.set_state(TranscribeStates.error)
-            await call.answer("Произошла ошибка. Попробуйте еще раз.")
+            await call.answer("Произошла ошибка")
