@@ -3,10 +3,10 @@
 """
 import os
 from pathlib import Path
-from typing import Optional, Union, List, Dict
+from typing import Optional, Union, List, Dict, Any
 
 from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic import Field, validator
 
 class Settings(BaseSettings):
     class Config:
@@ -117,12 +117,19 @@ class Settings(BaseSettings):
     REDIS_MAX_RETRIES: int = Field(default=3)
     
     # PostgreSQL
-    POSTGRES_HOST: Optional[str] = Field(default="localhost")
+    POSTGRES_HOST: Optional[str] = Field(default="192.168.0.4")
     POSTGRES_PORT: Optional[int] = Field(default=5432)
     POSTGRES_DB: Optional[str] = Field(default="aisha")
-    POSTGRES_USER: Optional[str] = Field(default="postgres")
-    POSTGRES_PASSWORD: Optional[str] = Field(default="postgres")
+    POSTGRES_USER: Optional[str] = Field(default="aisha_user")
+    POSTGRES_PASSWORD: Optional[str] = Field(default="KbZZGJHX09KSH7r9ev4m")
     DATABASE_URL: Optional[str] = None
+    
+    @validator("DATABASE_URL", pre=True)
+    def assemble_db_url(cls, v: Optional[str], values: Dict[str, Any]) -> str:
+        """Автоматически собираем DATABASE_URL из переменных PostgreSQL"""
+        if isinstance(v, str) and v:
+            return v
+        return f"postgresql+asyncpg://{values.get('POSTGRES_USER')}:{values.get('POSTGRES_PASSWORD')}@{values.get('POSTGRES_HOST')}:{values.get('POSTGRES_PORT')}/{values.get('POSTGRES_DB')}"
     
     # MinIO
     MINIO_ENDPOINT: Optional[str] = Field(default="localhost:9000")

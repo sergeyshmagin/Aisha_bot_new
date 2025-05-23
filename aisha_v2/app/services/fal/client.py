@@ -14,12 +14,11 @@ from PIL import Image
 
 from ...core.config import settings
 from ...core.logger import get_logger
-from ..base import BaseService
 
 logger = get_logger(__name__)
 
 
-class FalAIClient(BaseService):
+class FalAIClient:
     """
     Клиент для работы с FAL AI API.
     
@@ -31,7 +30,7 @@ class FalAIClient(BaseService):
     """
 
     def __init__(self):
-        super().__init__()
+        self.logger = logger
         self.api_key = settings.FAL_API_KEY
         self.test_mode = settings.FAL_TRAINING_TEST_MODE
         

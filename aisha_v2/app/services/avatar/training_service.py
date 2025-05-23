@@ -30,7 +30,7 @@ class AvatarTrainingService(BaseService):
     """
 
     def __init__(self, session: AsyncSession):
-        super().__init__()
+        super().__init__(session)
         self.session = session
         self.fal_client = FalAIClient()
 
