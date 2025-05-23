@@ -13,7 +13,7 @@ from aiogram.fsm.context import FSMContext
 
 from ..core.config import settings
 from ..core.logger import get_logger
-from ..database.connection import get_session_dependency
+from ..core.database import get_session
 from .state import AvatarStates
 from ..keyboards.avatar import (
     get_avatar_main_menu, get_avatar_type_keyboard, get_gender_keyboard,
@@ -47,14 +47,14 @@ class AvatarHandler:
 
     async def get_services(self):
         """Получает сервисы для работы с базой данных"""
-        session = await get_session_dependency()
-        return {
-            'user_service': UserService(),
-            'avatar_service': AvatarService(session),
-            'photo_service': PhotoUploadService(session),
-            'training_service': AvatarTrainingService(session),
-            'session': session
-        }
+        async with get_session() as session:
+            return {
+                'user_service': UserService(session),
+                'avatar_service': AvatarService(session),
+                'photo_service': PhotoUploadService(session),
+                'training_service': AvatarTrainingService(session),
+                'session': session
+            }
 
     async def register_handlers(self):
         """Регистрация обработчиков аватаров"""
@@ -92,6 +92,11 @@ class AvatarHandler:
         router.callback_query.register(
             self.show_avatar_gallery,
             F.data == "avatar_gallery"
+        )
+        
+        router.callback_query.register(
+            self.show_avatar_details,
+            F.data.startswith("avatar_view_")
         )
         
         # === ЗАГРУЗКА ФОТОГРАФИЙ ===
@@ -596,13 +601,19 @@ class AvatarHandler:
             text = self.texts.get_gallery_text(avatars_count)
             
             if avatars_count > 0:
-                # TODO: Реализовать пагинацию для галереи аватаров
-                # Пока возвращаемся к главному меню
-                keyboard = get_avatar_main_menu(avatars_count)
+                # Создаем расширенную галерею с отображением аватаров
+                keyboard = self._create_avatar_gallery_keyboard(user_avatars)
+                
+                # Добавляем информацию об аватарах в текст
+                text += "\n\n📋 **Ваши аватары:**\n"
+                for i, avatar in enumerate(user_avatars, 1):
+                    status_emoji = self._get_status_emoji(avatar.status)
+                    text += f"{i}. {status_emoji} **{avatar.name}** — {self._get_status_text(avatar.status)}\n"
+                
             else:
                 keyboard = get_avatar_main_menu(0)
             
-            await call.message.edit_text(text, reply_markup=keyboard)
+            await call.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
             await call.answer()
             
             logger.info(f"Показана галерея аватаров пользователю {call.from_user.id}, аватаров: {avatars_count}")
@@ -610,6 +621,197 @@ class AvatarHandler:
         except Exception as e:
             logger.exception(f"Ошибка при показе галереи аватаров: {e}")
             await call.answer("❌ Произошла ошибка", show_alert=True)
+    
+    def _create_avatar_gallery_keyboard(self, avatars):
+        """Создает клавиатуру для галереи аватаров"""
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        
+        buttons = []
+        
+        # Добавляем кнопки для каждого аватара (по 2 в ряд)
+        for i in range(0, len(avatars), 2):
+            row = []
+            
+            # Первый аватар в ряду
+            avatar1 = avatars[i]
+            status_emoji = self._get_status_emoji(avatar1.status)
+            button1 = InlineKeyboardButton(
+                text=f"{status_emoji} {avatar1.name}",
+                callback_data=f"avatar_view_{avatar1.id}"
+            )
+            row.append(button1)
+            
+            # Второй аватар в ряду (если есть)
+            if i + 1 < len(avatars):
+                avatar2 = avatars[i + 1]
+                status_emoji2 = self._get_status_emoji(avatar2.status)
+                button2 = InlineKeyboardButton(
+                    text=f"{status_emoji2} {avatar2.name}",
+                    callback_data=f"avatar_view_{avatar2.id}"
+                )
+                row.append(button2)
+            
+            buttons.append(row)
+        
+        # Добавляем управляющие кнопки
+        buttons.append([
+            InlineKeyboardButton(
+                text="🆕 Создать аватар",
+                callback_data="avatar_create"
+            )
+        ])
+        
+        buttons.append([
+            InlineKeyboardButton(
+                text="◀️ Назад к меню",
+                callback_data="avatar_menu"
+            )
+        ])
+        
+        return InlineKeyboardMarkup(inline_keyboard=buttons)
+    
+    def _get_status_emoji(self, status):
+        """Возвращает эмодзи для статуса аватара"""
+        status_emojis = {
+            'draft': '📝',
+            'uploading': '📤', 
+            'ready': '✅',
+            'training': '🔄',
+            'completed': '✅',
+            'error': '❌',
+            'cancelled': '🚫'
+        }
+        return status_emojis.get(status.value if hasattr(status, 'value') else str(status), '❓')
+    
+    def _get_status_text(self, status):
+        """Возвращает текстовое описание статуса"""
+        status_texts = {
+            'draft': 'Черновик',
+            'uploading': 'Загрузка фото',
+            'ready': 'Готов к обучению', 
+            'training': 'Обучается',
+            'completed': 'Готов',
+            'error': 'Ошибка',
+            'cancelled': 'Отменен'
+        }
+        return status_texts.get(status.value if hasattr(status, 'value') else str(status), 'Неизвестно')
+
+    async def show_avatar_details(self, call: CallbackQuery, state: FSMContext):
+        """Показывает детальную информацию об аватаре"""
+        try:
+            # Извлекаем avatar_id из callback data
+            avatar_id_str = call.data.split("avatar_view_")[1]
+            avatar_id = UUID(avatar_id_str)
+            
+            # Получаем сервисы
+            services = await self.get_services()
+            avatar_service = services['avatar_service']
+            
+            # Получаем аватар
+            avatar = await avatar_service.get_avatar_by_id(avatar_id)
+            
+            if not avatar:
+                await call.answer("❌ Аватар не найден", show_alert=True)
+                return
+            
+            # Формируем детальную информацию
+            status_emoji = self._get_status_emoji(avatar.status)
+            status_text = self._get_status_text(avatar.status)
+            
+            text = (
+                f"{status_emoji} **{avatar.name}**\n\n"
+                f"📊 **Статус:** {status_text}\n"
+                f"🎭 **Тип:** {avatar.avatar_type.value if avatar.avatar_type else 'Не указан'}\n"
+                f"👤 **Пол:** {avatar.gender.value if avatar.gender else 'Не указан'}\n"
+                f"📅 **Создан:** {avatar.created_at.strftime('%d.%m.%Y %H:%M') if avatar.created_at else 'Неизвестно'}\n"
+            )
+            
+            # Добавляем информацию о фотографиях
+            if hasattr(avatar, 'photos') and avatar.photos:
+                text += f"📸 **Фотографий:** {len(avatar.photos)}\n"
+            
+            # Добавляем информацию об обучении
+            if avatar.status in ['training', 'completed']:
+                if avatar.training_started_at:
+                    text += f"🚀 **Обучение начато:** {avatar.training_started_at.strftime('%d.%m.%Y %H:%M')}\n"
+                if avatar.training_completed_at and avatar.status == 'completed':
+                    text += f"✅ **Обучение завершено:** {avatar.training_completed_at.strftime('%d.%m.%Y %H:%M')}\n"
+            
+            # Создаем клавиатуру действий
+            keyboard = self._create_avatar_actions_keyboard(avatar_id_str, avatar.status)
+            
+            await call.message.edit_text(text, reply_markup=keyboard, parse_mode='Markdown')
+            await call.answer()
+            
+            logger.info(f"Показаны детали аватара {avatar_id}")
+            
+        except Exception as e:
+            logger.exception(f"Ошибка при показе деталей аватара: {e}")
+            await call.answer("❌ Ошибка получения информации", show_alert=True)
+    
+    def _create_avatar_actions_keyboard(self, avatar_id_str, status):
+        """Создает клавиатуру действий для аватара"""
+        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+        
+        buttons = []
+        
+        # Действия в зависимости от статуса
+        if status == 'ready':
+            buttons.append([
+                InlineKeyboardButton(
+                    text="🚀 Запустить обучение",
+                    callback_data=f"avatar_start_training_{avatar_id_str}"
+                )
+            ])
+        elif status == 'training':
+            buttons.append([
+                InlineKeyboardButton(
+                    text="📊 Прогресс обучения",
+                    callback_data=f"avatar_training_progress_{avatar_id_str}"
+                )
+            ])
+            buttons.append([
+                InlineKeyboardButton(
+                    text="❌ Отменить обучение",
+                    callback_data=f"avatar_cancel_training_{avatar_id_str}"
+                )
+            ])
+        elif status == 'completed':
+            buttons.append([
+                InlineKeyboardButton(
+                    text="🎨 Генерировать изображение",
+                    callback_data=f"avatar_generate_{avatar_id_str}"
+                )
+            ])
+        elif status in ['draft', 'uploading']:
+            buttons.append([
+                InlineKeyboardButton(
+                    text="📸 Добавить фото",
+                    callback_data=f"avatar_upload_photos_{avatar_id_str}"
+                )
+            ])
+        
+        # Общие действия
+        buttons.append([
+            InlineKeyboardButton(
+                text="⚙️ Настройки",
+                callback_data=f"avatar_settings_{avatar_id_str}"
+            ),
+            InlineKeyboardButton(
+                text="🗑️ Удалить",
+                callback_data=f"avatar_delete_{avatar_id_str}"
+            )
+        ])
+        
+        # Назад
+        buttons.append([
+            InlineKeyboardButton(
+                text="◀️ К галерее",
+                callback_data="avatar_gallery"
+            )
+        ])
+        
+        return InlineKeyboardMarkup(inline_keyboard=buttons)
 
     async def handle_back(self, call: CallbackQuery, state: FSMContext):
         """Обрабатывает возврат назад"""

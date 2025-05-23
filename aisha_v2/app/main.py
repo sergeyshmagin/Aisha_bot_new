@@ -18,6 +18,7 @@ from aisha_v2.app.handlers import (
     transcript_processing_handler,
 )
 from aisha_v2.app.handlers.gallery import router as gallery_router
+from aisha_v2.app.handlers.avatar import avatar_handler, register_avatar_handlers
 from aisha_v2.app.handlers.fallback import fallback_router
 from aisha_v2.app.keyboards.main import get_main_menu
 
@@ -45,6 +46,11 @@ async def main():
     # Регистрация роутеров
     dp.include_router(main_router)
     dp.include_router(gallery_router)
+    
+    # Регистрация обработчиков аватаров
+    await register_avatar_handlers()
+    from aisha_v2.app.handlers.avatar import router as avatar_router
+    dp.include_router(avatar_router)
     
     # Регистрация обработчиков транскриптов
     await transcript_main_handler.register_handlers()

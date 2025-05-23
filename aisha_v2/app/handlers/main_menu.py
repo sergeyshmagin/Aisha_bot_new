@@ -5,7 +5,6 @@ from aiogram.fsm.context import FSMContext
 
 from aisha_v2.app.keyboards.main import get_main_menu
 from aisha_v2.app.keyboards.gallery import get_gallery_menu
-from aisha_v2.app.keyboards.avatar import get_avatar_menu
 from aisha_v2.app.core.di import get_user_service
 from aisha_v2.app.services.user import UserService
 from aisha_v2.app.core.logger import get_logger
@@ -72,15 +71,18 @@ async def show_gallery(call: CallbackQuery):
     )
 
 @router.callback_query(F.data == "business_avatar")
-async def show_avatar_menu(call: CallbackQuery):
+async def show_avatar_menu(call: CallbackQuery, state: FSMContext):
     """
-    Показывает меню аватаров.
+    Показывает меню аватаров - перенаправляет на правильный обработчик.
     """
-    await call.answer("🔄 Переход в меню аватаров...", show_alert=False)
-    await call.message.edit_text(
-        "🧑‍🎨 Аватары\n\nВыберите действие:",
-        reply_markup=get_avatar_menu()
-    )
+    # Импортируем обработчик аватаров
+    from aisha_v2.app.handlers.avatar import avatar_handler
+    
+    # Изменяем callback_data для корректной обработки
+    call.data = "avatar_menu"
+    
+    # Вызываем правильный обработчик
+    await avatar_handler.show_avatar_menu(call, state)
 
 @router.callback_query(F.data == "back_to_main")
 async def back_to_main(call: CallbackQuery):
