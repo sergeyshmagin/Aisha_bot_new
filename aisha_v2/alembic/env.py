@@ -3,6 +3,8 @@
 """
 import asyncio
 from logging.config import fileConfig
+import os
+import sys
 
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
@@ -10,8 +12,11 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
-from aisha_v2.app.core.config import settings
-from aisha_v2.app.database.models import Base
+# Добавляем корень проекта в sys.path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from app.core.config import settings
+from app.database.models import Base
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

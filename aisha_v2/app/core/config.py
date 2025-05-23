@@ -46,6 +46,49 @@ class Settings(BaseSettings):
     WHISPER_MODEL: str = "whisper-1"
     WHISPER_LANGUAGE: str = "ru"
     
+    # ========== НАСТРОЙКИ АВАТАРОВ ==========
+    
+    # Лимиты фотографий
+    AVATAR_MIN_PHOTOS: int = Field(10, env="AVATAR_MIN_PHOTOS")
+    AVATAR_MAX_PHOTOS: int = Field(20, env="AVATAR_MAX_PHOTOS") 
+    AVATAR_MAX_PHOTOS_PER_USER: int = Field(5, env="AVATAR_MAX_PHOTOS_PER_USER")
+    
+    # Ограничения файлов
+    PHOTO_MAX_SIZE: int = Field(20 * 1024 * 1024, env="PHOTO_MAX_SIZE")  # 20MB
+    PHOTO_MIN_RESOLUTION: int = Field(512, env="PHOTO_MIN_RESOLUTION")
+    PHOTO_MAX_RESOLUTION: int = Field(4096, env="PHOTO_MAX_RESOLUTION")
+    PHOTO_ALLOWED_FORMATS: List[str] = Field(["jpg", "jpeg", "png", "webp"], env="PHOTO_ALLOWED_FORMATS")
+    
+    # FAL AI интеграция
+    FAL_API_KEY: str = Field("", env="FAL_KEY")
+    FAL_TRAINING_TEST_MODE: bool = Field(True, env="FAL_TRAINING_TEST_MODE")  # 🎯 КЛЮЧЕВОЙ ПАРАМЕТР!
+    FAL_WEBHOOK_URL: str = Field("https://aibots.kz/api/avatar/status_update", env="FAL_WEBHOOK_URL")
+    FAL_DEFAULT_MODE: str = Field("character", env="FAL_MODE")
+    FAL_DEFAULT_ITERATIONS: int = Field(500, env="FAL_ITERATIONS")
+    FAL_DEFAULT_PRIORITY: str = Field("quality", env="FAL_PRIORITY")
+    FAL_TRIGGER_WORD: str = Field("TOK", env="FAL_TRIGGER_WORD")
+    FAL_LORA_RANK: int = Field(32, env="FAL_LORA_RANK")
+    FAL_FINETUNE_TYPE: str = Field("full", env="FAL_FINETUNE_TYPE")
+    
+    # UX настройки
+    PHOTO_UPLOAD_TIMEOUT: int = Field(300, env="PHOTO_UPLOAD_TIMEOUT")  # 5 минут
+    GALLERY_PHOTOS_PER_PAGE: int = Field(6, env="GALLERY_PHOTOS_PER_PAGE")
+    TRAINING_STATUS_UPDATE_INTERVAL: int = Field(30, env="TRAINING_STATUS_UPDATE_INTERVAL")  # секунд
+    AUTO_GENERATE_PREVIEW: bool = Field(True, env="AUTO_GENERATE_PREVIEW")
+    AVATAR_CREATION_COOLDOWN: int = Field(86400, env="AVATAR_CREATION_COOLDOWN")  # 24 часа
+    
+    # Валидация и безопасность
+    ENABLE_FACE_DETECTION: bool = Field(True, env="ENABLE_FACE_DETECTION")
+    ENABLE_NSFW_DETECTION: bool = Field(True, env="ENABLE_NSFW_DETECTION")
+    MIN_FACE_SIZE: int = Field(100, env="MIN_FACE_SIZE")  # минимальный размер лица в пикселях
+    QUALITY_THRESHOLD: float = Field(0.5, env="QUALITY_THRESHOLD")  # минимальная оценка качества
+    
+    # Стоимость сервисов (в кредитах)
+    AVATAR_CREATION_COST: float = Field(10.0, env="AVATAR_CREATION_COST")
+    AVATAR_GENERATION_COST: float = Field(1.0, env="AVATAR_GENERATION_COST")
+    
+    # ========== КОНЕЦ НАСТРОЕК АВАТАРОВ ==========
+    
     # Настройки хранения
     STORAGE_CLEANUP_DAYS: int = 7
     
