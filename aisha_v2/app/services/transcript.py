@@ -163,24 +163,55 @@ class TranscriptService(BaseService):
     ) -> List[Dict]:
         """LEGACY: Получает список транскриптов пользователя из БД (без MinIO). Использовать только для миграции."""
         normalized_user_id = _normalize_user_id(user_id)
-        transcripts = await self.transcript_repo.get_user_transcripts(
-            normalized_user_id, limit, offset
-        )
-        result = []
-        for transcript in transcripts:
-            created_at_str = None
-            if transcript.created_at:
+        logger.info(f"[LIST_TRANSCRIPTS] Начало: user_id={normalized_user_id}, limit={limit}, offset={offset}")
+        
+        try:
+            transcripts = await self.transcript_repo.get_user_transcripts(
+                normalized_user_id, limit, offset
+            )
+            logger.info(f"[LIST_TRANSCRIPTS] Получено {len(transcripts)} транскриптов из репозитория")
+            
+            result = []
+            for i, transcript in enumerate(transcripts):
+                logger.info(f"[LIST_TRANSCRIPTS] Обработка транскрипта {i}: id={transcript.id}, type={type(transcript)}")
                 try:
-                    created_at_str = transcript.created_at.isoformat()
+                    # Безопасное извлечение атрибутов из SQLAlchemy объекта
+                    transcript_id = str(transcript.id) if transcript.id else None
+                    user_id_attr = str(transcript.user_id) if transcript.user_id else None
+                    created_at_attr = transcript.created_at
+                    metadata_attr = transcript.transcript_metadata if hasattr(transcript, 'transcript_metadata') else {}
+                    
+                    logger.info(f"[LIST_TRANSCRIPTS] Атрибуты извлечены: id={transcript_id}, user_id={user_id_attr}")
+                    
+                    created_at_str = None
+                    if created_at_attr:
+                        try:
+                            created_at_str = created_at_attr.isoformat()
+                        except Exception as e:
+                            logger.error(f"Error converting created_at to ISO format in list_transcripts: {e}, type: {type(created_at_attr)}, value: {created_at_attr}")
+                            created_at_str = str(created_at_attr)
+                    
+                    # Создаем простой словарь без передачи SQLAlchemy объекта
+                    transcript_dict = {
+                        "id": transcript_id,
+                        "created_at": created_at_str,
+                        "metadata": metadata_attr or {}
+                    }
+                    logger.info(f"[LIST_TRANSCRIPTS] Создан dict для транскрипта {i}: keys={list(transcript_dict.keys())}")
+                    result.append(transcript_dict)
+                    
                 except Exception as e:
-                    logger.error(f"Error converting created_at to ISO format in list_transcripts: {e}, type: {type(transcript.created_at)}, value: {transcript.created_at}")
-                    created_at_str = str(transcript.created_at)
-            result.append({
-                "id": str(transcript.id),
-                "created_at": created_at_str,
-                "metadata": transcript.transcript_metadata
-            })
-        return result
+                    logger.exception(f"[LIST_TRANSCRIPTS] Ошибка при обработке транскрипта {i}: {e}")
+                    # Пропускаем проблемный транскрипт вместо падения всего запроса
+                    continue
+                    
+            logger.info(f"[LIST_TRANSCRIPTS] Завершено успешно, результат: {len(result)} элементов")
+            return result
+            
+        except Exception as e:
+            logger.exception(f"[LIST_TRANSCRIPTS] Общая ошибка: {e}")
+            # Возвращаем пустой список вместо падения
+            return []
 
     async def delete_transcript(self, user_id: Union[int, str, UUID], transcript_id: UUID) -> bool:
         """Удаляет транскрипт (и файлы из MinIO)"""

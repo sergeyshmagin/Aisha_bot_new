@@ -8,7 +8,8 @@
 """
 import logging
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton  # Явный импорт для предотвращения конфликтов
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
@@ -48,7 +49,13 @@ class TranscriptMainHandler(TranscriptBaseHandler):
         # Обработчик основных кнопок меню транскрибации (только transcribe_*)
         self.router.callback_query.register(
             self._handle_transcript_callback, 
-            F.data.in_(["transcribe_audio", "transcribe_text", "transcribe_history", "transcribe_back_to_menu"])
+            F.data.in_(["transcribe_audio", "transcribe_text", "transcribe_history"])
+        )
+        
+        # Отдельный обработчик для возврата в меню транскрибации
+        self.router.callback_query.register(
+            self._handle_back_to_transcribe_menu,
+            F.data == "transcribe_back_to_menu"
         )
         
         # Команды открытия транскрипта (legacy)
@@ -105,7 +112,7 @@ class TranscriptMainHandler(TranscriptBaseHandler):
                 InlineKeyboardButton(text="📝 Текст", callback_data="transcribe_text")
             )
             builder.row(InlineKeyboardButton(text="📜 История", callback_data="transcribe_history"))
-            builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="transcribe_back_to_menu"))
+            builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_main"))
             
             await message.answer(
                 "🎙 <b>Транскрибация</b>\n\nВыберите действие:",
@@ -127,7 +134,7 @@ class TranscriptMainHandler(TranscriptBaseHandler):
                 InlineKeyboardButton(text="📝 Текст", callback_data="transcribe_text")
             )
             builder.row(InlineKeyboardButton(text="📜 История", callback_data="transcribe_history"))
-            builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="transcribe_back_to_menu"))
+            builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_main"))
             
             await message.answer(
                 "🎙 <b>Транскрибация</b>\n\nВыберите действие:",
@@ -143,12 +150,17 @@ class TranscriptMainHandler(TranscriptBaseHandler):
         """
         Отправляет страницу истории транскриптов с inline-кнопками и пагинацией
         """
+        logger.info(f"[SEND_HISTORY] Начало: user_id={user_id}, page={page}, edit={edit}")
+        logger.info(f"[SEND_HISTORY] InlineKeyboardButton type: {type(InlineKeyboardButton)}")
+        
         async with self.get_session() as session:
             transcript_service = get_transcript_service(session)
             # Преобразуем user_id в строку для совместимости с TranscriptService
             user_id_str = str(user_id) if not isinstance(user_id, str) else user_id
             transcripts = await transcript_service.list_transcripts(user_id_str, limit=self.PAGE_SIZE, offset=page * self.PAGE_SIZE)
             total = len(transcripts)
+            logger.info(f"[SEND_HISTORY] Получено {total} транскриптов")
+            
             if not transcripts:
                 text = "📜 История транскриптов:\n\nПока пусто"
                 kb = get_back_to_menu_keyboard()
@@ -161,8 +173,11 @@ class TranscriptMainHandler(TranscriptBaseHandler):
                 else:
                     await message_or_call.answer(text, reply_markup=kb)
                 return
+                
             text = f"📜 <b>История транскриптов</b> (стр. {page+1}):\n\n"
             builder = InlineKeyboardBuilder()
+            
+            # Добавляем кнопки транскриптов
             for t in transcripts:
                 # Транскрипты уже возвращаются как словари из сервиса
                 file_name = t.get("metadata", {}).get("file_name") or str(t.get("id"))
@@ -171,16 +186,49 @@ class TranscriptMainHandler(TranscriptBaseHandler):
                     created_at = created_at.replace('T', ' ')[:16]
                 transcript_type = "Аудио" if t.get("metadata", {}).get("source") == "audio" else "Текст"
                 btn_text = f"{file_name} | {created_at} | {transcript_type}"
-                builder.row(InlineKeyboardButton(text=btn_text, callback_data=f"transcribe_open_{t['id']}"))
+                
+                # Явное создание кнопки с проверкой типа
+                try:
+                    btn = InlineKeyboardButton(text=btn_text, callback_data=f"transcribe_open_{t['id']}")
+                    logger.info(f"[SEND_HISTORY] Создана кнопка транскрипта: {type(btn)}")
+                    builder.row(btn)
+                except Exception as e:
+                    logger.error(f"[SEND_HISTORY] Ошибка создания кнопки транскрипта: {e}")
+                    raise
+                    
             # Пагинация
             nav_buttons = []
             if page > 0:
-                nav_buttons.append(InlineKeyboardButton("⬅️ Назад", callback_data=f"transcribe_history_page_{page-1}"))
+                try:
+                    back_btn = InlineKeyboardButton(text="⬅️ Назад", callback_data=f"transcribe_history_page_{page-1}")
+                    logger.info(f"[SEND_HISTORY] Создана кнопка 'Назад': {type(back_btn)}")
+                    nav_buttons.append(back_btn)
+                except Exception as e:
+                    logger.error(f"[SEND_HISTORY] Ошибка создания кнопки 'Назад': {e}")
+                    raise
+                    
             if total == self.PAGE_SIZE:
-                nav_buttons.append(InlineKeyboardButton("Вперёд ➡️", callback_data=f"transcribe_history_page_{page+1}"))
+                try:
+                    forward_btn = InlineKeyboardButton(text="Вперёд ➡️", callback_data=f"transcribe_history_page_{page+1}")
+                    logger.info(f"[SEND_HISTORY] Создана кнопка 'Вперёд': {type(forward_btn)}")
+                    nav_buttons.append(forward_btn)
+                except Exception as e:
+                    logger.error(f"[SEND_HISTORY] Ошибка создания кнопки 'Вперёд': {e}")
+                    raise
+                    
             if nav_buttons:
                 builder.row(*nav_buttons)
-            builder.row(InlineKeyboardButton(text="◀️ Назад в меню", callback_data="transcribe_back_to_menu"))
+                
+            # Кнопка возврата в меню
+            try:
+                menu_btn = InlineKeyboardButton(text="◀️ Назад в меню", callback_data="transcribe_back_to_menu")
+                logger.info(f"[SEND_HISTORY] Создана кнопка 'Назад в меню': {type(menu_btn)}")
+                builder.row(menu_btn)
+            except Exception as e:
+                logger.error(f"[SEND_HISTORY] Ошибка создания кнопки 'Назад в меню': {e}")
+                raise
+                
+            # Отправка сообщения
             if edit and hasattr(message_or_call, 'message') and message_or_call.message.text:
                 try:
                     await message_or_call.message.edit_text(text, reply_markup=builder.as_markup(), parse_mode="HTML")
@@ -189,6 +237,8 @@ class TranscriptMainHandler(TranscriptBaseHandler):
                     await message_or_call.message.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
             else:
                 await message_or_call.answer(text, reply_markup=builder.as_markup(), parse_mode="HTML")
+                
+        logger.info(f"[SEND_HISTORY] Завершено успешно")
 
     async def _handle_history_command(self, message: Message, state: FSMContext):
         """
@@ -370,7 +420,14 @@ class TranscriptMainHandler(TranscriptBaseHandler):
         Обработка callback-запросов для основного меню транскриптов
         """
         try:
-            action = call.data.split("_")[1]
+            # Парсим action из callback_data
+            parts = call.data.split("_")
+            if len(parts) < 2:
+                logger.warning(f"Неверный формат callback_data: {call.data}")
+                await call.answer("Неверный формат данных")
+                return
+                
+            action = parts[1]
             
             if action == "audio":
                 await state.set_state(TranscribeStates.waiting_audio)
@@ -393,26 +450,59 @@ class TranscriptMainHandler(TranscriptBaseHandler):
                 )
                 
             elif action == "history":
-                async with self.get_session() as session:
-                    user_service = get_user_service(session)
-                    user = await user_service.get_user_by_telegram_id(call.from_user.id)
-                    if not user:
-                        await call.answer("❌ Ошибка: пользователь не найден", show_alert=True)
-                        return
-                    await self._send_history_page(call, str(user.id), page=0, edit=True)
+                try:
+                    async with self.get_session() as session:
+                        user_service = get_user_service(session)
+                        user = await user_service.get_user_by_telegram_id(call.from_user.id)
+                        if not user:
+                            await call.answer("❌ Ошибка: пользователь не найден", show_alert=True)
+                            return
+                        logger.info(f"[HISTORY] Начинаем отправку истории для user_id={user.id}")
+                        await self._send_history_page(call, str(user.id), page=0, edit=True)
+                        logger.info(f"[HISTORY] История отправлена успешно")
+                except Exception as e:
+                    logger.exception(f"[HISTORY] Ошибка при обработке истории: {e}")
+                    try:
+                        await call.message.edit_text(
+                            "📜 <b>История транскриптов</b>\n\nПроизошла ошибка при загрузке истории.\nПопробуйте позже.",
+                            parse_mode="HTML",
+                            reply_markup=get_back_to_menu_keyboard()
+                        )
+                    except:
+                        await call.message.answer(
+                            "📜 <b>История транскриптов</b>\n\nПроизошла ошибка при загрузке истории.\nПопробуйте позже.",
+                            parse_mode="HTML",
+                            reply_markup=get_back_to_menu_keyboard()
+                        )
                 
-            elif action == "back":
-                await state.clear()
-                await call.message.edit_text(
-                    "🎙 <b>Транскрибация</b>\n\nВыберите действие:",
-                    parse_mode="HTML",
-                    reply_markup=get_transcript_menu_keyboard()
-                )
-            
             else:
-                logger.warning(f"Неизвестное действие: {action}")
+                logger.warning(f"Неизвестное действие: {action}, полный callback: {call.data}")
                 await call.answer("Неизвестное действие")
                 
         except Exception as e:
             logger.error(f"Ошибка при обработке callback: {e}")
             await call.answer("Произошла ошибка")
+
+    async def _handle_back_to_transcribe_menu(self, call: CallbackQuery, state: FSMContext):
+        """
+        Обработка callback-запроса для возврата в меню транскрибации
+        """
+        try:
+            await state.clear()
+            try:
+                await call.message.edit_text(
+                    "🎙 <b>Транскрибация</b>\n\nВыберите действие:",
+                    parse_mode="HTML",
+                    reply_markup=get_transcript_menu_keyboard()
+                )
+            except Exception as edit_error:
+                # Если не удалось отредактировать (например, сообщение содержит документ)
+                logger.warning(f"Не удалось отредактировать сообщение при возврате в меню: {edit_error}")
+                await call.message.answer(
+                    "🎙 <b>Транскрибация</b>\n\nВыберите действие:",
+                    parse_mode="HTML",
+                    reply_markup=get_transcript_menu_keyboard()
+                )
+        except Exception as e:
+            logger.error(f"Ошибка при возврате в меню транскрибации: {e}")
+            await call.answer("Ошибка при возврате в меню транскрибации")
