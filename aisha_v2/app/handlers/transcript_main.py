@@ -1,12 +1,9 @@
 """
---- LEGACY: основной обработчик транскриптов, частично устарел ---
-# Современные сценарии используют TranscriptProcessingHandler
-# Данный файл содержит:
-# - История транскриптов (актуально)
-# - Основное меню транскрибации (актуально)
-# - Обработка аудио/текста (LEGACY - перенесено в TranscriptProcessingHandler)
+Основной обработчик транскриптов - история, меню транскрибации
+Современные сценарии обработки используют TranscriptProcessingHandler
 """
 import logging
+from datetime import datetime
 from aiogram import Router, F
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup
 from aiogram.types import InlineKeyboardButton  # Явный импорт для предотвращения конфликтов
@@ -14,7 +11,6 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.filters import StateFilter
-from datetime import datetime
 
 from aisha_v2.app.handlers.transcript_base import TranscriptBaseHandler
 from aisha_v2.app.core.di import (
@@ -40,7 +36,6 @@ class TranscriptMainHandler(TranscriptBaseHandler):
     def __init__(self):
         self.router = Router()
         # Команды
-        self.router.message.register(self._handle_open_transcript, F.text.regexp(r"^/open_"))  # legacy, можно удалить позже
         self.router.message.register(self._handle_history_command, Command("history"))
         
         # Специфичные callback-обработчики (порядок важен!)
@@ -57,12 +52,6 @@ class TranscriptMainHandler(TranscriptBaseHandler):
         self.router.callback_query.register(
             self._handle_back_to_transcribe_menu,
             F.data == "transcribe_back_to_menu"
-        )
-        
-        # Команды открытия транскрипта (legacy)
-        self.router.message.register(
-            self._handle_open_transcript,
-            F.text.regexp(r'^/open_[a-f0-9\-]+$')
         )
 
     async def register_handlers(self):
@@ -85,17 +74,6 @@ class TranscriptMainHandler(TranscriptBaseHandler):
             self._handle_transcript_callback,
             F.data.startswith("transcribe_")
         )
-        
-        # --- УНИВЕРСАЛЬНЫЙ ОБРАБОТЧИК ОТКЛЮЧЕН: мешает работе transcript_* действий ---
-        # self.router.callback_query.register(
-        #     self._handle_unknown_callback,
-        #     F.data.regexp(r'.*')
-        # )
-        
-        # --- LEGACY: обработчики аудио/текста закомментированы, используется TranscriptProcessingHandler ---
-        # self.router.message.register(self._handle_audio, F.audio, StateFilter(TranscribeStates.waiting_audio))
-        # self.router.message.register(self._handle_voice, F.voice, StateFilter(TranscribeStates.waiting_audio))
-        # self.router.message.register(self._handle_text, F.text, StateFilter(TranscribeStates.waiting_text))
 
     async def _handle_transcribe_command(self, message: Message, state: FSMContext):
         """
@@ -310,64 +288,6 @@ class TranscriptMainHandler(TranscriptBaseHandler):
         except Exception as e:
             logger.exception(f"Ошибка при открытии транскрипта (callback): {e}")
             await call.answer("Ошибка при открытии транскрипта", show_alert=True)
-
-    # --- LEGACY: методы обработки аудио/текста перенесены в TranscriptProcessingHandler ---
-    # async def _handle_audio(self, message: Message, state: FSMContext):
-    #     """
-    #     Обработка аудио
-    #     
-    #     Args:
-    #         message: Объект сообщения
-    #         state: Состояние FSM
-    #     """
-    #     try:
-    #         from aisha_v2.app.handlers.transcript_processing import TranscriptProcessingHandler
-    #         
-    #         # Делегируем обработку специализированному обработчику
-    #         processing_handler = TranscriptProcessingHandler()
-    #         await processing_handler._handle_audio_processing(message, state)
-    #     except Exception as e:
-    #         logger.error(f"Ошибка при обработке аудио: {e}")
-    #         await state.set_state(TranscribeStates.error)
-    #         await message.reply("Произошла ошибка при обработке аудио.")
-    
-    # async def _handle_voice(self, message: Message, state: FSMContext):
-    #     """
-    #     Обработка голосового сообщения
-    #     
-    #     Args:
-    #         message: Объект сообщения
-    #         state: Состояние FSM
-    #     """
-    #     try:
-    #         from aisha_v2.app.handlers.transcript_processing import TranscriptProcessingHandler
-    #         
-    #         # Делегируем обработку специализированному обработчику
-    #         processing_handler = TranscriptProcessingHandler()
-    #         await processing_handler._handle_audio_processing(message, state)
-    #     except Exception as e:
-    #         logger.error(f"Ошибка при обработке голосового сообщения: {e}")
-    #         await state.set_state(TranscribeStates.error)
-    #         await message.reply("Произошла ошибка при обработке голосового сообщения.")
-    
-    # async def _handle_text(self, message: Message, state: FSMContext):
-    #     """
-    #     Обработка текстовых сообщений
-    #     
-    #     Args:
-    #         message: Объект сообщения
-    #         state: Состояние FSM
-    #     """
-    #     try:
-    #         from aisha_v2.app.handlers.transcript_processing import TranscriptProcessingHandler
-    #         
-    #         # Делегируем обработку специализированному обработчику
-    #         processing_handler = TranscriptProcessingHandler()
-    #         await processing_handler._handle_text_processing(message, state)
-    #     except Exception as e:
-    #         logger.error(f"Ошибка при обработке текста: {e}")
-    #         await state.set_state(TranscribeStates.error)
-    #         await message.reply("Произошла ошибка при обработке текста.")
 
     async def _handle_open_transcript(self, message: Message, state: FSMContext):
         """

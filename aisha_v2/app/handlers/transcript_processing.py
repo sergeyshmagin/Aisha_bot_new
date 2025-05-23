@@ -83,22 +83,23 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
             F.voice
         )
         
-        # Обработка старых callback данных "назад к транскрипту" для совместимости
+        # Специфичные обработчики callback'ов
         self.router.callback_query.register(
-            self._handle_legacy_back_to_transcript,
-            F.data.startswith("transcript_back_")
+            self._handle_transcript_format,
+            F.data.startswith("transcript_format_")
         )
         
-        # Обработка форматирования транскрипта (legacy)
-        self.router.callback_query.register(
-            self._handle_format_transcript,
-            F.data.startswith("transcribe_format_")
-        )
-        
-        # Обработка действий с транскриптом (новое)
+        # Обработчик действий с транскриптами (summary, todo, protocol)
         self.router.callback_query.register(
             self._handle_transcript_actions,
-            F.data.startswith("transcript_")
+            F.data.startswith("transcript_summary_") | 
+            F.data.startswith("transcript_todo_") | 
+            F.data.startswith("transcript_protocol_")
+        )
+        
+        self.router.callback_query.register(
+            self._handle_back_to_transcribe_menu,
+            F.data == "transcribe_back_to_menu"
         )
 
     async def _handle_audio_universal(self, message: Message, state: FSMContext) -> None:
@@ -543,65 +544,88 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                 reply_markup=get_back_to_menu_keyboard()
             )
 
-    async def _handle_legacy_back_to_transcript(self, call: CallbackQuery, state: FSMContext) -> None:
+    async def _handle_transcript_format(self, call: CallbackQuery, state: FSMContext) -> None:
         """
-        Обработка старых callback данных "назад к транскрипту" для совместимости
+        Обработка форматирования транскрипта
+        
+        Args:
+            call: CallbackQuery с данными о форматировании
+            state: Контекст состояния FSM
         """
         try:
-            # Разбираем callback data: transcript_back_<id>
-            parts = call.data.split("_", 2)
-            if len(parts) < 3:
+            # Получаем данные из callback
+            data = call.data.split("_")
+            if len(data) < 4:
                 await call.answer("❌ Неверный формат данных")
                 return
-            
-            transcript_id = safe_uuid(parts[2])
+
+            transcript_id = safe_uuid(data[2])
             if not transcript_id:
                 await call.answer("❌ Неверный ID транскрипта")
                 return
-            
-            # Отправляем новое сообщение вместо редактирования
-            processing_msg = await call.message.answer("⏳ Обрабатываю транскрипт с помощью GPT...")
+
+            format_type = data[3]
+            await state.set_state(TranscribeStates.format_selection)
 
             async with self.get_session() as session:
+                # Получаем транскрипт
                 transcript_service = get_transcript_service(session)
                 user_service = get_user_service(session)
                 user = await user_service.get_user_by_telegram_id(call.from_user.id)
                 
                 if not user:
+                    logger.error(f"[FORMAT] Пользователь не найден: {call.from_user.id}")
                     await call.answer("❌ Ошибка: пользователь не найден")
                     return
                     
                 content = await transcript_service.get_transcript_content(user.id, transcript_id)
                 if not content:
-                    logger.error(f"[GPT] Не удалось получить текст транскрипта: {transcript_id}")
-                    await processing_msg.edit_text("❌ Ошибка: не удалось получить текст транскрипта")
+                    logger.error(f"[FORMAT] Не удалось получить текст транскрипта: {transcript_id}")
+                    await call.answer("❌ Ошибка: не удалось получить текст транскрипта")
                     return
 
                 text = content.decode('utf-8')
                 text_service = get_text_processing_service(session)
                 
-                # Обрабатываем текст через GPT
-                formatted_text = await text_service.format_summary(text)
-                format_name = "Краткое содержание"
-                file_prefix = "summary"
+                # Форматируем текст
+                if format_type == "summary":
+                    formatted_text = await text_service.format_summary(text)
+                elif format_type == "todo":
+                    formatted_text = await text_service.format_todo(text)
+                elif format_type == "protocol":
+                    formatted_text = await text_service.format_protocol(text)
+                else:
+                    logger.error(f"[FORMAT] Неизвестный формат: {format_type}")
+                    await call.answer("❌ Неизвестный формат")
+                    return
 
-                # Отправляем результат как файл
-                from aiogram.types import BufferedInputFile
-                file_data = formatted_text.encode('utf-8')
-                input_file = BufferedInputFile(file_data, filename=f"{file_prefix}_{transcript_id}.txt")
-                
-                await processing_msg.delete()
-                await call.message.answer_document(
-                    document=input_file,
-                    caption=f"📄 {format_name}",
-                    reply_markup=get_back_to_transcript_keyboard(transcript_id)
+                # Сохраняем отформатированный текст
+                formatted_transcript = await transcript_service.save_transcript(
+                    user_id=call.from_user.id,
+                    transcript_data=formatted_text.encode('utf-8'),
+                    metadata={
+                        "source": "format",
+                        "original_id": str(transcript_id),
+                        "format_type": format_type
+                    }
                 )
+
+                # Отправляем результат
+                await self._send_transcript_result(call.message, formatted_transcript, None)
                 await state.set_state(TranscribeStates.result)
 
         except Exception as e:
-            logger.exception(f"[LEGACY_BACK] Ошибка при обработке старых callback данных: {e}")
+            logger.exception(f"[FORMAT] Ошибка при форматировании транскрипта: {e}")
             await state.set_state(TranscribeStates.error)
-            await call.message.answer(
-                "❌ Произошла ошибка при обработке старых callback данных.\nПожалуйста, попробуйте еще раз.",
+            await call.message.reply(
+                "❌ Произошла ошибка при форматировании.\n"
+                "Пожалуйста, попробуйте еще раз.",
                 reply_markup=get_back_to_menu_keyboard()
             )
+
+    async def _handle_back_to_transcribe_menu(self, call: CallbackQuery, state: FSMContext) -> None:
+        """
+        Обработка возврата к меню транскриптов
+        """
+        await call.answer()
+        await state.set_state(TranscribeStates.waiting_text)
