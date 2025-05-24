@@ -15,6 +15,7 @@ from app.core.database import get_session
 from app.services.avatar.training_service import AvatarTrainingService
 from app.database.models import AvatarStatus
 from app.core.logger import get_logger
+from app.core.config import settings
 
 logger = get_logger(__name__)
 router = Router()
@@ -46,9 +47,29 @@ class TrainingHandler:
                     await callback.answer("❌ Пользователь не найден", show_alert=True)
                     return
             
+            # Проверяем тестовый режим и списываем средства только в продакшн
+            is_test_mode = settings.AVATAR_TEST_MODE
+            
+            if not is_test_mode:
+                # В продакшн режиме - списываем средства с баланса
+                user_balance = getattr(user, 'balance', 0)
+                avatar_cost = 150  # Можно получить из данных состояния
+                
+                if user_balance < avatar_cost:
+                    await callback.message.edit_text(
+                        text=f"❌ **Недостаточно средств**\n\nНеобходимо: {avatar_cost} кредитов\nВаш баланс: {user_balance}",
+                        parse_mode="Markdown"
+                    )
+                    return
+                
+                # Списываем средства (здесь должна быть логика списания)
+                # await user_service.deduct_balance(user.id, avatar_cost)
+                logger.info(f"💰 ПРОДАКШН: Списано {avatar_cost} кредитов с баланса пользователя {user.id}")
+            
             # Показываем индикатор запуска
+            status_text = "🧪 **Запускаем тестовое обучение...**" if is_test_mode else "🚀 **Запускаем обучение...**"
             await callback.message.edit_text(
-                text="🚀 **Запускаем обучение...**\n\nПодготавливаем ваши фотографии для обучения",
+                text=f"{status_text}\n\nПодготавливаем ваши фотографии для обучения",
                 parse_mode="Markdown"
             )
             

@@ -169,7 +169,7 @@ class TestAvatarConfiguration:
         from app.core.config import settings
         
         # Проверяем критические настройки
-        assert hasattr(settings, 'FAL_TRAINING_TEST_MODE')
+        # FAL_TRAINING_TEST_MODE удален - используется AVATAR_TEST_MODE        assert hasattr(settings, 'AVATAR_TEST_MODE')
         assert hasattr(settings, 'FAL_WEBHOOK_URL')
         assert hasattr(settings, 'AVATAR_MIN_PHOTOS')
         assert hasattr(settings, 'AVATAR_MAX_PHOTOS')

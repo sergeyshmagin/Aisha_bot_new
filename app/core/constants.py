@@ -93,10 +93,7 @@ class AvatarStatus(str, Enum):
     ERROR = "error"
 
 
-class AvatarGender(str, Enum):
-    """Пол аватара"""
-    MALE = "male"
-    FEMALE = "female"
+# AvatarGender перенесен в app.database.models для согласованности с БД
 
 
 # Лимиты

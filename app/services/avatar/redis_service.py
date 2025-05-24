@@ -456,11 +456,53 @@ class AvatarRedisService:
             progress_key = f"training_progress:{avatar_id}"
             
             progress_str = await redis_client.get(progress_key)
-            if progress_str:
-                return int(progress_str.decode())
+            if progress_str is None:
+                return None
             
-            return None
+            return int(progress_str.decode() if isinstance(progress_str, bytes) else progress_str)
             
         except Exception as e:
             logger.exception(f"Ошибка получения прогресса обучения аватара {avatar_id}: {e}")
-            return None 
+            return None
+    
+    # ==================== ОБЩИЕ МЕТОДЫ ОЧИСТКИ ====================
+    
+    async def clear_user_data(self, user_id: int) -> bool:
+        """
+        Полностью очищает все данные пользователя из Redis
+        Используется при отмене создания аватара или сбросе сессии
+        
+        Args:
+            user_id: ID пользователя
+            
+        Returns:
+            bool: Успешность операции
+        """
+        try:
+            redis_client = await self.get_redis()
+            
+            # Паттерны ключей для удаления
+            patterns_to_clear = [
+                f"photo_buffer:{user_id}*",      # Буфер фотографий
+                f"avatar_lock:{user_id}*",       # Блокировки операций
+                f"avatar_draft:{user_id}*",      # Черновики аватаров
+                f"avatar_cache:{user_id}*",      # Кэшированные данные
+            ]
+            
+            total_deleted = 0
+            
+            for pattern in patterns_to_clear:
+                # Получаем ключи по паттерну
+                keys = await redis_client.keys(pattern)
+                if keys:
+                    # Удаляем ключи
+                    deleted_count = await redis_client.delete(*keys)
+                    total_deleted += deleted_count
+                    logger.debug(f"Удалено {deleted_count} ключей по паттерну {pattern}")
+            
+            logger.info(f"Очищены все данные пользователя {user_id} из Redis, удалено ключей: {total_deleted}")
+            return True
+            
+        except Exception as e:
+            logger.exception(f"Ошибка очистки данных пользователя {user_id} из Redis: {e}")
+            return False 

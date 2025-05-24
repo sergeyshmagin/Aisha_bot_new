@@ -136,10 +136,10 @@ class Avatar(Base):
     
     # Основная информация
     name: Mapped[str] = mapped_column(String(100))
-    gender: Mapped[AvatarGender] = mapped_column(SQLEnum(AvatarGender))
-    avatar_type: Mapped[AvatarType] = mapped_column(SQLEnum(AvatarType), default=AvatarType.CHARACTER)
-    training_type: Mapped[AvatarTrainingType] = mapped_column(SQLEnum(AvatarTrainingType), default=AvatarTrainingType.PORTRAIT)
-    status: Mapped[AvatarStatus] = mapped_column(SQLEnum(AvatarStatus), default=AvatarStatus.DRAFT)
+    gender: Mapped[AvatarGender] = mapped_column(SQLEnum(AvatarGender, native_enum=False))
+    avatar_type: Mapped[AvatarType] = mapped_column(SQLEnum(AvatarType, native_enum=False), default="CHARACTER")
+    training_type: Mapped[AvatarTrainingType] = mapped_column(SQLEnum(AvatarTrainingType, native_enum=False), default="PORTRAIT")
+    status: Mapped[AvatarStatus] = mapped_column(SQLEnum(AvatarStatus, native_enum=False), default="DRAFT")
     
     # FAL AI интеграция
     finetune_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True, index=True)
@@ -151,13 +151,13 @@ class Avatar(Base):
     # Настройки обучения - универсальные
     fal_mode: Mapped[str] = mapped_column(String(20), default="character")  # character, style, custom
     fal_iterations: Mapped[int] = mapped_column(Integer, default=500)
-    fal_priority: Mapped[FALPriority] = mapped_column(SQLEnum(FALPriority), default=FALPriority.QUALITY)  # 🔄 Обновлено на enum
+    fal_priority: Mapped[FALPriority] = mapped_column(SQLEnum(FALPriority, native_enum=False), default="QUALITY")  # 🔄 Обновлено на enum
     trigger_word: Mapped[str] = mapped_column(String(50), default="TOK")
     lora_rank: Mapped[int] = mapped_column(Integer, default=32)
     
     # 🆕 Настройки обучения - специфичные для FAL AI
     learning_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)  # Скорость обучения
-    finetune_type: Mapped[FALFinetuneType] = mapped_column(SQLEnum(FALFinetuneType), default=FALFinetuneType.LORA)  # 🔄 Обновлено на enum
+    finetune_type: Mapped[FALFinetuneType] = mapped_column(SQLEnum(FALFinetuneType, native_enum=False), default="LORA")  # 🔄 Обновлено на enum
     finetune_comment: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # Комментарий к обучению
     
     # 🆕 Portrait-specific настройки (flux-lora-portrait-trainer)
@@ -217,7 +217,7 @@ class AvatarPhoto(Base):
     
     # Порядок и статус
     upload_order: Mapped[int] = mapped_column(Integer)  # Порядок загрузки
-    validation_status: Mapped[PhotoValidationStatus] = mapped_column(SQLEnum(PhotoValidationStatus), default=PhotoValidationStatus.PENDING)
+    validation_status: Mapped[PhotoValidationStatus] = mapped_column(SQLEnum(PhotoValidationStatus, native_enum=False), default="PENDING")
     
     # Метаданные файла
     file_size: Mapped[int] = mapped_column(Integer)  # Размер в байтах

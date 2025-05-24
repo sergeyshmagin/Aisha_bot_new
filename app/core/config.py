@@ -23,10 +23,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: Optional[str] = Field(default="test_key")
     ASSISTANT_ID: Optional[str] = None
     
-    # Fal AI
-    FAL_API_KEY: str = Field("", env="FAL_API_KEY")
-    FAL_TRAINING_TEST_MODE: bool = Field(True, env="FAL_TRAINING_TEST_MODE")
-    FAL_WEBHOOK_URL: str = Field("https://aibots.kz/api/avatar/status_update", env="FAL_WEBHOOK_URL")
+        # Fal AI    FAL_API_KEY: str = Field("", env="FAL_API_KEY")    FAL_WEBHOOK_URL: str = Field("https://aibots.kz/api/avatar/status_update", env="FAL_WEBHOOK_URL")
     
     # FAL AI - Pro Trainer Settings
     FAL_DEFAULT_MODE: str = Field("character", env="FAL_MODE")
@@ -91,9 +88,13 @@ class Settings(BaseSettings):
     
     # ========== НАСТРОЙКИ АВАТАРОВ ==========
     
+    # Тестовый режим аватаров (для отладки)
+    AVATAR_TEST_MODE: bool = Field(True, env="AVATAR_TEST_MODE")
+    
     # Лимиты фотографий
     AVATAR_MIN_PHOTOS: int = Field(10, env="AVATAR_MIN_PHOTOS")
-    AVATAR_MAX_PHOTOS: int = Field(20, env="AVATAR_MAX_PHOTOS") 
+    AVATAR_MAX_PHOTOS: int = Field(20, env="AVATAR_MAX_PHOTOS")
+    
     AVATAR_MAX_PHOTOS_PER_USER: int = Field(5, env="AVATAR_MAX_PHOTOS_PER_USER")
     
     # Ограничения файлов

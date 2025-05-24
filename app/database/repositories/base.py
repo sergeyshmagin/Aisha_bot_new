@@ -39,11 +39,7 @@ class BaseRepository(Repository[ModelType], Generic[ModelType]):
         self.session.add(obj)
         await self.session.flush()
         await self.session.refresh(obj)
-        import logging
-        logger = logging.getLogger(__name__)
-        logger.info(f"[REPO] create: добавлен объект id={getattr(obj, 'id', None)}, user_id={getattr(obj, 'user_id', None)}")
         await self.session.commit()
-        logger.info(f"[REPO] create: commit выполнен")
         return obj
 
     async def update(self, id: Any, data: Dict[str, Any]) -> Optional[ModelType]:

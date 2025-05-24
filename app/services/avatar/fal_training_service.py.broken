@@ -22,13 +22,7 @@ class FALTrainingService:
     - Портретный тип обучения (Flux LoRA Portrait Trainer) 
     - Художественный тип обучения (Flux Pro Trainer)
     - Полный тестовый режим для отладки без затрат
-    - Webhook simulation для тестирования UX
-    """
-    
-    def __init__(self):
-        self.test_mode = settings.AVATAR_TEST_MODE
-        self.webhook_url = settings.FAL_WEBHOOK_URL
-        self.logger = logger
+        - Webhook simulation для тестирования UX    """        def __init__(self):        self.test_mode = settings.AVATAR_TEST_MODE        self.webhook_url = settings.FAL_WEBHOOK_URL        self.logger = logger
         
         # Импорты FAL клиентов (только в не-тестовом режиме)
         self.fal_client = None

@@ -233,7 +233,7 @@ async def test_webhook_simulation():
 async def main():
     """Основная функция тестирования"""
     print("🎯 === ТЕСТИРОВАНИЕ FAL AI ИНТЕГРАЦИИ ===")
-    print(f"Режим: {'TEST MODE ✅' if settings.FAL_TRAINING_TEST_MODE else 'PRODUCTION ⚠️'}")
+    print(f"Режим: {'TEST MODE ✅' if settings.AVATAR_TEST_MODE else 'PRODUCTION ⚠️'}")
     print(f"Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
     results = []

@@ -18,24 +18,7 @@ from ...core.logger import get_logger
 logger = get_logger(__name__)
 
 
-class FalAIClient:
-    """
-    Клиент для работы с FAL AI API.
-    
-    Основные функции:
-    - Обучение персональных моделей (finetune)
-    - Мониторинг прогресса обучения
-    - Генерация изображений с обученными моделями
-    - Управление файлами и архивами
-    """
-
-    def __init__(self):
-        self.logger = logger
-        self.api_key = settings.FAL_API_KEY
-        self.test_mode = settings.AVATAR_TEST_MODE
-        
-        # Настраиваем FAL клиент
-        if self.api_key:
+class FalAIClient:    """    Клиент для работы с FAL AI API.        Основные функции:    - Обучение персональных моделей (finetune)    - Мониторинг прогресса обучения    - Генерация изображений с обученными моделями    - Управление файлами и архивами    """    def __init__(self):        self.logger = logger        self.api_key = settings.FAL_API_KEY        self.test_mode = settings.AVATAR_TEST_MODE                # Настраиваем FAL клиент        if self.api_key:
             fal_client.api_key = self.api_key
         else:
             logger.debug("FAL_API_KEY не установлен, работа в тестовом режиме")

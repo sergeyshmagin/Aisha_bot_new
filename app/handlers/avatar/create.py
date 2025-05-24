@@ -117,11 +117,40 @@ async def process_avatar_name(message: Message, state: FSMContext):
         # ✅ Никаких ограничений на символы - принимаем любые буквы и цифры
         await state.update_data(avatar_name=name)
         
+        # Получаем данные из состояния для создания аватара
+        data = await state.get_data()
+        gender = data.get("gender", "male")
+        training_type = data.get("training_type", "portrait")
+        
+        # Создаем аватар в базе данных
+        from app.core.di import get_user_service, get_avatar_service
+        from app.database.models import AvatarGender, AvatarType, AvatarTrainingType
+        
+        async with get_user_service() as user_service:
+            user = await user_service.get_user_by_telegram_id(message.from_user.id)
+            if not user:
+                await message.answer("❌ Пользователь не найден. Попробуйте позже.")
+                return
+        
+        async with get_avatar_service() as avatar_service:
+            avatar = await avatar_service.create_avatar(
+                user_id=user.id,
+                name=name,
+                gender=AvatarGender(gender),
+                avatar_type=AvatarType.CHARACTER,
+                training_type=AvatarTrainingType(training_type)
+            )
+            
+            # Сохраняем ID аватара в состоянии
+            await state.update_data(avatar_id=str(avatar.id))
+        
         # Показываем успешное сохранение имени и переход к загрузке фото
         text = f"""
-✅ **Имя аватара сохранено!**
+✅ **Аватар создан!**
 
 🎭 **Имя:** {name}
+👤 **Пол:** {"Мужской" if gender == "male" else "Женский"}
+🎯 **Тип:** {"Портретный" if training_type == "portrait" else "Художественный"}
 
 📸 **Следующий шаг:** Загрузка фотографий
 
@@ -152,10 +181,10 @@ async def process_avatar_name(message: Message, state: FSMContext):
             parse_mode="Markdown"
         )
         
-        logger.info(f"Пользователь {message.from_user.id} ввел имя аватара: {name}")
+        logger.info(f"Пользователь {message.from_user.id} создал аватар: {name} (ID: {avatar.id})")
         
     except Exception as e:
-        logger.exception(f"Ошибка при обработке имени аватара: {e}")
-        await message.answer("❌ Произошла ошибка. Попробуйте еще раз.")
+        logger.exception(f"Ошибка при создании аватара: {e}")
+        await message.answer("❌ Произошла ошибка при создании аватара. Попробуйте еще раз.")
 
-# LEGACY - старая заглушка, теперь обработка в photo_upload.py# @router.callback_query(F.data == "start_photo_upload") # async def start_photo_upload_legacy(callback: CallbackQuery, state: FSMContext):#     """LEGACY: Заглушка начала загрузки фотографий - заменена на полнофункциональную систему"""#     pass 
+ 

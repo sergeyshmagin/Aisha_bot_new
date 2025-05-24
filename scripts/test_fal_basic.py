@@ -10,12 +10,12 @@ from uuid import uuid4
 from datetime import datetime
 
 # Устанавливаем переменные окружения для тестирования
-os.environ['FAL_TRAINING_TEST_MODE'] = 'true'
+os.environ['AVATAR_TEST_MODE'] = 'true'
 os.environ['FAL_KEY'] = 'test_key'
 
 print("🎯 === БАЗОВЫЙ ТЕСТ FAL AI КЛИЕНТА ===")
 print(f"Время: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-print(f"Тестовый режим: {os.environ.get('FAL_TRAINING_TEST_MODE', 'false')}")
+print(f"Тестовый режим: {os.environ.get('AVATAR_TEST_MODE', 'false')}")
 
 # Тест без импорта сложных зависимостей
 class MockFalAIClient:

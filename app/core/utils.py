@@ -52,29 +52,7 @@ def get_storage_path(filename: str) -> Path:
     """Получить путь для сохранения файла"""
     return settings.AUDIO_STORAGE_PATH / filename
 
-# LEGACY: Дублирующаяся функция - ИСПОЛЬЗУЙТЕ app.services.audio_processing.storage.LocalAudioStorage.cleanup_old_files()
-# def cleanup_old_files(days: Optional[int] = None) -> None:
-#     """LEGACY: Удаление старых файлов"""
-#     if days is None:
-#         days = settings.STORAGE_CLEANUP_DAYS
-#     
-#     cutoff_date = datetime.now() - timedelta(days=days)
-#     deleted_count = 0
-#     
-#     try:
-#         for file_path in settings.AUDIO_STORAGE_PATH.glob("*"):
-#             if not file_path.is_file():
-#                 continue
-#             
-#             file_time = datetime.fromtimestamp(file_path.stat().st_mtime)
-#             if file_time < cutoff_date:
-#                 file_path.unlink()
-#                 deleted_count += 1
-#         
-#         logger.info(f"Удалено {deleted_count} старых файлов")
-#     except OSError as e:
-#         logger.error(f"Ошибка при удалении старых файлов: {e}")
-#         raise AudioProcessingError(f"Ошибка при удалении старых файлов: {e}")
+
 
 def format_duration(seconds: float) -> str:
     """Форматирование длительности в читаемый вид"""

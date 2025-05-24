@@ -9,11 +9,11 @@ def get_photo_upload_keyboard(photos_count: int, min_photos: int, max_photos: in
     
     buttons = []
     
-    # Показ галереи (если есть фото)
+    # Показ загруженных фото (если есть фото)
     if photos_count > 0:
         buttons.append([
             InlineKeyboardButton(
-                text=f"🖼️ Галерея ({photos_count})",
+                text=f"📸 Загруженные фото ({photos_count})",
                 callback_data="show_photo_gallery"
             )
         ])
@@ -39,8 +39,8 @@ def get_photo_upload_keyboard(photos_count: int, min_photos: int, max_photos: in
     # Навигация
     buttons.append([
         InlineKeyboardButton(
-            text="◀️ Отмена",
-            callback_data="avatar_menu"
+            text="🗑️ Отменить создание",
+            callback_data="cancel_avatar_draft"
         )
     ])
     
