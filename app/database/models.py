@@ -189,6 +189,9 @@ class Avatar(Base):
     photos_count: Mapped[int] = mapped_column(Integer, default=0)
     generations_count: Mapped[int] = mapped_column(Integer, default=0)
     
+    # Основной аватар
+    is_main: Mapped[bool] = mapped_column(Boolean, default=False)  # Основной аватар пользователя
+    
     # Временные метки
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)

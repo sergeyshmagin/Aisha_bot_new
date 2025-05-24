@@ -88,9 +88,7 @@ def get_transcripts_keyboard(transcripts: List[Dict], telegram_id: int) -> Inlin
             )
         )
     
-    builder.row(
-        InlineKeyboardButton("⬅️ Назад", callback_data="transcribe_back_to_menu")
-    )
+    builder.row(        InlineKeyboardButton(text="⬅️ Назад", callback_data="transcribe_back_to_menu")    )
     
     return builder.as_markup()
 

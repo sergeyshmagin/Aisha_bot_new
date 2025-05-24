@@ -4,7 +4,7 @@
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -49,6 +49,67 @@ class AvatarRepository(BaseRepository[Avatar]):
         )
         result = await self.session.execute(stmt)
         return result.scalar_one_or_none()
+
+    async def get_main_avatar(self, user_id: int) -> Optional[Avatar]:
+        """Получить основной аватар пользователя"""
+        stmt = (
+            select(self.model)
+            .where(self.model.user_id == user_id, self.model.is_main.is_(True))
+            .options(selectinload(self.model.photos))
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def clear_main_avatar(self, user_id: int) -> None:
+        """
+        Убирает флаг is_main у ВСЕХ аватаров пользователя
+        
+        ⚠️ ВАЖНО: Этот метод обеспечивает, что у пользователя не будет основных аватаров.
+        Используется перед установкой нового основного аватара.
+        
+        Args:
+            user_id: ID пользователя
+        """
+        stmt = (
+            update(self.model)
+            .where(self.model.user_id == user_id)
+            .values(is_main=False)
+        )
+        await self.session.execute(stmt)
+
+    async def count_main_avatars(self, user_id: int) -> int:
+        """
+        Подсчитывает количество основных аватаров у пользователя
+        
+        Args:
+            user_id: ID пользователя
+            
+        Returns:
+            int: Количество основных аватаров (должно быть 0 или 1)
+        """
+        stmt = (
+            select(func.count(self.model.id))
+            .where(
+                self.model.user_id == user_id,
+                self.model.is_main.is_(True)
+            )
+        )
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
+
+    async def get_user_avatars_with_photos(self, user_id: int) -> List[Avatar]:
+        """Получить все завершенные аватары пользователя с фотографиями"""
+        stmt = (
+            select(self.model)
+            .where(
+                self.model.user_id == user_id,
+                self.model.is_draft.is_(False)  # Только завершенные аватары
+            )
+            .options(selectinload(self.model.photos))
+            .order_by(self.model.is_main.desc(), self.model.created_at.desc())  # Сначала основной, потом по дате
+        )
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
 
 
 class AvatarPhotoRepository(BaseRepository[AvatarPhoto]):

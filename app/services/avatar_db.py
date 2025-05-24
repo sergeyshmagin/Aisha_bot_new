@@ -68,8 +68,20 @@ class AvatarService(BaseService):
         return await self.avatar_repo.create(data_for_repo)
 
     async def get_avatar(self, avatar_id: UUID) -> Optional[Avatar]:
-        """Получить аватар по ID"""
-        return await self.avatar_repo.get_with_photos(avatar_id)
+        """
+        Получает аватар по ID с фотографиями
+        
+        Args:
+            avatar_id: ID аватара
+            
+        Returns:
+            Optional[Avatar]: Аватар с фотографиями или None
+        """
+        try:
+            return await self.avatar_repo.get_with_photos(avatar_id)
+        except Exception as e:
+            logger.exception(f"Ошибка при получении аватара {avatar_id}: {e}")
+            raise
 
     async def get_user_avatars(self, user_id: int) -> List[Avatar]:
         """Получить все аватары пользователя"""
@@ -141,43 +153,44 @@ class AvatarService(BaseService):
 
     async def delete_avatar_completely(self, avatar_id: UUID) -> bool:
         """
-        Полностью удаляет аватар с фотографиями, файлами из MinIO и очисткой кешей
-        Используется при отмене создания аватара
+        Полностью удаляет аватар со всеми файлами
+        
+        Args:
+            avatar_id: ID аватара
+            
+        Returns:
+            bool: Результат удаления
         """
         try:
-            # Получаем все фотографии аватара
-            photos, _ = await self.get_avatar_photos(avatar_id)
+            # Получаем аватар с фотографиями
+            avatar = await self.avatar_repo.get_with_photos(avatar_id)
+            if not avatar:
+                logger.warning(f"Аватар {avatar_id} не найден для удаления")
+                return False
             
-            # Удаляем файлы из MinIO
-            from app.services.storage import StorageService
-            storage = StorageService()
+            # Удаляем все фотографии через сервис
+            from app.services.avatar.photo_service import PhotoUploadService
+            photo_service = PhotoUploadService(self.session)
             
-            for photo in photos:
+            for photo in avatar.photos:
                 try:
-                    if photo.minio_key:
-                        await storage.delete_file("avatars", photo.minio_key)
-                        logger.debug(f"Удален файл из MinIO: {photo.minio_key}")
+                    # Исправляем сигнатуру метода delete_photo - добавляем user_id
+                    await photo_service.delete_photo(photo.id, avatar.user_id)
                 except Exception as e:
-                    logger.warning(f"Ошибка при удалении файла {photo.minio_key} из MinIO: {e}")
+                    logger.warning(f"Не удалось удалить фото {photo.id}: {e}")
             
-            # Удаляем записи о фотографиях из БД
-            for photo in photos:
-                await self.photo_repo.delete(photo.id)
-            
-            # Удаляем сам аватар из БД
-            result = await self.avatar_repo.delete(avatar_id)
-            
-            # Коммитим транзакцию
+            # Удаляем аватар из базы
+            await self.avatar_repo.delete(avatar_id)
             await self.session.commit()
             
-            logger.info(f"Аватар {avatar_id} полностью удален с {len(photos)} фотографиями")
-            return result
+            logger.info(f"Аватар {avatar_id} полностью удален")
+            return True
             
         except Exception as e:
             await self.session.rollback()
             logger.exception(f"Ошибка при полном удалении аватара {avatar_id}: {e}")
             raise
-    
+
     async def delete_avatar(self, avatar_id: UUID) -> bool:
         """
         Алиас для delete_avatar_completely для обратной совместимости
@@ -191,12 +204,13 @@ class AvatarService(BaseService):
         logger.warning(f"Используется устаревший метод delete_avatar для {avatar_id}. Рекомендуется использовать delete_avatar_completely")
         return await self.delete_avatar_completely(avatar_id)
 
-    async def delete_avatar_photo(self, photo_id: UUID) -> bool:
+    async def delete_avatar_photo(self, photo_id: UUID, user_id: UUID) -> bool:
         """
         Удаляет фото аватара через PhotoUploadService
         
         Args:
             photo_id: ID фотографии
+            user_id: ID пользователя (для проверки прав)
             
         Returns:
             bool: Результат удаления
@@ -204,19 +218,112 @@ class AvatarService(BaseService):
         try:
             from app.services.avatar.photo_service import PhotoUploadService
             
-            # Получаем фото чтобы узнать user_id
-            photo = await self.photo_repo.get(photo_id)
-            if not photo:
-                logger.warning(f"Фото {photo_id} не найдено для удаления")
-                return False
-            
-            # Используем PhotoUploadService для удаления с правильной логикой
             photo_service = PhotoUploadService(self.session)
-            result = await photo_service.delete_photo(photo_id, photo.user_id)
+            result = await photo_service.delete_photo(photo_id, user_id)
             
             logger.info(f"Фото {photo_id} удалено из аватара")
             return result
             
         except Exception as e:
             logger.exception(f"Ошибка при удалении фото аватара {photo_id}: {e}")
+            raise
+
+    async def set_main_avatar(self, user_id: int, avatar_id: UUID) -> bool:
+        """
+        Устанавливает аватар как основной для пользователя
+        
+        ⚠️ ВАЖНО: У пользователя может быть только ОДИН основной аватар в любой момент времени!
+        Этот метод автоматически снимает флаг is_main с ВСЕХ других аватаров пользователя.
+        
+        Args:
+            user_id: ID пользователя
+            avatar_id: ID аватара для установки как основной
+            
+        Returns:
+            bool: Результат операции
+            
+        Raises:
+            Exception: При ошибках БД или если аватар не принадлежит пользователю
+        """
+        try:
+            # Проверяем, что аватар принадлежит пользователю
+            avatar = await self.avatar_repo.get(avatar_id)
+            if not avatar or avatar.user_id != user_id:
+                logger.error(f"Аватар {avatar_id} не принадлежит пользователю {user_id}")
+                return False
+            
+            # Начинаем транзакцию
+            # 1. Сначала убираем флаг is_main у ВСЕХ аватаров пользователя
+            await self.avatar_repo.clear_main_avatar(user_id)
+            logger.debug(f"Сброшен флаг is_main для всех аватаров пользователя {user_id}")
+            
+            # 2. Затем устанавливаем флаг ТОЛЬКО для выбранного аватара
+            result = await self.avatar_repo.update(avatar_id, {"is_main": True})
+            
+            if result:
+                await self.session.commit()
+                logger.info(f"✅ Аватар {avatar_id} установлен как ЕДИНСТВЕННЫЙ основной для пользователя {user_id}")
+                return True
+            else:
+                await self.session.rollback()
+                logger.error(f"Не удалось установить аватар {avatar_id} как основной")
+                return False
+                
+        except Exception as e:
+            await self.session.rollback()
+            logger.exception(f"Ошибка при установке основного аватара {avatar_id} для пользователя {user_id}: {e}")
+            raise
+
+    async def unset_main_avatar(self, user_id: int) -> bool:
+        """
+        Снимает статус основного аватара у всех аватаров пользователя
+        
+        Args:
+            user_id: ID пользователя
+            
+        Returns:
+            bool: Результат операции
+        """
+        try:
+            await self.avatar_repo.clear_main_avatar(user_id)
+            await self.session.commit()
+            
+            logger.info(f"✅ Статус основного аватара снят у всех аватаров пользователя {user_id}")
+            return True
+            
+        except Exception as e:
+            await self.session.rollback()
+            logger.exception(f"Ошибка при снятии статуса основного аватара для пользователя {user_id}: {e}")
+            raise
+
+    async def get_main_avatar(self, user_id: int) -> Optional[Avatar]:
+        """
+        Получает основной аватар пользователя
+        
+        Args:
+            user_id: ID пользователя
+            
+        Returns:
+            Optional[Avatar]: Основной аватар или None
+        """
+        try:
+            return await self.avatar_repo.get_main_avatar(user_id)
+        except Exception as e:
+            logger.exception(f"Ошибка при получении основного аватара пользователя {user_id}: {e}")
+            raise
+
+    async def get_user_avatars_with_photos(self, user_id: int) -> List[Avatar]:
+        """
+        Получает все аватары пользователя с загруженными фотографиями
+        
+        Args:
+            user_id: ID пользователя
+            
+        Returns:
+            List[Avatar]: Список аватаров с фотографиями
+        """
+        try:
+            return await self.avatar_repo.get_user_avatars_with_photos(user_id)
+        except Exception as e:
+            logger.exception(f"Ошибка при получении аватаров пользователя {user_id}: {e}")
             raise 

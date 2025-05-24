@@ -33,8 +33,8 @@ class AvatarMainHandler:
                     return
             
             async with get_avatar_service() as avatar_service:
-                # Получаем аватары пользователя
-                user_avatars = await avatar_service.get_user_avatars(user.id)
+                # Получаем завершенные аватары пользователя (как в галерее)
+                user_avatars = await avatar_service.get_user_avatars_with_photos(user.id)
                 avatars_count = len(user_avatars)
             
             # Устанавливаем состояние
@@ -75,21 +75,8 @@ async def start_avatar_creation(callback: CallbackQuery, state: FSMContext):
         logger.exception(f"Ошибка при начале создания аватара: {e}")
         await callback.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True)
 
-@router.callback_query(F.data == "avatar_gallery")
-async def show_avatar_gallery(callback: CallbackQuery, state: FSMContext):
-    """Показывает галерею аватаров"""
-    try:
-        # TODO: Реализовать галерею аватаров
-        await callback.message.edit_text(
-            "🎭 **Галерея аватаров**\n\n🚧 В разработке...\n\nВозвращайтесь позже!",
-            parse_mode="Markdown"
-        )
-        
-        logger.info(f"Пользователь {callback.from_user.id} открыл галерею аватаров")
-        
-    except Exception as e:
-        logger.exception(f"Ошибка при показе галереи аватаров: {e}")
-        await callback.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True)
+# Галерея аватаров обрабатывается в отдельном модуле gallery.py
+# Это сделано для лучшей организации кода и возможности повторного использования
 
 # Экспортируем обработчик для использования в других модулях
 __all__ = ["avatar_main_handler", "router"] 

@@ -1,11 +1,7 @@
 """
 Модуль обработчиков аватаров
 """
-from .training_type_selection import router as training_type_router
-from .create import router as create_router
-from .main import router as main_router, avatar_main_handler
-from .photo_upload import router as photo_upload_router
-from .training_production import router as training_router
+from .training_type_selection import router as training_type_routerfrom .create import router as create_routerfrom .main import router as main_router, avatar_main_handlerfrom .photo_upload import router as photo_upload_routerfrom .training_production import router as training_routerfrom .gallery import router as gallery_routerfrom .cancel_handler import router as cancel_router
 
 # Создаем объединенный роутер
 from aiogram import Router
@@ -16,6 +12,7 @@ router.include_router(training_type_router)
 router.include_router(create_router)
 router.include_router(photo_upload_router)
 router.include_router(training_router)
+router.include_router(gallery_router)
 
 # Заглушка для совместимости с тестами (для старого AvatarHandler)
 class AvatarHandler:
@@ -68,6 +65,7 @@ __all__ = [
     "main_router",
     "photo_upload_router",
     "training_router",
+    "gallery_router",
     "router",
     "avatar_main_handler",
     "register_avatar_handlers",
