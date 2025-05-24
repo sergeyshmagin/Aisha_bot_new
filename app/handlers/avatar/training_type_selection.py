@@ -87,8 +87,17 @@ async def select_training_type(callback: CallbackQuery, state: FSMContext):
 async def confirm_training_type(callback: CallbackQuery, state: FSMContext):
     """Подтверждение выбора типа обучения и переход к выбору пола"""
     try:
-        training_type = callback.data.split("_", 2)[2]
-        await state.update_data(training_type=training_type)
+        # Получаем training_type из callback_data или из состояния
+        callback_training_type = callback.data.split("_", 2)[2]
+        
+        if callback_training_type == "current":
+            # Если пришло "current", берем сохраненный тип из состояния
+            data = await state.get_data()
+            training_type = data.get("training_type", "portrait")
+        else:
+            # Иначе используем тип из callback_data
+            training_type = callback_training_type
+            await state.update_data(training_type=training_type)
         
         # Получаем информацию о типе для подтверждения
         fal_service = FALTrainingService()
