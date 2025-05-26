@@ -202,6 +202,7 @@ TELEGRAM_WEBHOOK_URL=https://aibots.kz:8443/webhook
 # FAL AI (ЗАПОЛНИТЕ)
 FAL_API_KEY=
 FAL_WEBHOOK_URL=https://aibots.kz:8443/api/v1/avatar/status_update
+FAL_WEBHOOK_SECRET=  # Необязательно - дополнительная безопасность
 AVATAR_TEST_MODE=false
 
 # Performance (оптимизировано для 5000+ пользователей)
@@ -251,6 +252,9 @@ DATABASE_URL=postgresql+asyncpg://username:password@your-postgres-server:5432/ai
 # Telegram (ЗАПОЛНИТЕ)
 TELEGRAM_TOKEN=
 
+# FAL AI (дополнительная безопасность)
+FAL_WEBHOOK_SECRET=  # Необязательно
+
 # Security
 LOG_LEVEL=INFO
 EOF
@@ -274,6 +278,9 @@ DATABASE_URL=postgresql+asyncpg://username:password@your-postgres-server:5432/ai
 
 # Telegram (ЗАПОЛНИТЕ)
 TELEGRAM_TOKEN=
+
+# FAL AI (дополнительная безопасность)
+FAL_WEBHOOK_SECRET=  # Необязательно
 
 # Security
 LOG_LEVEL=INFO
@@ -893,6 +900,9 @@ main() {
     echo "   - REDIS_URL (ваш Redis сервер)"  
     echo "   - MINIO_* настройки (ваш MinIO сервер)"
     echo "   - TELEGRAM_TOKEN и FAL_API_KEY"
+    echo
+    echo -e "${BLUE}📝 НЕОБЯЗАТЕЛЬНЫЕ НАСТРОЙКИ:${NC}"
+    echo "   - FAL_WEBHOOK_SECRET (дополнительная безопасность)"
     echo
     echo -e "${BLUE}💡 ВНЕШНИЕ ТРЕБОВАНИЯ:${NC}"
     echo "   PostgreSQL: database 'aisha_bot_prod' с пользователем"

@@ -130,7 +130,7 @@ $RECYCLE.BIN/
 *.iml
 
 # Local storage
-storage/
+#storage/
 
 # GFPGAN model weights
 GFPGAN*.pth

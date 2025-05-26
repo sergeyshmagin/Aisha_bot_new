@@ -7,13 +7,18 @@ import os
 import sys
 from pathlib import Path
 
-# Добавляем корневую директорию проекта в PYTHONPATH
+# Добавляем корневую директорию проекта в PYTHONPATH для доступа к основному проекту
 root_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(root_dir))
+
+# Добавляем текущий каталог для импорта локального app
+current_dir = Path(__file__).parent
+sys.path.insert(0, str(current_dir))
 
 # Устанавливаем переменные окружения для API сервера
 os.environ.setdefault("API_SERVER_MODE", "true")
 
+# Импортируем локальный API сервер
 from app.main import run_server
 
 if __name__ == "__main__":
@@ -24,4 +29,4 @@ if __name__ == "__main__":
     print("📊 Webhook status: https://aibots.kz:8443/api/v1/webhook/status")
     print()
     
-    run_server() 
+    run_server()
