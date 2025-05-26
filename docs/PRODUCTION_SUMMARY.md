@@ -28,37 +28,37 @@ Total:              3-6 GB RAM, 150-300% CPU
 
 ### 1. Автоматическая установка
 ```bash
-# Скачайте и запустите скрипт развертывания
+# Скачайте и запустите скрипт развертывания (обновленный)
 sudo bash scripts/deploy_production_minimal.sh
 ```
 
-### 2. Ручная настройка конфигурации
+### 2. Копирование проекта
 ```bash
-# Основная конфигурация
-sudo nano /opt/aisha_bot/.env
-
-# API сервер
-sudo nano /opt/aisha_bot/api_server/.env
+# Код проекта в новую структуру
+sudo rsync -av --exclude='.git' --exclude='__pycache__' --exclude='temp' --exclude='*.log' --exclude='archive' --exclude='.venv' ./ /opt/aisha-backend/
+sudo chown -R aisha:aisha /opt/aisha-backend/
 ```
 
-### 3. Копирование проекта и SSL
+### 3. SSL сертификаты и конфигурация
 ```bash
-# Код проекта
-sudo cp -r . /opt/aisha_bot/
-sudo chown -R aisha:aisha /opt/aisha_bot/
+# SSL сертификаты (обновленный путь)
+sudo cp ssl_certificate/* /opt/aisha-backend/ssl/
+sudo chown aisha:aisha /opt/aisha-backend/ssl/*
+sudo chmod 600 /opt/aisha-backend/ssl/*.key
+sudo chmod 644 /opt/aisha-backend/ssl/*.crt
 
-# SSL сертификаты
-sudo cp ssl_certificate/* /opt/aisha_bot/api_server/ssl/
-sudo chmod 600 /opt/aisha_bot/api_server/ssl/*.key
+# Конфигурация (обновленные пути)
+sudo nano /opt/aisha-backend/.env
+sudo nano /opt/aisha-backend/api_server/.env
 ```
 
 ### 4. Установка зависимостей
 ```bash
 sudo -u aisha bash
-cd /opt/aisha_bot
-source venv/bin/activate
+cd /opt/aisha-backend
+python3.11 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-cd api_server && pip install -r requirements.txt
 ```
 
 ### 5. Миграции БД (на внешнем сервере)
@@ -73,22 +73,30 @@ sudo systemctl start aisha-bot aisha-api
 sudo systemctl status aisha-bot aisha-api
 ```
 
-## 🔧 Архитектура продакшн
+## 🔧 Архитектура продакшн (обновлено)
 
 ```
 ┌─────────────────────────────────────────┐
 │         Application Server              │
 │            Ubuntu 24.04                 │
 ├─────────────────────────────────────────┤
+│  🌐 Nginx (HTTPS:8443)                 │ ← Rate limiting + SSL termination
+│     ├── SSL certificates               │   RAM: 50-100 MB
+│     ├── Webhook protection             │   CPU: 5-10%
+│     └── Reverse proxy                  │
+├─────────────────────────────────────────┤
 │  🤖 Telegram Bot                       │ ← systemd: aisha-bot.service
 │     ├── Aiogram 3.3                    │   RAM: 1.5-3 GB
 │     ├── SQLAlchemy async               │   CPU: 100-200%
-│     └── FAL AI integration             │
+│     └── FAL AI integration             │   Path: /opt/aisha-backend/
 ├─────────────────────────────────────────┤
-│  📡 API Server (HTTPS:8443)            │ ← systemd: aisha-api.service  
+│  📡 API Server (localhost:8000)        │ ← systemd: aisha-api.service  
 │     ├── FastAPI + uvicorn              │   RAM: 0.5-1 GB
-│     ├── SSL certificates               │   CPU: 25-50%
-│     └── Webhook processing             │
+│     ├── Webhook processing             │   CPU: 25-50%
+│     └── FAL AI callbacks               │   Path: /opt/aisha-backend/api_server/
+├─────────────────────────────────────────┤
+│  📁 Frontend (заготовка)               │ ← Будущее расширение
+│     └── Path: /opt/aisha-frontend/     │   React/Vue interface
 └─────────────────────────────────────────┘
               ↓ Network ↓
 ┌─────────────────────────────────────────┐
@@ -103,16 +111,18 @@ sudo systemctl status aisha-bot aisha-api
 │     └── Background tasks               │
 ├─────────────────────────────────────────┤
 │  📦 MinIO Server                       │ ← Уже развернут
-│     ├── User uploads                   │
-│     └── Generated images               │
+│     ├── Buckets: aisha-avatars         │
+│     ├── aisha-transcripts              │
+│     └── aisha-generated                │
 └─────────────────────────────────────────┘
 ```
 
 ## 🚀 Процессы в продакшн
 
-### Основные сервисы:
-1. **aisha-bot.service** - Основной Telegram бот
-2. **aisha-api.service** - API сервер для webhook
+### Основные сервисы (обновлено):
+1. **nginx.service** - Reverse proxy + SSL termination + Rate limiting  
+2. **aisha-bot.service** - Основной Telegram бот
+3. **aisha-api.service** - API сервер для webhook (за nginx)
 
 ### Внешние зависимости:
 - **PostgreSQL** - База данных (внешний сервер)
@@ -134,12 +144,13 @@ sudo systemctl status aisha-bot aisha-api
 - **API requests**: ~1000/час (обучение аватаров)
 - **Local storage growth**: ~100-500 MB/месяц (только логи)
 
-### Ресурсы по компонентам (только приложения):
+### Ресурсы по компонентам (обновлено):
 ```
+Nginx:           50-100 MB RAM, 5-10% CPU
 Telegram Bot:    1.5-3 GB RAM, 100-200% CPU
 API Server:      0.5-1 GB RAM, 25-50% CPU  
 System/Other:    1-2 GB RAM, 25-50% CPU
-Total:           3-6 GB RAM, 150-300% CPU
+Total:           3-6 GB RAM, 155-310% CPU
 ```
 
 ## 🔐 Безопасность
@@ -203,26 +214,32 @@ Total:           3-6 GB RAM, 150-300% CPU
 ## 📞 Команды для мониторинга
 
 ```bash
-# Статус сервисов
-sudo systemctl status aisha-bot aisha-api
+# Статус сервисов (обновлено)
+sudo systemctl status nginx aisha-bot aisha-api
 
 # Логи в реальном времени
 sudo journalctl -fu aisha-bot
 sudo journalctl -fu aisha-api
+sudo journalctl -fu nginx
+
+# Логи webhook (nginx)
+tail -f /var/log/aisha/webhook_access.log
+tail -f /var/log/aisha/nginx_access.log
 
 # Ресурсы системы
 htop
 iotop
 df -h
 
+# Health checks (обновлено)
+curl https://aibots.kz:8443/health
+tail -f /var/log/aisha/health_check.log
+sudo -u aisha /opt/aisha-backend/scripts/test_connections.sh
+
 # Проверка внешних подключений
 telnet your-postgres-server 5432
 telnet your-redis-server 6379
 telnet your-minio-server 9000
-
-# Health checks
-curl https://aibots.kz:8443/health
-tail -f /var/log/aisha-health.log
 
 # Test external connections
 redis-cli -h your-redis-server ping
@@ -265,5 +282,7 @@ REDIS_URL=redis://your-redis-server:6379/0
 MINIO_ENDPOINT=your-minio-server:9000
 MINIO_ACCESS_KEY=your-access-key
 MINIO_SECRET_KEY=your-secret-key
-MINIO_BUCKET=aisha-bot-storage
+MINIO_BUCKET_PREFIX=aisha-bot
+MINIO_BUCKETS={"avatars": "aisha-avatars", "transcripts": "aisha-transcripts", "generated": "aisha-generated"}
+MINIO_SECURE=true
 ``` 
