@@ -1,3 +1,16 @@
+# Временные файлы
+temp/
+*.log
+app_test.log
+
+# Тестовые файлы в корне
+test_*.py
+
+# Кэш и сборка
+__pycache__/
+.pytest_cache/
+*.egg-info/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -137,3 +150,15 @@ data/
 
 # windsurf rules
 .windsurfrules
+
+# Временные файлы проекта
+temp/
+*.log
+app_test.log
+
+# Тестовые файлы в корне (должны быть в tests/)
+/test_*.py
+
+# Дополнительные файлы сборки и кэша
+*.egg-info/
+.pytest_cache/

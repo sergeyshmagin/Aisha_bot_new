@@ -154,7 +154,7 @@ class TranscriptService(BaseService):
             "metadata": transcript.transcript_metadata
         }
 
-    # =================== LEGACY CODE - ЗАКОММЕНТИРОВАН ===================    # LEGACY: Устаревший метод для обратной совместимости    # TODO: Удалить после полной миграции на list_transcripts    # async def get_user_transcripts(self, user_id: Union[int, str, UUID]) -> List[Dict]:    #     """    #     LEGACY: Получает все транскрипты пользователя из БД (без MinIO)    #         #     Deprecated:    #         Используйте list_transcripts вместо этого метода    #     """    #     return await self.list_transcripts(user_id, limit=1000, offset=0)    # =================== END LEGACY CODE ===================
+
 
     async def list_transcripts(self, user_id: Union[int, str, UUID], limit: int = 10, offset: int = 0) -> List[dict]:
         """

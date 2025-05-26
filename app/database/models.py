@@ -196,7 +196,7 @@ class Avatar(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
     
-    # =================== LEGACY FIELDS - ЗАКОММЕНТИРОВАНЫ ===================    # LEGACY: Поля для совместимости со старой системой    # TODO: Удалить после выполнения миграции Alembic e3da12f2e9cc    # is_draft: Mapped[bool] = mapped_column(Boolean, default=True)  # LEGACY: используйте status вместо этого    # photo_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # LEGACY: не используется в новой системе      # preview_key: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)  # LEGACY: не используется в новой системе    # =================== END LEGACY FIELDS ===================
+
 
     # Связи
     user: Mapped[User] = relationship(back_populates="avatars")

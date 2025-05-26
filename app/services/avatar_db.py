@@ -191,7 +191,7 @@ class AvatarService(BaseService):
             logger.exception(f"Ошибка при полном удалении аватара {avatar_id}: {e}")
             raise
 
-    # =================== LEGACY CODE - ЗАКОММЕНТИРОВАН ===================    # LEGACY: Устаревший метод для обратной совместимости    # TODO: Удалить после миграции всех вызовов на delete_avatar_completely    # async def delete_avatar(self, avatar_id: UUID) -> bool:    #     """    #     LEGACY: Алиас для delete_avatar_completely для обратной совместимости    #         #     Args:    #         avatar_id: ID аватара для удаления    #             #     Returns:    #         bool: Результат удаления    #             #     Deprecated:    #         Используйте delete_avatar_completely вместо этого метода    #     """    #     logger.warning(f"LEGACY: Используется устаревший метод delete_avatar для {avatar_id}. Рекомендуется использовать delete_avatar_completely")    #     return await self.delete_avatar_completely(avatar_id)    # =================== END LEGACY CODE ===================
+
 
     async def delete_avatar_photo(self, photo_id: UUID, user_id: UUID) -> bool:
         """
