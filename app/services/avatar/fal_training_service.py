@@ -257,11 +257,13 @@ class FALTrainingService:
     def _get_webhook_url(self, training_type: str) -> Optional[str]:
         """
         Формирует URL webhook с учетом типа обучения
+        Теперь использует новый API сервер с SSL
         """
         if not self.webhook_url:
             return None
             
-        base_url = self.webhook_url
+        # Используем новый endpoint API сервера
+        base_url = "https://aibots.kz:8443/api/v1/avatar/status_update"
         
         # Добавляем параметр типа обучения
         separator = "&" if "?" in base_url else "?"
