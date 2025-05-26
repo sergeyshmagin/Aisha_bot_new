@@ -58,7 +58,7 @@ class AvatarService(BaseService):
             "avatar_type": avatar_type_value,
             "training_type": training_type_value,
             "status": "DRAFT",  # Передаём uppercase строковое значение
-            "is_draft": True,
+            # FIXED: удаляем Legacy поле is_draft - используем только status="DRAFT"
             "avatar_data": avatar_data,
             # Принудительно передаем все enum поля как uppercase строки
             "fal_priority": "QUALITY",
@@ -121,7 +121,7 @@ class AvatarService(BaseService):
         return await self.photo_repo.create({
             "avatar_id": avatar_id,
             "minio_key": minio_key,
-            "order": order
+            "upload_order": order  # FIXED: заменяем order на upload_order
         })
 
     async def remove_photo(self, photo_id: UUID) -> bool:
@@ -147,7 +147,7 @@ class AvatarService(BaseService):
     async def finalize_avatar(self, avatar_id: UUID) -> Optional[Avatar]:
         """Завершить создание аватара"""
         return await self.avatar_repo.update(avatar_id, {
-            "is_draft": False,
+            # FIXED: удаляем is_draft, оставляем только status
             "status": "READY_FOR_TRAINING"  # Передаём uppercase строковое значение
         })
 
@@ -191,18 +191,7 @@ class AvatarService(BaseService):
             logger.exception(f"Ошибка при полном удалении аватара {avatar_id}: {e}")
             raise
 
-    async def delete_avatar(self, avatar_id: UUID) -> bool:
-        """
-        Алиас для delete_avatar_completely для обратной совместимости
-        
-        Args:
-            avatar_id: ID аватара для удаления
-            
-        Returns:
-            bool: Результат удаления
-        """
-        logger.warning(f"Используется устаревший метод delete_avatar для {avatar_id}. Рекомендуется использовать delete_avatar_completely")
-        return await self.delete_avatar_completely(avatar_id)
+    # =================== LEGACY CODE - ЗАКОММЕНТИРОВАН ===================    # LEGACY: Устаревший метод для обратной совместимости    # TODO: Удалить после миграции всех вызовов на delete_avatar_completely    # async def delete_avatar(self, avatar_id: UUID) -> bool:    #     """    #     LEGACY: Алиас для delete_avatar_completely для обратной совместимости    #         #     Args:    #         avatar_id: ID аватара для удаления    #             #     Returns:    #         bool: Результат удаления    #             #     Deprecated:    #         Используйте delete_avatar_completely вместо этого метода    #     """    #     logger.warning(f"LEGACY: Используется устаревший метод delete_avatar для {avatar_id}. Рекомендуется использовать delete_avatar_completely")    #     return await self.delete_avatar_completely(avatar_id)    # =================== END LEGACY CODE ===================
 
     async def delete_avatar_photo(self, photo_id: UUID, user_id: UUID) -> bool:
         """

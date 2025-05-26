@@ -44,7 +44,7 @@ class AvatarRepository(BaseRepository[Avatar]):
         """Получить черновик аватара пользователя"""
         stmt = (
             select(self.model)
-            .where(self.model.user_id == user_id, self.model.is_draft.is_(True))
+            .where(self.model.user_id == user_id, self.model.status == "DRAFT")
             .options(selectinload(self.model.photos))
         )
         result = await self.session.execute(stmt)
@@ -103,10 +103,10 @@ class AvatarRepository(BaseRepository[Avatar]):
             select(self.model)
             .where(
                 self.model.user_id == user_id,
-                self.model.is_draft.is_(False)  # Только завершенные аватары
+                self.model.status != "DRAFT"
             )
             .options(selectinload(self.model.photos))
-            .order_by(self.model.is_main.desc(), self.model.created_at.desc())  # Сначала основной, потом по дате
+            .order_by(self.model.is_main.desc(), self.model.created_at.desc())
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
@@ -125,7 +125,7 @@ class AvatarPhotoRepository(BaseRepository[AvatarPhoto]):
         stmt = (
             select(self.model)
             .where(self.model.avatar_id == avatar_id)
-            .order_by(self.model.order)
+            .order_by(self.model.upload_order)
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
@@ -133,9 +133,9 @@ class AvatarPhotoRepository(BaseRepository[AvatarPhoto]):
     async def get_next_photo_order(self, avatar_id: UUID) -> int:
         """Получить следующий порядковый номер для фото"""
         stmt = (
-            select(self.model.order)
+            select(self.model.upload_order)
             .where(self.model.avatar_id == avatar_id)
-            .order_by(self.model.order.desc())
+            .order_by(self.model.upload_order.desc())
         )
         result = await self.session.execute(stmt)
         max_order = result.scalar_one_or_none()

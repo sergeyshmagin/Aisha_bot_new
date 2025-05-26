@@ -99,6 +99,14 @@ async def select_avatar_gender(callback: CallbackQuery, state: FSMContext):
 async def process_avatar_name(message: Message, state: FSMContext):
     """Обработка ввода имени аватара - принимает любые символы"""
     try:
+        # Проверяем, что пользователь отправил текстовое сообщение
+        if not message.text:
+            await message.answer(
+                "❌ Пожалуйста, отправьте имя аватара текстом.\n"
+                "Не используйте стикеры, фото или другие файлы."
+            )
+            return
+            
         name = message.text.strip()
         
         # Простая валидация - только длина

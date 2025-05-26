@@ -44,7 +44,39 @@ def get_avatar_main_menu(avatars_count: int = 0) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def get_training_type_keyboard() -> InlineKeyboardMarkup:    """Клавиатура выбора типа обучения"""        return InlineKeyboardMarkup(inline_keyboard=[        [            InlineKeyboardButton(                text="🎭 Портретный",                callback_data="training_type_portrait"            )        ],        [            InlineKeyboardButton(                text="🎨 Художественный",                callback_data="training_type_style"            )        ],        [            InlineKeyboardButton(                text="📊 Сравнить типы",                callback_data="detailed_comparison"            )        ],        [            InlineKeyboardButton(                text="◀️ Главное меню",                callback_data="back_to_avatar_menu"            ),            InlineKeyboardButton(                text="❌ Отмена",                callback_data="cancel_avatar_creation"            )        ]    ])
+def get_training_type_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура выбора типа обучения (ИСПРАВЛЕНО после Legacy повреждения)"""
+    
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="🎭 Портретный",
+                callback_data="training_type_portrait"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🎨 Художественный",
+                callback_data="training_type_style"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📊 Сравнить типы",
+                callback_data="detailed_comparison"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="◀️ Главное меню",
+                callback_data="back_to_avatar_menu"
+            ),
+            InlineKeyboardButton(
+                text="❌ Отмена",
+                callback_data="cancel_avatar_creation"
+            )
+        ]
+    ])
 
 
 def get_avatar_gender_keyboard() -> InlineKeyboardMarkup:
