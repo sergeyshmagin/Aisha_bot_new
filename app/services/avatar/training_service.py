@@ -368,11 +368,12 @@ class AvatarTrainingService(BaseService):
         
         Args:
             avatar_id: ID аватара
-            finetune_id: ID обучения FAL AI
+            finetune_id: ID обучения FAL AI (может быть request_id)
             training_config: Конфигурация обучения
         """
         update_data = {
             "finetune_id": finetune_id,
+            "fal_request_id": finetune_id,  # Сохраняем как request_id тоже
             "updated_at": datetime.utcnow()
         }
         
@@ -399,6 +400,20 @@ class AvatarTrainingService(BaseService):
             Optional[UUID]: ID аватара или None
         """
         query = select(Avatar.id).where(Avatar.finetune_id == finetune_id)
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
+    async def _find_avatar_by_request_id(self, request_id: str) -> Optional["Avatar"]:
+        """
+        Находит аватар по fal_request_id
+        
+        Args:
+            request_id: Request ID от FAL AI
+            
+        Returns:
+            Optional[Avatar]: Аватар или None
+        """
+        query = select(Avatar).where(Avatar.fal_request_id == request_id)
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 

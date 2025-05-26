@@ -63,6 +63,7 @@ class FALTrainingService:
         try:
             # 🧪 ТЕСТОВЫЙ РЕЖИМ - имитация обучения без реальных запросов
             if self.test_mode:
+                logger.info(f"🧪 ТЕСТ РЕЖИМ: Пропускаем отправку на обучение для аватара {avatar_id}, тип: {training_type}")
                 return await self._simulate_training(avatar_id, training_type)
             
             # Получаем настройки качества
@@ -76,7 +77,7 @@ class FALTrainingService:
             webhook_url = self._get_webhook_url(training_type)
             
             if training_type == "portrait":
-                # Используем специализированный портретный тренер
+                # 🎭 ПОРТРЕТНЫЙ СТИЛЬ → Flux LoRA Portrait Trainer API
                 preset = settings_preset["portrait"]
                 
                 result = await self._train_portrait_model(
@@ -87,11 +88,11 @@ class FALTrainingService:
                     webhook_url=webhook_url
                 )
                 
-                logger.info(f"Портретное обучение запущено для аватара {avatar_id}: {result}")
+                logger.info(f"🎭 Портретное обучение запущено для аватара {avatar_id}: {result}")
                 return result
                 
             else:
-                # Используем универсальный тренер
+                # 🎨 ХУДОЖЕСТВЕННЫЙ СТИЛЬ → Flux Pro Trainer API
                 preset = settings_preset["general"]
                 
                 result = await self._train_general_model(
@@ -103,7 +104,7 @@ class FALTrainingService:
                     webhook_url=webhook_url
                 )
                 
-                logger.info(f"Универсальное обучение запущено для аватара {avatar_id}: {result}")
+                logger.info(f"🎨 Художественное обучение запущено для аватара {avatar_id}: {result}")
                 return result.get("finetune_id") or result.get("request_id")
                 
         except Exception as e:
@@ -186,26 +187,24 @@ class FALTrainingService:
         if not self.fal_client:
             raise RuntimeError("FAL client не инициализирован")
         
-        # Конфигурация для портретного тренера
+        # Конфигурация для портретного тренера согласно документации
         config = {
             "images_data_url": images_data_url,
-            "trigger_word": trigger_phrase,
+            "trigger_phrase": trigger_phrase,
             "steps": steps,
             "learning_rate": learning_rate,
-            "crop_based_on_portrait": True,
-            "create_masks": True,
-            "multiresolution_training": True,
+            "multiresolution_training": settings.FAL_PORTRAIT_MULTIRESOLUTION,
+            "subject_crop": settings.FAL_PORTRAIT_SUBJECT_CROP,
+            "create_masks": settings.FAL_PORTRAIT_CREATE_MASKS,
         }
         
-        if webhook_url:
-            config["webhook_url"] = webhook_url
-        
-        # Запускаем обучение
+        # Запускаем обучение с webhook
         result = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: self.fal_client.submit(
                 "fal-ai/flux-lora-portrait-trainer",
-                arguments=config
+                arguments=config,
+                webhook_url=webhook_url
             )
         )
         

@@ -13,6 +13,7 @@ from app.handlers.state import AvatarStates
 from app.core.di import get_user_service, get_avatar_service
 from app.core.database import get_session
 from app.services.avatar.training_service import AvatarTrainingService
+from app.services.avatar.fal_training_service import FALTrainingService
 from app.database.models import AvatarStatus
 from app.core.logger import get_logger
 from app.core.config import settings
@@ -74,25 +75,60 @@ class TrainingHandler:
             )
             
             try:
-                # Создаем сервис обучения с сессией
-                async with get_session() as session:
-                    training_service = AvatarTrainingService(session)
-                    result = await training_service.start_training(avatar_id)
-                    
-                    if result:
-                        # Обновляем состояние
-                        await state.set_state(AvatarStates.training_in_progress)
-                        await state.update_data(
-                            avatar_id=str(avatar_id),
-                            finetune_id="training_in_progress"
+                # Получаем данные аватара для определения типа обучения
+                async with get_avatar_service() as avatar_service:
+                    avatar = await avatar_service.get_avatar(avatar_id)
+                    if not avatar:
+                        raise RuntimeError("Аватар не найден")
+                
+                # Определяем тип обучения из данных аватара
+                training_type = getattr(avatar, 'training_type', 'portrait')
+                if hasattr(avatar, 'training_type') and avatar.training_type:
+                    training_type = avatar.training_type.value if hasattr(avatar.training_type, 'value') else str(avatar.training_type)
+                else:
+                    training_type = "portrait"  # По умолчанию портретный
+                
+                logger.info(f"🎯 Запуск обучения аватара {avatar_id} с типом: {training_type}")
+                
+                # Создаем FAL сервис обучения
+                fal_service = FALTrainingService()
+                
+                # Получаем URL архива с фотографиями (заглушка - нужно реализовать)
+                training_data_url = f"https://example.com/photos/{avatar_id}.zip"  # TODO: Реализовать получение реального URL
+                
+                # Запускаем обучение через FAL AI
+                request_id = await fal_service.start_avatar_training(
+                    avatar_id=avatar_id,
+                    training_type=training_type,
+                    training_data_url=training_data_url,
+                    user_preferences={"quality": "balanced"}
+                )
+                
+                if request_id:
+                    # Обновляем аватар в БД через старый сервис
+                    async with get_session() as session:
+                        training_service = AvatarTrainingService(session)
+                        await training_service._save_training_info(avatar_id, request_id)
+                        await training_service._update_avatar_status(
+                            avatar_id, 
+                            AvatarStatus.TRAINING,
+                            progress=0
                         )
-                        
-                        # Показываем статус обучения
-                        await self._show_training_progress(callback, avatar_id, "training_in_progress")
-                        
-                        logger.info(f"Обучение аватара {avatar_id} запущено успешно")
-                    else:
-                        raise RuntimeError("Не удалось запустить обучение")
+                    
+                    # Обновляем состояние
+                    await state.set_state(AvatarStates.training_in_progress)
+                    await state.update_data(
+                        avatar_id=str(avatar_id),
+                        finetune_id=request_id,
+                        training_type=training_type
+                    )
+                    
+                    # Показываем статус обучения
+                    await self._show_training_progress(callback, avatar_id, request_id)
+                    
+                    logger.info(f"✅ Обучение аватара {avatar_id} запущено успешно: request_id={request_id}")
+                else:
+                    raise RuntimeError("Не удалось запустить обучение")
                 
             except Exception as training_error:
                 error_msg = str(training_error)
