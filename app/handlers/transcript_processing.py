@@ -67,7 +67,7 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
         # Обработка текста (специфичная - только в состоянии waiting_text)
         self.router.message.register(
             self._handle_text_processing,
-            F.document,
+            F.document & F.document.mime_type.in_(["text/plain"]),
             StateFilter(TranscribeStates.waiting_text)
         )
         
@@ -81,6 +81,13 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
         self.router.message.register(
             self._handle_audio_universal,
             F.voice
+        )
+        
+        # НОВОЕ: Обработка аудио файлов, отправленных как документы
+        # Принимаем любые документы и проверяем формат внутри обработчика
+        self.router.message.register(
+            self._handle_audio_document,
+            F.document
         )
         
         # Специфичные обработчики callback'ов
@@ -155,30 +162,118 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                 await state.set_state(TranscribeStates.error)
                 return
             
-            # Скачиваем файл (обычный или большой)
+            # Скачиваем файл
             if file_size and file_size > telegram_api_limit:
-                logger.info(f"[AUDIO_UNIVERSAL] Большой файл ({file_size} байт), используем прямую ссылку")
+                logger.info(f"[AUDIO_UNIVERSAL] Большой файл ({file_size} байт), пытаемся обработать автоматически")
                 
-                # Обновляем сообщение о прогрессе
+                # Обновляем сообщение о попытке обработки
                 await processing_msg.edit_text(
                     f"📁 **Большой файл обнаружен**\n\n"
-                    f"Размер: {file_size / (1024*1024):.1f} МБ\n"
-                    f"🔄 Скачиваем через прямую ссылку...",
+                    f"📊 Размер: {file_size / (1024*1024):.1f} МБ\n"
+                    f"📏 Лимит Bot API: {telegram_api_limit / (1024*1024):.0f} МБ\n\n"
+                    f"🔄 **Обрабатываю альтернативным методом...**\n"
+                    f"⏳ Это может занять больше времени",
                     parse_mode="Markdown"
                 )
                 
-                # Для больших файлов (>20MB) Telegram Bot API не предоставляет file_path
-                # Уведомляем пользователя об ограничении
-                logger.warning(f"[AUDIO_UNIVERSAL] Файл слишком большой для обработки: {file_size} байт")
+                # Пытаемся обработать большой файл через chunked processing
+                try:
+                    from app.services.large_audio_processor import try_process_large_audio
+                    
+                    # Получаем токен бота
+                    bot_token = message.bot.token
+                    
+                    # Пытаемся получить file_path (может не сработать для больших файлов)
+                    file_path = None
+                    try:
+                        file = await message.bot.get_file(file_id)
+                        file_path = file.file_path
+                        logger.info(f"[AUDIO_UNIVERSAL] Получен file_path для большого файла")
+                    except Exception as e:
+                        logger.warning(f"[AUDIO_UNIVERSAL] Не удалось получить file_path (ожидаемо для файлов >{telegram_api_limit / (1024*1024):.0f}МБ): {e}")
+                    
+                    # Обновляем прогресс
+                    await processing_msg.edit_text(
+                        f"📁 **Большой файл обнаружен**\n\n"
+                        f"📊 Размер: {file_size / (1024*1024):.1f} МБ\n"
+                        f"🤖 **Использую специальный алгоритм обработки...**\n"
+                        f"⚡ Разбиваю на части и обрабатываю",
+                        parse_mode="Markdown"
+                    )
+                    
+                    # Получаем audio_service
+                    async with self.get_session() as session:
+                        audio_service = get_audio_processing_service(session)
+                        
+                        # Обрабатываем через специальный сервис
+                        transcript_text = await try_process_large_audio(
+                            bot_token=bot_token,
+                            file_id=file_id,
+                            file_path=file_path,
+                            file_size=file_size,
+                            audio_service=audio_service
+                        )
+                    
+                    if transcript_text:
+                        logger.info(f"[AUDIO_UNIVERSAL] Большой файл успешно обработан: {len(transcript_text)} символов")
+                        
+                        # Сохраняем результат
+                        async with self.get_session() as session:
+                            user_service = get_user_service_with_session(session)
+                            user = await user_service.get_user_by_telegram_id(message.from_user.id)
+                            if not user:
+                                # Автоматически регистрируем пользователя
+                                user_data = {
+                                    "id": message.from_user.id,
+                                    "username": message.from_user.username,
+                                    "first_name": message.from_user.first_name,
+                                    "last_name": message.from_user.last_name,
+                                    "language_code": message.from_user.language_code or "ru",
+                                    "is_bot": message.from_user.is_bot,
+                                    "is_premium": getattr(message.from_user, "is_premium", False)
+                                }
+                                user = await user_service.register_user(user_data)
+                                if not user:
+                                    logger.error(f"[AUDIO_UNIVERSAL] Не удалось зарегистрировать пользователя: {message.from_user.id}")
+                                    await message.reply("❌ Ошибка регистрации пользователя")
+                                    return
+
+                            transcript_service = get_transcript_service(session)
+                            transcript = await transcript_service.save_transcript(
+                                user_id=user.id,
+                                transcript_data=transcript_text.encode('utf-8'),
+                                metadata={
+                                    "source": "large_audio",
+                                    "duration": duration,
+                                    "file_id": file_id,
+                                    "file_name": file_name,
+                                    "file_size": file_size,
+                                    "word_count": len(transcript_text.split()) if transcript_text else 0,
+                                    "processing_method": "chunked_large_file"
+                                }
+                            )
+                            
+                            if transcript and transcript.get("transcript_key"):
+                                await self._send_transcript_result(message, transcript, processing_msg)
+                                await state.set_state(TranscribeStates.result)
+                                return
+                    
+                    # Если специальный метод не сработал
+                    logger.warning(f"[AUDIO_UNIVERSAL] Специальный метод обработки не дал результата")
+                    
+                except Exception as e:
+                    logger.exception(f"[AUDIO_UNIVERSAL] Ошибка при специальной обработке большого файла: {e}")
                 
+                # Финальное сообщение если не удалось обработать
                 await message.reply(
-                    f"❌ **Файл слишком большой**\n\n"
+                    f"❌ **Не удалось обработать большой файл автоматически**\n\n"
                     f"📊 **Размер файла:** {file_size / (1024*1024):.1f} МБ\n"
-                    f"📏 **Максимальный размер:** {telegram_api_limit / (1024*1024):.0f} МБ\n\n"
-                    f"💡 **Рекомендации:**\n"
-                    f"• Сожмите аудио файл\n"
-                    f"• Разделите на части до 20 МБ\n"
-                    f"• Используйте формат MP3 с низким битрейтом",
+                    f"📏 **Лимит Bot API:** {telegram_api_limit / (1024*1024):.0f} МБ\n\n"
+                    f"🔧 **Возможные решения:**\n"
+                    f"• Сохраните файл на устройство и отправьте как документ (📎 → Файл)\n"
+                    f"• Разделите файл на части меньше {telegram_api_limit / (1024*1024):.0f} МБ\n"
+                    f"• Сожмите аудио до меньшего размера\n\n"
+                    f"💡 **Для пересланных файлов:** скачайте файл и отправьте заново как документ",
                     parse_mode="Markdown"
                 )
                 await state.set_state(TranscribeStates.error)
@@ -265,9 +360,26 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
         """
         logger.info(f"[TEXT] Получен файл от user_id={message.from_user.id}, state={await state.get_state()}")
         try:
-            if not message.document or message.document.mime_type != "text/plain" or not message.document.file_name.endswith(".txt"):
+            if not message.document:
                 await message.reply(
-                    "❌ Пожалуйста, отправьте файл в формате .txt",
+                    "❌ Пожалуйста, отправьте текстовый файл",
+                    reply_markup=get_back_to_menu_keyboard()
+                )
+                return
+                
+            file_name = message.document.file_name or ""
+            mime_type = message.document.mime_type or ""
+            
+            # Проверяем, что это текстовый файл
+            if not (mime_type == "text/plain" or file_name.lower().endswith(".txt")):
+                await message.reply(
+                    f"❌ **Неподдерживаемый формат текстового файла**\n\n"
+                    f"📁 Файл: {file_name}\n"
+                    f"🏷️ MIME тип: {mime_type}\n\n"
+                    f"✅ **Поддерживаемые форматы:**\n"
+                    f"📝 .txt файлы (text/plain)\n\n"
+                    f"💡 Отправьте файл с расширением .txt",
+                    parse_mode="Markdown",
                     reply_markup=get_back_to_menu_keyboard()
                 )
                 return
@@ -702,3 +814,134 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
         """
         await call.answer()
         await state.set_state(TranscribeStates.waiting_text)
+
+    async def _handle_audio_document(self, message: Message, state: FSMContext) -> None:
+        """
+        Обработка аудио файлов, отправленных как документы
+        
+        Args:
+            message: Входящее сообщение с аудио файлом
+            state: Контекст состояния FSM
+        """
+        logger.info(f"[AUDIO_DOCUMENT] Получен аудио файл от user_id={message.from_user.id}, state={await state.get_state()}")
+        try:
+            # Проверяем, что это документ
+            if not message.document:
+                await message.reply(
+                    "❌ Пожалуйста, отправьте файл как документ",
+                    reply_markup=get_back_to_menu_keyboard()
+                )
+                return
+            
+            # Проверяем MIME тип или расширение файла для аудио
+            file_name = message.document.file_name or ""
+            mime_type = message.document.mime_type or ""
+            
+            # Список поддерживаемых аудио расширений
+            audio_extensions = ['.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac', '.wma', '.opus']
+            is_audio_by_extension = any(file_name.lower().endswith(ext) for ext in audio_extensions)
+            is_audio_by_mime = mime_type.startswith("audio/")
+            
+            if not (is_audio_by_mime or is_audio_by_extension):
+                await message.reply(
+                    f"❌ **Неподдерживаемый формат файла**\n\n"
+                    f"📁 Файл: {file_name}\n"
+                    f"🏷️ MIME тип: {mime_type}\n\n"
+                    f"✅ **Поддерживаемые форматы:**\n"
+                    f"🎵 MP3, WAV, M4A, OGG, FLAC\n"
+                    f"🎵 AAC, WMA, OPUS\n\n"
+                    f"💡 Убедитесь, что отправляете аудио файл",
+                    parse_mode="Markdown",
+                    reply_markup=get_back_to_menu_keyboard()
+                )
+                return
+
+            file_size = message.document.file_size
+            file_name = message.document.file_name
+            
+            # Показываем информацию о файле
+            processing_msg = await message.answer(
+                f"🎵 **Обрабатываю аудио файл**\n\n"
+                f"📁 Файл: {file_name}\n"
+                f"📊 Размер: {file_size / (1024*1024):.1f} МБ\n"
+                f"🔄 Скачиваю и транскрибирую...",
+                parse_mode="Markdown"
+            )
+            await state.set_state(TranscribeStates.processing)
+
+            file = await message.bot.get_file(message.document.file_id)
+            file_bytes_io = await message.bot.download_file(file.file_path)
+            audio_data = file_bytes_io.read()
+            
+            # Обновляем прогресс
+            await processing_msg.edit_text(
+                f"🎵 **Обрабатываю аудио файл**\n\n"
+                f"📁 Файл: {file_name}\n"
+                f"📊 Размер: {file_size / (1024*1024):.1f} МБ\n"
+                f"✅ Скачан: {len(audio_data) / (1024*1024):.1f} МБ\n"
+                f"🤖 Транскрибирую через Whisper...",
+                parse_mode="Markdown"
+            )
+
+            async with self.get_session() as session:
+                audio_service = get_audio_processing_service(session)
+                result = await audio_service.process_audio(audio_data)
+                
+                if not result.success:
+                    logger.error(f"[AUDIO_DOCUMENT] Ошибка транскрибации: {result.error}")
+                    await message.reply("❌ Ошибка транскрибации аудио.")
+                    return
+                
+                text = result.text
+                logger.info(f"[AUDIO_DOCUMENT] Получен текст транскрипта, длина: {len(text)}")
+                
+                # Сохраняем транскрипт
+                user_service = get_user_service_with_session(session)
+                user = await user_service.get_user_by_telegram_id(message.from_user.id)
+                if not user:
+                    # Автоматически регистрируем пользователя
+                    user_data = {
+                        "id": message.from_user.id,
+                        "username": message.from_user.username,
+                        "first_name": message.from_user.first_name,
+                        "last_name": message.from_user.last_name,
+                        "language_code": message.from_user.language_code or "ru",
+                        "is_bot": message.from_user.is_bot,
+                        "is_premium": getattr(message.from_user, "is_premium", False)
+                    }
+                    user = await user_service.register_user(user_data)
+                    if not user:
+                        logger.error(f"[AUDIO_DOCUMENT] Не удалось зарегистрировать пользователя: {message.from_user.id}")
+                        await message.reply("❌ Ошибка регистрации пользователя")
+                        return
+
+                transcript_service = get_transcript_service(session)
+                transcript = await transcript_service.save_transcript(
+                    user_id=user.id,
+                    audio_data=audio_data,
+                    transcript_data=text.encode('utf-8'),
+                    metadata={
+                        "source": "audio",
+                        "file_name": file_name,
+                        "word_count": len(text.split()) if text else 0
+                    }
+                )
+                
+                if not transcript or not transcript.get("transcript_key"):
+                    logger.error(f"[AUDIO_DOCUMENT] Ошибка сохранения транскрипта: {transcript}")
+                    await message.reply("❌ Ошибка при сохранении транскрипта")
+                    return
+                    
+                logger.info(f"[AUDIO_DOCUMENT] Транскрипт сохранен: {transcript}")
+
+                await self._send_transcript_result(message, transcript, processing_msg)
+                await state.set_state(TranscribeStates.result)
+
+        except Exception as e:
+            logger.exception(f"[AUDIO_DOCUMENT] Ошибка при обработке аудио файла: {e}")
+            await state.set_state(TranscribeStates.error)
+            await message.reply(
+                "❌ Произошла ошибка при обработке аудио файла.\n"
+                "Пожалуйста, попробуйте еще раз.",
+                reply_markup=get_back_to_menu_keyboard()
+            )
