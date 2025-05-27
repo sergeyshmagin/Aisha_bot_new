@@ -452,6 +452,10 @@ class AvatarTrainingService(BaseService):
         if new_status == AvatarStatus.COMPLETED:
             update_params["training_completed_at"] = datetime.utcnow()
             update_params["progress"] = 100
+            
+            # НОВОЕ: Удаляем фотографии после успешного завершения обучения
+            await self._cleanup_training_photos(avatar_id)
+            
         elif new_status == AvatarStatus.ERROR:
             update_params["error_message"] = message or "Ошибка обучения на FAL AI"
         
@@ -460,4 +464,83 @@ class AvatarTrainingService(BaseService):
         logger.info(
             f"[WEBHOOK] Обновлен статус аватара {avatar_id}: "
             f"{fal_status} -> {new_status.value} (progress: {progress}%)"
-        ) 
+        )
+
+    async def _cleanup_training_photos(self, avatar_id: UUID) -> None:
+        """
+        Удаляет фотографии аватара после успешного завершения обучения
+        
+        Args:
+            avatar_id: ID аватара
+        """
+        try:
+            from app.core.config import settings
+            
+            # Проверяем настройку - нужно ли удалять фото после обучения
+            if not getattr(settings, 'DELETE_PHOTOS_AFTER_TRAINING', True):
+                logger.info(f"[CLEANUP] Удаление фото после обучения отключено для аватара {avatar_id}")
+                return
+            
+            # Получаем все фотографии аватара
+            query = (
+                select(AvatarPhoto)
+                .where(AvatarPhoto.avatar_id == avatar_id)
+                .order_by(AvatarPhoto.upload_order)
+            )
+            result = await self.session.execute(query)
+            photos = result.scalars().all()
+            
+            if not photos:
+                logger.info(f"[CLEANUP] Нет фотографий для удаления у аватара {avatar_id}")
+                return
+            
+            # Удаляем фотографии из MinIO
+            from app.services.storage import StorageService
+            storage = StorageService()
+            
+            # Проверяем настройку - оставлять ли первое фото как превью
+            keep_preview = getattr(settings, 'KEEP_PREVIEW_PHOTO', True)
+            
+            deleted_count = 0
+            for i, photo in enumerate(photos):
+                # Пропускаем первое фото если нужно оставить превью
+                if i == 0 and keep_preview:
+                    logger.debug(f"[CLEANUP] Оставляем первое фото {photo.id} как превью")
+                    continue
+                
+                try:
+                    # Удаляем файл из MinIO
+                    await storage.delete_file("avatars", photo.minio_key)
+                    
+                    # Удаляем запись из БД
+                    await self.session.delete(photo)
+                    deleted_count += 1
+                    
+                    logger.debug(f"[CLEANUP] Удалено фото {photo.id} (ключ: {photo.minio_key})")
+                    
+                except Exception as e:
+                    logger.warning(f"[CLEANUP] Не удалось удалить фото {photo.id}: {e}")
+            
+            # Сохраняем изменения в БД
+            await self.session.commit()
+            
+            # Формируем сообщение о результатах очистки
+            total_photos = len(photos)
+            kept_count = total_photos - deleted_count
+            
+            if keep_preview and total_photos > 0:
+                logger.info(
+                    f"[CLEANUP] Удалено {deleted_count}/{total_photos} фотографий "
+                    f"после завершения обучения аватара {avatar_id} "
+                    f"(оставлено {kept_count} для превью)"
+                )
+            else:
+                logger.info(
+                    f"[CLEANUP] Удалено {deleted_count}/{total_photos} фотографий "
+                    f"после завершения обучения аватара {avatar_id}"
+                )
+            
+        except Exception as e:
+            await self.session.rollback()
+            logger.exception(f"[CLEANUP] Ошибка при удалении фотографий аватара {avatar_id}: {e}")
+            # Не прерываем процесс - это не критическая ошибка 

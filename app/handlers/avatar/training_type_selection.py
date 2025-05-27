@@ -90,14 +90,17 @@ async def confirm_training_type(callback: CallbackQuery, state: FSMContext):
         # Получаем training_type из callback_data или из состояния
         callback_training_type = callback.data.split("_", 2)[2]
         
+        # ИСПРАВЛЕНИЕ: Если это "current", то это подтверждение готовности к обучению
+        # из photo_upload, а не выбор типа обучения для нового аватара
         if callback_training_type == "current":
-            # Если пришло "current", берем сохраненный тип из состояния
-            data = await state.get_data()
-            training_type = data.get("training_type", "portrait")
-        else:
-            # Иначе используем тип из callback_data
-            training_type = callback_training_type
-            await state.update_data(training_type=training_type)
+            # Перенаправляем к обработчику подтверждения обучения из photo_upload
+            from .photo_upload import photo_handler
+            await photo_handler.show_training_confirmation(callback, state)
+            return
+        
+        # Для новых аватаров (portrait/style) - продолжаем обычную логику
+        training_type = callback_training_type
+        await state.update_data(training_type=training_type)
         
         # Получаем информацию о типе для подтверждения
         fal_service = FALTrainingService()
@@ -116,7 +119,7 @@ async def confirm_training_type(callback: CallbackQuery, state: FSMContext):
         # Небольшая задержка перед переходом к выбору пола
         await asyncio.sleep(1)
         
-        # Переход к выбору пола (импортируем функцию из create.py)
+        # Переход к выбору пола (только для новых аватаров)
         from .create import show_gender_selection
         await show_gender_selection(callback, state)
         

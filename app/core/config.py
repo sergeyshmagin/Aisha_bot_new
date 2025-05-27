@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     
     # Telegram
     TELEGRAM_TOKEN: str = Field(default="test_token")
-    BACKEND_URL: str = "http://localhost:8000"
+    # BACKEND_URL: str = "http://localhost:8000"  # LEGACY - удален
     
     # OpenAI
     OPENAI_API_KEY: Optional[str] = Field(default="test_key")
@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     
     # Fal AI
     FAL_API_KEY: str = Field("", env="FAL_API_KEY")
-    FAL_WEBHOOK_URL: str = Field("https://aibots.kz/api/avatar/status_update", env="FAL_WEBHOOK_URL")
+    FAL_WEBHOOK_URL: str = Field("https://aibots.kz:8443/api/v1/avatar/status_update", env="FAL_WEBHOOK_URL")
     
     # FAL AI - Pro Trainer Settings
     FAL_DEFAULT_MODE: str = Field("character", env="FAL_MODE")
@@ -122,6 +122,10 @@ class Settings(BaseSettings):
     AVATAR_CREATION_COST: float = Field(10.0, env="AVATAR_CREATION_COST")
     AVATAR_GENERATION_COST: float = Field(1.0, env="AVATAR_GENERATION_COST")
     
+    # Управление хранением фотографий
+    DELETE_PHOTOS_AFTER_TRAINING: bool = Field(True, env="DELETE_PHOTOS_AFTER_TRAINING")  # Удалять фото после обучения
+    KEEP_PREVIEW_PHOTO: bool = Field(True, env="KEEP_PREVIEW_PHOTO")  # Оставлять первое фото как превью
+    
     # ========== КОНЕЦ НАСТРОЕК АВАТАРОВ ==========
     
     # Настройки хранения
@@ -190,8 +194,8 @@ class Settings(BaseSettings):
     ALERT_EMAIL: Optional[str] = None
     ALERT_SLACK_WEBHOOK: Optional[str] = None
     
-    # Backend
-    BACKEND_URL: Optional[str] = None
+    # Backend - LEGACY удален
+    # BACKEND_URL: Optional[str] = None
     
     # Python
     PYTHONPATH: Optional[str] = None

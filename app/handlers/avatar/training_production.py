@@ -195,23 +195,24 @@ class TrainingHandler:
                 ],
                 [
                     InlineKeyboardButton(
-                        text="⏸️ Отменить обучение",
-                        callback_data=f"cancel_training_{avatar_id}"
-                    )
-                ],
-                [
-                    InlineKeyboardButton(
                         text="◀️ К меню аватаров",
                         callback_data="avatar_menu"
                     )
                 ]
             ])
             
-            await callback.message.edit_text(
-                text=text,
-                reply_markup=keyboard,
-                parse_mode="Markdown"
-            )
+            try:
+                await callback.message.edit_text(
+                    text=text,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+            except Exception as edit_error:
+                if "message is not modified" in str(edit_error):
+                    await callback.answer("📊 Прогресс актуален")
+                else:
+                    logger.warning(f"Ошибка редактирования сообщения прогресса: {edit_error}")
+                    await callback.answer("❌ Ошибка обновления прогресса", show_alert=True)
             
         except Exception as e:
             logger.exception(f"Ошибка при показе прогресса обучения: {e}")
@@ -267,20 +268,32 @@ class TrainingHandler:
                         await avatar_service.update_avatar_status(avatar_id, AvatarStatus.COMPLETED)
                         
                 else:
+                    # ИСПРАВЛЕНИЕ: Убираем кнопку отмены из промежуточных шагов
                     keyboard = InlineKeyboardMarkup(inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text="⏸️ Отменить",
-                                callback_data=f"cancel_training_{avatar_id}"
+                                text="🔄 Обновить прогресс",
+                                callback_data=f"refresh_training_{avatar_id}"
+                            )
+                        ],
+                        [
+                            InlineKeyboardButton(
+                                text="◀️ К меню аватаров",
+                                callback_data="avatar_menu"
                             )
                         ]
                     ])
                 
-                await callback.message.edit_text(
-                    text=text,
-                    reply_markup=keyboard,
-                    parse_mode="Markdown"
-                )
+                try:
+                    await callback.message.edit_text(
+                        text=text,
+                        reply_markup=keyboard,
+                        parse_mode="Markdown"
+                    )
+                except Exception as edit_error:
+                    # Игнорируем ошибки "message is not modified" в имитации
+                    if "message is not modified" not in str(edit_error):
+                        logger.warning(f"Ошибка обновления имитации прогресса: {edit_error}")
                 
                 if progress < 100:
                     await asyncio.sleep(3)  # Пауза между обновлениями
@@ -316,10 +329,8 @@ class TrainingHandler:
                     await callback.answer("❌ Аватар не найден", show_alert=True)
                     return
             
-            # Показываем обновленный прогресс
+            # Показываем обновленный прогресс (метод сам обработает ошибки)
             await self._show_training_progress(callback, avatar_id, avatar.finetune_id or "training")
-            
-            await callback.answer("🔄 Прогресс обновлен")
             
         except Exception as e:
             logger.exception(f"Ошибка при обновлении прогресса: {e}")

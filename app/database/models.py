@@ -192,6 +192,9 @@ class Avatar(Base):
     # Основной аватар
     is_main: Mapped[bool] = mapped_column(Boolean, default=False)  # Основной аватар пользователя
     
+    # ВРЕМЕННОЕ ПОЛЕ для совместимости с БД (пока не применена миграция)
+    is_draft: Mapped[bool] = mapped_column(Boolean, default=True)  # TODO: Удалить после применения миграции e3da12f2e9cc
+    
     # Временные метки
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)

@@ -21,44 +21,69 @@ class AvatarRepository(BaseRepository[Avatar]):
         super().__init__(session, Avatar)
 
     async def get_with_photos(self, avatar_id: UUID) -> Optional[Avatar]:
-        """Получить аватар с фотографиями"""
+        """Получить аватар с фотографиями (отсортированными по порядку загрузки)"""
         stmt = (
             select(self.model)
             .where(self.model.id == avatar_id)
             .options(selectinload(self.model.photos))
         )
         result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
+        avatar = result.scalar_one_or_none()
+        
+        # Сортируем фотографии по порядку загрузки
+        if avatar and avatar.photos:
+            avatar.photos.sort(key=lambda photo: photo.upload_order)
+        
+        return avatar
 
     async def get_user_avatars(self, user_id: int) -> List[Avatar]:
-        """Получить все аватары пользователя"""
+        """Получить все аватары пользователя (с фотографиями, отсортированными по порядку загрузки)"""
         stmt = (
             select(self.model)
             .where(self.model.user_id == user_id)
             .options(selectinload(self.model.photos))
         )
         result = await self.session.execute(stmt)
-        return list(result.scalars().all())
+        avatars = list(result.scalars().all())
+        
+        # Сортируем фотографии по порядку загрузки
+        for avatar in avatars:
+            if avatar.photos:
+                avatar.photos.sort(key=lambda photo: photo.upload_order)
+        
+        return avatars
 
     async def get_user_draft_avatar(self, user_id: int) -> Optional[Avatar]:
-        """Получить черновик аватара пользователя"""
+        """Получить черновик аватара пользователя (с фотографиями, отсортированными по порядку загрузки)"""
         stmt = (
             select(self.model)
             .where(self.model.user_id == user_id, self.model.status == "DRAFT")
             .options(selectinload(self.model.photos))
         )
         result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
+        avatar = result.scalar_one_or_none()
+        
+        # Сортируем фотографии по порядку загрузки
+        if avatar and avatar.photos:
+            avatar.photos.sort(key=lambda photo: photo.upload_order)
+        
+        return avatar
 
     async def get_main_avatar(self, user_id: int) -> Optional[Avatar]:
-        """Получить основной аватар пользователя"""
+        """Получить основной аватар пользователя (с фотографиями, отсортированными по порядку загрузки)"""
         stmt = (
             select(self.model)
             .where(self.model.user_id == user_id, self.model.is_main.is_(True))
             .options(selectinload(self.model.photos))
         )
         result = await self.session.execute(stmt)
-        return result.scalar_one_or_none()
+        avatar = result.scalar_one_or_none()
+        
+        # Сортируем фотографии по порядку загрузки
+        if avatar and avatar.photos:
+            avatar.photos.sort(key=lambda photo: photo.upload_order)
+        
+        return avatar
 
     async def clear_main_avatar(self, user_id: int) -> None:
         """
@@ -98,7 +123,7 @@ class AvatarRepository(BaseRepository[Avatar]):
         return result.scalar() or 0
 
     async def get_user_avatars_with_photos(self, user_id: int) -> List[Avatar]:
-        """Получить все завершенные аватары пользователя с фотографиями"""
+        """Получить все завершенные аватары пользователя с фотографиями (отсортированными по порядку загрузки)"""
         stmt = (
             select(self.model)
             .where(
@@ -109,7 +134,14 @@ class AvatarRepository(BaseRepository[Avatar]):
             .order_by(self.model.is_main.desc(), self.model.created_at.desc())
         )
         result = await self.session.execute(stmt)
-        return list(result.scalars().all())
+        avatars = list(result.scalars().all())
+        
+        # Сортируем фотографии по порядку загрузки для корректного отображения превью
+        for avatar in avatars:
+            if avatar.photos:
+                avatar.photos.sort(key=lambda photo: photo.upload_order)
+        
+        return avatars
 
 
 class AvatarPhotoRepository(BaseRepository[AvatarPhoto]):

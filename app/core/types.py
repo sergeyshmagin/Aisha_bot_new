@@ -53,5 +53,5 @@ class ServiceContainer:
     def __init__(self):
         self.user_service: "UserService"
         self.avatar_service: "AvatarService"
-        self.backend_service: "BackendService"
+        # self.backend_service: "BackendService"  # LEGACY - удален
         # Другие сервисы

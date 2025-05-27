@@ -1,3 +1,6 @@
+# LEGACY файл - больше не используется
+# Заменен на FAL AI интеграцию
+
 def get_backend_headers(api_key: str) -> dict:
     """Формирует headers для Backend API"""
     if api_key:

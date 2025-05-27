@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from app.core.config import settings
 from app.services.audio_processing.service import AudioService as AudioProcessingService
 from app.services.avatar_db import AvatarService
-from app.services.backend import BackendService
+# from app.services.backend import BackendService  # LEGACY - удален
 from app.services.text_processing import TextProcessingService
 from app.services.transcript import TranscriptService
 from app.services.user import UserService
@@ -146,11 +146,11 @@ def get_avatar_service_with_session(session: AsyncSession) -> AvatarService:
     return AvatarService(session)
 
 
-def get_backend_service(session: AsyncSession, http_session=None) -> BackendService:
-    """
-    Получение сервиса для работы с Backend API
-    """
-    return BackendService(http_session, session)
+# def get_backend_service(session: AsyncSession, http_session=None) -> BackendService:
+#     """
+#     Получение сервиса для работы с Backend API - LEGACY удален
+#     """
+#     return BackendService(http_session, session)
 
 
 def get_transcript_service(session: AsyncSession) -> TranscriptService:

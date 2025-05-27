@@ -769,8 +769,27 @@ class PhotoUploadHandler:
                     await callback.answer("❌ Пользователь не найден", show_alert=True)
                     return
                 
-                # Получаем баланс (предполагаем, что есть атрибут balance)
-                user_balance = getattr(user, 'balance', 0)
+                # ИСПРАВЛЕНИЕ: Получаем баланс через сервис, а не через lazy loading
+                try:
+                    # Пытаемся получить баланс через связь
+                    from app.core.database import get_session
+                    async with get_session() as session:
+                        # Перезагружаем пользователя с балансом
+                        from sqlalchemy.orm import selectinload
+                        from sqlalchemy import select
+                        from app.database.models import User
+                        
+                        stmt = select(User).options(selectinload(User.balance)).where(User.id == user.id)
+                        result = await session.execute(stmt)
+                        user_with_balance = result.scalar_one_or_none()
+                        
+                        if user_with_balance and user_with_balance.balance:
+                            user_balance = user_with_balance.balance.coins
+                        else:
+                            user_balance = 0
+                except Exception as balance_error:
+                    logger.warning(f"Ошибка получения баланса: {balance_error}")
+                    user_balance = 0  # По умолчанию 0 если не удалось получить баланс
             
             # Определяем стоимость в зависимости от типа
             avatar_cost = 150 if training_type == "style" else 120  # Художественный дороже портретного
@@ -924,10 +943,8 @@ async def handle_delete_photo_callback(callback: CallbackQuery):
         logger.exception(f"Ошибка в обработчике удаления фото: {e}")
         await callback.answer("❌ Произошла ошибка", show_alert=True)
 
-@router.callback_query(F.data == "confirm_training_current")
-async def handle_confirm_training_current(callback: CallbackQuery, state: FSMContext):
-    """Обработчик подтверждения готовности к обучению"""
-    await photo_handler.show_training_confirmation(callback, state)
+# УДАЛЕН: Обработчик confirm_training_current перенесен в training_type_selection.py
+# для избежания конфликтов с выбором типа обучения
 
 # Экспорт
 __all__ = ["photo_handler", "router"] 

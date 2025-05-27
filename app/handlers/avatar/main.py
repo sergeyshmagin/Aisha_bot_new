@@ -44,7 +44,19 @@ class AvatarMainHandler:
             keyboard = get_avatar_main_menu(avatars_count)
             text = self.texts.get_main_menu_text(avatars_count)
             
-            await callback.message.edit_text(text, reply_markup=keyboard)
+            # Проверяем тип сообщения и выбираем правильный метод
+            if callback.message.photo:
+                # Если сообщение содержит фото, удаляем его и отправляем текстовое
+                try:
+                    await callback.message.delete()
+                except Exception:
+                    pass  # Игнорируем ошибки удаления
+                
+                await callback.message.answer(text, reply_markup=keyboard)
+            else:
+                # Если сообщение текстовое, просто редактируем
+                await callback.message.edit_text(text, reply_markup=keyboard)
+            
             await callback.answer()
             
             logger.info(f"Показано меню аватаров пользователю {user.id}, аватаров: {avatars_count}")

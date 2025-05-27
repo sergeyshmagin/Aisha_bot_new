@@ -3,17 +3,19 @@
 Реализация на основе archive/aisha_v1/frontend_bot/handlers/avatar/gallery.py
 """
 import asyncio
+import io
 from typing import Optional, List
 from uuid import UUID
 
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto, BufferedInputFile
 from aiogram.fsm.context import FSMContext
 
 from app.core.di import get_user_service, get_avatar_service
 from app.services.storage import StorageService
 from app.core.logger import get_logger
 from app.handlers.state import AvatarStates
+from app.database.models import AvatarGender, AvatarStatus, AvatarTrainingType
 
 logger = get_logger(__name__)
 router = Router()
@@ -22,7 +24,7 @@ router = Router()
 gallery_cache = {}
 
 
-def get_avatar_card_keyboard(avatar_idx: int, total_avatars: int, avatar_id: str, is_main: bool = False) -> InlineKeyboardMarkup:
+def get_avatar_card_keyboard(avatar_idx: int, total_avatars: int, avatar_id: str, is_main: bool = False, avatar_status = None) -> InlineKeyboardMarkup:
     """Создает клавиатуру для карточки аватара"""
     
     buttons = []
@@ -56,13 +58,15 @@ def get_avatar_card_keyboard(avatar_idx: int, total_avatars: int, avatar_id: str
         )
     else:
         action_buttons.append(
-            InlineKeyboardButton(text="⭐ Главный", callback_data="noop")
+            InlineKeyboardButton(text="⭐ Основной", callback_data="noop")
         )
     
-    # Просмотр фотографий
-    action_buttons.append(
-        InlineKeyboardButton(text="📸 Фото", callback_data=f"avatar_view_photos:{avatar_id}")
-    )
+    # ИСПРАВЛЕНИЕ: Кнопка "Фото" только для черновиков и загрузки фото
+    # После отправки на обучение пользователю не нужно пересматривать фото
+    if avatar_status in [AvatarStatus.DRAFT, AvatarStatus.PHOTOS_UPLOADING]:
+        action_buttons.append(
+            InlineKeyboardButton(text="📸 Фото", callback_data=f"avatar_view_photos:{avatar_id}")
+        )
     
     # Удаление
     action_buttons.append(
@@ -132,19 +136,28 @@ async def send_avatar_card(
     
     # Формируем информацию об аватаре
     name = avatar.name or "Без имени"
-    gender_str = "👨 Мужской" if avatar.gender == "MALE" else "👩 Женский"
-    status_str = {
-        "DRAFT": "📝 Черновик",
-        "READY": "⏳ Готов к обучению", 
-        "TRAINING": "🔄 Обучается",
-        "COMPLETED": "✅ Готов",
-        "ERROR": "❌ Ошибка"
-    }.get(avatar.status, avatar.status)
     
-    type_str = {
-        "portrait": "🎭 Портретный",
-        "style": "🎨 Художественный"
-    }.get(avatar.training_type, avatar.training_type)
+    # ИСПРАВЛЕНИЕ 2: Правильное отображение пола (исправлена логика)
+    gender_str = "👨 Мужской" if avatar.gender == AvatarGender.MALE else "👩 Женский"
+    
+    # ИСПРАВЛЕНИЕ 3: Читаемые статусы вместо enum значений
+    status_map = {
+        AvatarStatus.DRAFT: "📝 Черновик",
+        AvatarStatus.PHOTOS_UPLOADING: "📤 Загрузка фото",
+        AvatarStatus.READY_FOR_TRAINING: "⏳ Готов к обучению", 
+        AvatarStatus.TRAINING: "🔄 Обучается",
+        AvatarStatus.COMPLETED: "✅ Готов",
+        AvatarStatus.ERROR: "❌ Ошибка",
+        AvatarStatus.CANCELLED: "⏹️ Отменен"
+    }
+    status_str = status_map.get(avatar.status, str(avatar.status))
+    
+    # Правильное отображение типа обучения
+    type_map = {
+        AvatarTrainingType.PORTRAIT: "🎭 Портретный",
+        AvatarTrainingType.STYLE: "🎨 Художественный"
+    }
+    type_str = type_map.get(avatar.training_type, str(avatar.training_type))
     
     # Дата создания
     created_str = avatar.created_at.strftime("%d.%m.%Y %H:%M") if avatar.created_at else "—"
@@ -173,7 +186,8 @@ async def send_avatar_card(
         avatar_idx, 
         len(avatars), 
         str(avatar.id), 
-        avatar.is_main
+        avatar.is_main,
+        avatar.status
     )
     
     # Если у аватара есть превью фото, показываем его
@@ -184,20 +198,53 @@ async def send_avatar_card(
             photo_data = await storage.download_file("avatars", first_photo.minio_key)
             
             if photo_data:
-                await callback.message.edit_media(
-                    media=InputMediaPhoto(media=photo_data, caption=text, parse_mode="Markdown"),
-                    reply_markup=keyboard
-                )
+                # Используем BufferedInputFile для работы с байтами
+                photo_file = BufferedInputFile(photo_data, filename="preview.jpg")
+                
+                # Проверяем тип текущего сообщения
+                if callback.message.photo:
+                    # Если сообщение уже содержит фото, используем edit_media
+                    await callback.message.edit_media(
+                        media=InputMediaPhoto(media=photo_file, caption=text, parse_mode="Markdown"),
+                        reply_markup=keyboard
+                    )
+                else:
+                    # Если сообщение текстовое, удаляем его и отправляем новое с фото
+                    try:
+                        await callback.message.delete()
+                    except Exception:
+                        pass  # Игнорируем ошибки удаления
+                    
+                    await callback.message.answer_photo(
+                        photo=photo_file,
+                        caption=text,
+                        reply_markup=keyboard,
+                        parse_mode="Markdown"
+                    )
                 return
         except Exception as e:
             logger.warning(f"Не удалось загрузить превью для аватара {avatar.id}: {e}")
     
     # Если превью нет, показываем только текст
-    await callback.message.edit_text(
-        text=text,
-        reply_markup=keyboard,
-        parse_mode="Markdown"
-    )
+    if callback.message.photo:
+        # Если текущее сообщение с фото, а превью нет - удаляем и отправляем текст
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+        
+        await callback.message.answer(
+            text=text,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+    else:
+        # Если текущее сообщение текстовое - просто редактируем
+        await callback.message.edit_text(
+            text=text,
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
 
 
 @router.callback_query(F.data == "avatar_gallery")
@@ -469,8 +516,10 @@ async def show_avatar_photo(callback: CallbackQuery, avatar, photo_idx: int):
             str(avatar.id)
         )
         
+        # ИСПРАВЛЕНИЕ: Используем BufferedInputFile для корректной передачи байтов
+        photo_file = BufferedInputFile(photo_data, filename=f"photo_{photo_idx + 1}.jpg")
         await callback.message.edit_media(
-            media=InputMediaPhoto(media=photo_data, caption=text, parse_mode="Markdown"),
+            media=InputMediaPhoto(media=photo_file, caption=text, parse_mode="Markdown"),
             reply_markup=keyboard
         )
         

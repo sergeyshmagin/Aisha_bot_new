@@ -62,7 +62,7 @@ Restart=always
 RestartSec=10
 
 # Ограничения ресурсов
-MemoryLimit=3G
+MemoryLimit=8G
 CPUQuota=200%
 
 # Безопасность
@@ -99,7 +99,7 @@ Restart=always
 RestartSec=5
 
 # Ограничения ресурсов
-MemoryLimit=1G
+MemoryLimit=6G
 CPUQuota=50%
 
 # Безопасность
