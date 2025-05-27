@@ -1,12 +1,21 @@
 """
 Конфигурация API сервера для обработки webhook от FAL AI
+Обновленная версия для продакшн использования
 """
 import os
 from pathlib import Path
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 
 class Settings(BaseSettings):
     """Настройки API сервера"""
+    
+    # Конфигурация модели - игнорируем лишние поля из .env
+    model_config = ConfigDict(
+        env_file=".env",
+        case_sensitive=True,
+        extra="ignore"  # Игнорируем лишние поля
+    )
     
     # API Server настройки
     API_HOST: str = "0.0.0.0"
@@ -21,26 +30,36 @@ class Settings(BaseSettings):
     SSL_CA_BUNDLE_PATH: str = "ssl/aibots_kz.ca-bundle"
     
     # Database URL (используем ту же БД что и основной бот)
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://user:password@localhost/aisha_bot")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://aisha_user:secure_password@localhost/aisha_v2")
     
     # Telegram Bot
-    TELEGRAM_TOKEN: str = os.getenv("TELEGRAM_TOKEN", "")
+    TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
     
     # FAL AI настройки
     FAL_API_KEY: str = os.getenv("FAL_API_KEY", "")
-    FAL_WEBHOOK_SECRET: str = os.getenv("FAL_WEBHOOK_SECRET", "")  # Дополнительная безопасность
+    FAL_KEY: str = os.getenv("FAL_KEY", "")  # Альтернативное имя
+    FAL_WEBHOOK_URL: str = os.getenv("FAL_WEBHOOK_URL", "https://aibots.kz:8443/api/v1/avatar/status_update")
+    FAL_WEBHOOK_SECRET: str = os.getenv("FAL_WEBHOOK_SECRET", "")
+    
+    # MinIO настройки (для загрузки архивов)
+    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "localhost:9000")
+    MINIO_ACCESS_KEY: str = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
+    MINIO_SECRET_KEY: str = os.getenv("MINIO_SECRET_KEY", "minioadmin123")
+    MINIO_BUCKET_AVATARS: str = os.getenv("MINIO_BUCKET_AVATARS", "aisha-v2-avatars")
     
     # Логирование
     LOG_LEVEL: str = "INFO"
     LOG_DIR: str = "logs"
     WEBHOOK_LOG_FILE: str = "webhook.log"
+    API_LOG_FILE: str = "api.log"
     
-    # Безопасность
-    ALLOWED_IPS: list = ["185.199.108.0/22", "140.82.112.0/20"]  # IP адреса FAL AI
+    # Тестовый режим
+    FAL_TRAINING_TEST_MODE: bool = os.getenv("FAL_TRAINING_TEST_MODE", "false").lower() == "true"
     
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
+    @property
+    def effective_fal_api_key(self) -> str:
+        """Возвращает FAL API ключ из любого доступного источника"""
+        return self.FAL_API_KEY or self.FAL_KEY or ""
 
 # Создаем глобальный экземпляр настроек
 settings = Settings()
