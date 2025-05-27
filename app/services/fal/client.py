@@ -203,7 +203,7 @@ class FalAIClient:
             logger.exception(f"[FAL AI] Ошибка генерации изображения: {e}")
             return None
 
-    async def _download_photos_from_minio(
+    async def download_photos_from_minio(
         self, 
         photo_urls: List[str], 
         avatar_id: UUID
@@ -229,16 +229,24 @@ class FalAIClient:
             from ..storage import StorageService
             storage = StorageService()
             
-            for i, photo_url in enumerate(photo_urls):
+            for i, minio_key in enumerate(photo_urls):
                 try:
-                    # Извлекаем путь объекта из URL (предполагаем формат MinIO URL)
-                    object_name = photo_url.split('/')[-1] if '/' in photo_url else photo_url
+                    # minio_key уже содержит полный путь, например: avatars/user_id/avatar_id/photo_1.jpeg
+                    # Разделяем на bucket и object_name
+                    if minio_key.startswith("avatars/"):
+                        bucket_name = "avatars"
+                        object_name = minio_key[8:]  # Убираем "avatars/" из начала
+                    else:
+                        # Fallback для других форматов
+                        parts = minio_key.split("/", 1)
+                        bucket_name = parts[0] if len(parts) > 1 else "avatars"
+                        object_name = parts[1] if len(parts) > 1 else minio_key
                     
                     # Скачиваем файл из MinIO
-                    photo_data = await storage.download_file("avatars", object_name)
+                    photo_data = await storage.download_file(bucket_name, object_name)
                     
                     if not photo_data:
-                        logger.warning(f"[FAL AI] Не удалось скачать фото {object_name}")
+                        logger.warning(f"[FAL AI] Не удалось скачать фото {bucket_name}/{object_name}")
                         continue
                     
                     # Сохраняем файл во временную директорию
@@ -259,11 +267,11 @@ class FalAIClient:
                             logger.debug(f"[FAL AI] Сохранено фото: {photo_path}")
                     
                     except Exception as img_error:
-                        logger.warning(f"[FAL AI] Ошибка обработки изображения {object_name}: {img_error}")
+                        logger.warning(f"[FAL AI] Ошибка обработки изображения {bucket_name}/{object_name}: {img_error}")
                         continue
                 
                 except Exception as e:
-                    logger.warning(f"[FAL AI] Ошибка скачивания фото {photo_url}: {e}")
+                    logger.warning(f"[FAL AI] Ошибка скачивания фото {minio_key}: {e}")
                     continue
             
             logger.info(f"[FAL AI] Скачано {len(photo_paths)} фотографий для аватара {avatar_id}")
@@ -273,7 +281,7 @@ class FalAIClient:
             logger.exception(f"[FAL AI] Ошибка скачивания фотографий: {e}")
             return []
 
-    async def _create_and_upload_archive(
+    async def create_and_upload_archive(
         self, 
         photo_paths: List[Path], 
         avatar_id: UUID

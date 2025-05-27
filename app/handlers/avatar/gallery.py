@@ -254,15 +254,19 @@ async def show_avatar_gallery(callback: CallbackQuery, state: FSMContext):
         user_telegram_id = callback.from_user.id
         
         # Получаем пользователя
+        user_id = None
         async with get_user_service() as user_service:
             user = await user_service.get_user_by_telegram_id(user_telegram_id)
             if not user:
                 await callback.message.edit_text("❌ Пользователь не найден")
                 return
+            
+            # Сохраняем user_id перед закрытием сессии
+            user_id = user.id
         
         # Получаем аватары пользователя
         async with get_avatar_service() as avatar_service:
-            avatars = await avatar_service.get_user_avatars_with_photos(user.id)
+            avatars = await avatar_service.get_user_avatars_with_photos(user_id)
         
         if not avatars:
             # Если аватаров нет
@@ -381,11 +385,15 @@ async def handle_set_main_avatar(callback: CallbackQuery, state: FSMContext):
         avatar_id = UUID(callback.data.split(":")[1])
         
         # Получаем пользователя
+        user_id = None
         async with get_user_service() as user_service:
             user = await user_service.get_user_by_telegram_id(user_telegram_id)
             if not user:
                 await callback.answer("❌ Пользователь не найден", show_alert=True)
                 return
+            
+            # Сохраняем user_id перед закрытием сессии
+            user_id = user.id
         
         # Устанавливаем основной аватар
         async with get_avatar_service() as avatar_service:
@@ -428,11 +436,15 @@ async def handle_delete_avatar(callback: CallbackQuery, state: FSMContext):
         avatar_id = UUID(callback.data.split(":")[1])
         
         # Получаем пользователя
+        user_id = None
         async with get_user_service() as user_service:
             user = await user_service.get_user_by_telegram_id(user_telegram_id)
             if not user:
                 await callback.answer("❌ Пользователь не найден", show_alert=True)
                 return
+            
+            # Сохраняем user_id перед закрытием сессии
+            user_id = user.id
         
         # Удаляем аватар
         async with get_avatar_service() as avatar_service:
@@ -634,7 +646,9 @@ async def handle_view_avatar_card(callback: CallbackQuery, state: FSMContext):
         
         async with get_user_service() as user_service:
             user = await user_service.get_user_by_telegram_id(user_telegram_id)
-            await send_avatar_card(callback, user.id, avatars, avatar_idx)
+            user_id = user.id
+            
+        await send_avatar_card(callback, user_id, avatars, avatar_idx)
         
         await callback.answer()
         

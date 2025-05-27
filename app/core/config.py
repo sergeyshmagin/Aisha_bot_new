@@ -25,7 +25,13 @@ class Settings(BaseSettings):
     
     # Fal AI
     FAL_API_KEY: str = Field("", env="FAL_API_KEY")
+    FAL_KEY: str = Field("", env="FAL_KEY")  # Альтернативное имя для совместимости
     FAL_WEBHOOK_URL: str = Field("https://aibots.kz:8443/api/v1/avatar/status_update", env="FAL_WEBHOOK_URL")
+    
+    @property
+    def effective_fal_api_key(self) -> str:
+        """Возвращает FAL API ключ из любого доступного источника"""
+        return self.FAL_API_KEY or self.FAL_KEY or ""
     
     # FAL AI - Pro Trainer Settings (flux-pro-trainer)
     FAL_PRO_MODE: str = Field("character", env="FAL_PRO_MODE")
@@ -87,9 +93,10 @@ class Settings(BaseSettings):
     FFMPEG_PATH: str = "C:\\dev\\distr\\ffmpeg\\bin\\ffmpeg.exe"
     
     # Настройки аудио
-    MAX_AUDIO_SIZE: int = 25 * 1024 * 1024  # 25 МБ
-    MAX_AUDIO_DURATION: int = 300  # 5 минут
-    AUDIO_FORMATS: List[str] = ["mp3", "wav", "ogg", "m4a"]
+    MAX_AUDIO_SIZE: int = 1024 * 1024 * 1024  # 1 ГБ (наш лимит)
+    TELEGRAM_API_LIMIT: int = 20 * 1024 * 1024  # 20 МБ (лимит Telegram Bot API)
+    MAX_AUDIO_DURATION: int = 7200  # 2 часа (для больших файлов)
+    AUDIO_FORMATS: List[str] = ["mp3", "wav", "ogg", "m4a", "flac", "aac"]
     
     # Настройки транскрибации
     DEFAULT_LANGUAGE: str = "ru"

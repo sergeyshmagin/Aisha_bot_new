@@ -81,6 +81,10 @@ class UserService(BaseService):
         telegram_id_str = str(telegram_id)
         return await self.user_repo.get_by_telegram_id(telegram_id_str)
     
+    async def get_user_by_id(self, user_id) -> Optional[User]:
+        """Получить пользователя по внутреннему ID"""
+        return await self.user_repo.get(user_id)
+    
     def _get_timezone_from_location(self, location: Dict) -> Optional[str]:
         """Получить часовой пояс из местоположения пользователя"""
         # Здесь можно реализовать более сложную логику определения часового пояса

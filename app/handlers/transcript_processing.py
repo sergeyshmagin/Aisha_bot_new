@@ -132,13 +132,62 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                 file_id = message.voice.file_id
                 duration = message.voice.duration
                 file_name = f"voice_{message.message_id}.ogg"
+                file_size = message.voice.file_size
             else:
                 file_id = message.audio.file_id  
                 duration = message.audio.duration
                 file_name = message.audio.file_name or f"audio_{message.message_id}.mp3"
+                file_size = message.audio.file_size
             
-            file = await message.bot.get_file(file_id)
-            downloaded_file = await message.bot.download_file(file.file_path)
+            # Проверяем размер файла (используем настройки из конфигурации)
+            max_file_size = settings.MAX_AUDIO_SIZE  # 1GB
+            telegram_api_limit = settings.TELEGRAM_API_LIMIT  # 20MB - лимит Telegram Bot API для get_file()
+            
+            if file_size and file_size > max_file_size:
+                logger.warning(f"[AUDIO_UNIVERSAL] Файл слишком большой: {file_size} байт (лимит: {max_file_size})")
+                await message.reply(
+                    f"❌ **Файл слишком большой**\n\n"
+                    f"Размер файла: {file_size / (1024*1024):.1f} МБ\n"
+                    f"Максимальный размер: {max_file_size / (1024*1024*1024)} ГБ\n\n"
+                    f"Пожалуйста, отправьте файл меньшего размера.",
+                    parse_mode="Markdown"
+                )
+                await state.set_state(TranscribeStates.error)
+                return
+            
+            # Скачиваем файл (обычный или большой)
+            if file_size and file_size > telegram_api_limit:
+                logger.info(f"[AUDIO_UNIVERSAL] Большой файл ({file_size} байт), используем прямую ссылку")
+                
+                # Обновляем сообщение о прогрессе
+                await processing_msg.edit_text(
+                    f"📁 **Большой файл обнаружен**\n\n"
+                    f"Размер: {file_size / (1024*1024):.1f} МБ\n"
+                    f"🔄 Скачиваем через прямую ссылку...",
+                    parse_mode="Markdown"
+                )
+                
+                # Для больших файлов (>20MB) Telegram Bot API не предоставляет file_path
+                # Уведомляем пользователя об ограничении
+                logger.warning(f"[AUDIO_UNIVERSAL] Файл слишком большой для обработки: {file_size} байт")
+                
+                await message.reply(
+                    f"❌ **Файл слишком большой**\n\n"
+                    f"📊 **Размер файла:** {file_size / (1024*1024):.1f} МБ\n"
+                    f"📏 **Максимальный размер:** {telegram_api_limit / (1024*1024):.0f} МБ\n\n"
+                    f"💡 **Рекомендации:**\n"
+                    f"• Сожмите аудио файл\n"
+                    f"• Разделите на части до 20 МБ\n"
+                    f"• Используйте формат MP3 с низким битрейтом",
+                    parse_mode="Markdown"
+                )
+                await state.set_state(TranscribeStates.error)
+                return
+                
+            else:
+                # Обычное скачивание для файлов <= 20MB
+                file = await message.bot.get_file(file_id)
+                downloaded_file = await message.bot.download_file(file.file_path)
 
             # Транскрибируем
             async with self.get_session() as session:

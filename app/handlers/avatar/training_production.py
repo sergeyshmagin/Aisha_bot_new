@@ -41,31 +41,35 @@ class TrainingHandler:
             
             avatar_id = UUID(avatar_id_str)
             
-            # Получаем пользователя
+            # Получаем пользователя и проверяем баланс
+            user_id = None
             async with get_user_service() as user_service:
                 user = await user_service.get_user_by_telegram_id(callback.from_user.id)
                 if not user:
                     await callback.answer("❌ Пользователь не найден", show_alert=True)
                     return
-            
-            # Проверяем тестовый режим и списываем средства только в продакшн
-            is_test_mode = settings.AVATAR_TEST_MODE
-            
-            if not is_test_mode:
-                # В продакшн режиме - списываем средства с баланса
-                user_balance = getattr(user, 'balance', 0)
-                avatar_cost = 150  # Можно получить из данных состояния
                 
-                if user_balance < avatar_cost:
-                    await callback.message.edit_text(
-                        text=f"❌ **Недостаточно средств**\n\nНеобходимо: {avatar_cost} кредитов\nВаш баланс: {user_balance}",
-                        parse_mode="Markdown"
-                    )
-                    return
+                # Сохраняем user_id перед закрытием сессии
+                user_id = user.id
                 
-                # Списываем средства (здесь должна быть логика списания)
-                # await user_service.deduct_balance(user.id, avatar_cost)
-                logger.info(f"💰 ПРОДАКШН: Списано {avatar_cost} кредитов с баланса пользователя {user.id}")
+                # Проверяем тестовый режим и списываем средства только в продакшн
+                is_test_mode = settings.AVATAR_TEST_MODE
+                
+                if not is_test_mode:
+                    # В продакшн режиме - списываем средства с баланса
+                    user_balance = await user_service.get_user_balance(user.id)
+                    avatar_cost = 150  # Можно получить из данных состояния
+                    
+                    if user_balance < avatar_cost:
+                        await callback.message.edit_text(
+                            text=f"❌ **Недостаточно средств**\n\nНеобходимо: {avatar_cost} кредитов\nВаш баланс: {user_balance}",
+                            parse_mode="Markdown"
+                        )
+                        return
+                    
+                    # Списываем средства (здесь должна быть логика списания)
+                    # await user_service.deduct_balance(user.id, avatar_cost)
+                    logger.info(f"💰 ПРОДАКШН: Списано {avatar_cost} кредитов с баланса пользователя {user.id}")
             
             # Показываем индикатор запуска
             status_text = "🧪 **Запускаем тестовое обучение...**" if is_test_mode else "🚀 **Запускаем обучение...**"
@@ -99,8 +103,35 @@ class TrainingHandler:
                 # Создаем FAL сервис обучения
                 fal_service = FALTrainingService()
                 
-                # Получаем URL архива с фотографиями (заглушка - нужно реализовать)
-                training_data_url = f"https://example.com/photos/{avatar_id}.zip"  # TODO: Реализовать получение реального URL
+                # Получаем фотографии аватара для создания архива
+                async with get_avatar_service() as avatar_service:
+                    photos, total_count = await avatar_service.get_avatar_photos(avatar_id)
+                    if not photos or len(photos) < settings.AVATAR_MIN_PHOTOS:
+                        raise RuntimeError(f"Недостаточно фотографий для обучения: {len(photos) if photos else 0}/{settings.AVATAR_MIN_PHOTOS}")
+                    
+                    # Создаем список URL фотографий
+                    photo_urls = []
+                    for photo in photos:
+                        # Используем minio_key напрямую (он уже содержит полный путь)
+                        photo_urls.append(photo.minio_key)
+                    
+                    logger.info(f"Найдено {len(photo_urls)} фотографий для аватара {avatar_id}")
+                
+                # Создаем архив с фотографиями через FAL клиент
+                from app.services.fal.client import FalAIClient
+                fal_client = FalAIClient()
+                
+                # Скачиваем фотографии и создаем архив
+                photo_paths = await fal_client.download_photos_from_minio(photo_urls, avatar_id)
+                if not photo_paths:
+                    raise RuntimeError("Не удалось скачать фотографии для создания архива")
+                
+                # Создаем и загружаем архив
+                training_data_url = await fal_client.create_and_upload_archive(photo_paths, avatar_id)
+                if not training_data_url:
+                    raise RuntimeError("Не удалось создать архив с фотографиями")
+                
+                logger.info(f"Создан архив для обучения: {training_data_url}")
                 
                 # Запускаем обучение через FAL AI
                 request_id = await fal_service.start_avatar_training(
@@ -155,8 +186,10 @@ class TrainingHandler:
                     logger.info(f"🧪 ТЕСТОВЫЙ РЕЖИМ: Имитация обучения аватара {avatar_id} для разработчика")
                     await self._simulate_training_progress(callback, avatar_id)
                 else:
+                    # ИСПРАВЛЕНИЕ: Экранируем специальные символы для Markdown
+                    safe_error_msg = str(error_msg).replace("_", "\\_").replace("*", "\\*").replace("[", "\\[").replace("]", "\\]")
                     await callback.message.edit_text(
-                        text=f"❌ **Ошибка запуска обучения**\n\n{error_msg}",
+                        text=f"❌ **Ошибка запуска обучения**\n\n`{safe_error_msg}`",
                         parse_mode="Markdown"
                     )
                 

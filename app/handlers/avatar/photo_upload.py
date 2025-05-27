@@ -164,11 +164,15 @@ class PhotoUploadHandler:
             avatar_id = UUID(avatar_id_str)
             
             # Получаем пользователя
+            user_db_id = None
             async with get_user_service() as user_service:
                 user = await user_service.get_user_by_telegram_id(user_id)
                 if not user:
                     await message.answer("❌ Пользователь не найден")
                     return
+                
+                # Сохраняем user.id перед закрытием сессии
+                user_db_id = user.id
             
             # Проверяем лимиты сначала
             async with get_avatar_service() as avatar_service:
@@ -209,7 +213,7 @@ class PhotoUploadHandler:
                         photo_service = PhotoUploadService(session)
                         uploaded_photo = await photo_service.upload_photo(
                             avatar_id=avatar_id,
-                            user_id=user.id,
+                            user_id=user_db_id,
                             photo_data=photo_bytes,
                             filename=f"telegram_photo_{photo.file_id}.jpg"
                         )
@@ -770,26 +774,7 @@ class PhotoUploadHandler:
                     return
                 
                 # ИСПРАВЛЕНИЕ: Получаем баланс через сервис, а не через lazy loading
-                try:
-                    # Пытаемся получить баланс через связь
-                    from app.core.database import get_session
-                    async with get_session() as session:
-                        # Перезагружаем пользователя с балансом
-                        from sqlalchemy.orm import selectinload
-                        from sqlalchemy import select
-                        from app.database.models import User
-                        
-                        stmt = select(User).options(selectinload(User.balance)).where(User.id == user.id)
-                        result = await session.execute(stmt)
-                        user_with_balance = result.scalar_one_or_none()
-                        
-                        if user_with_balance and user_with_balance.balance:
-                            user_balance = user_with_balance.balance.coins
-                        else:
-                            user_balance = 0
-                except Exception as balance_error:
-                    logger.warning(f"Ошибка получения баланса: {balance_error}")
-                    user_balance = 0  # По умолчанию 0 если не удалось получить баланс
+                user_balance = await user_service.get_user_balance(user.id)
             
             # Определяем стоимость в зависимости от типа
             avatar_cost = 150 if training_type == "style" else 120  # Художественный дороже портретного

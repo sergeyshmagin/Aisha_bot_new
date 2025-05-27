@@ -139,10 +139,13 @@ async def process_avatar_name(message: Message, state: FSMContext):
             if not user:
                 await message.answer("❌ Пользователь не найден. Попробуйте позже.")
                 return
+            
+            # Сохраняем user_id перед закрытием сессии
+            user_id = user.id
         
         async with get_avatar_service() as avatar_service:
             avatar = await avatar_service.create_avatar(
-                user_id=user.id,
+                user_id=user_id,
                 name=name,
                 gender=AvatarGender(gender),
                 avatar_type=AvatarType.CHARACTER,

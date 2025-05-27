@@ -51,6 +51,39 @@ async def cmd_start(message: Message, state: FSMContext):
             "❌ Произошла ошибка при регистрации. Попробуйте позже или обратитесь в поддержку."
         )
 
+@router.callback_query(F.data.startswith("balance_details_"))
+async def show_balance_details(call: CallbackQuery):
+    """
+    Показывает детальную информацию о пополнении баланса во всплывающем окне.
+    """
+    try:
+        # Парсим данные из callback_data: balance_details_{added_amount}_{current_balance}
+        parts = call.data.split("_")
+        if len(parts) >= 4:
+            added_amount = float(parts[2])
+            current_balance = float(parts[3])
+            
+            # Формируем детальное сообщение
+            details_text = (
+                f"💰 Детали пополнения баланса:\n\n"
+                f"➕ Пополнено: {added_amount} кредитов\n"
+                f"💎 Текущий баланс: {current_balance} кредитов\n\n"
+                f"🎯 Что можно сделать:\n"
+                f"• Создать аватар (120-150 кредитов)\n"
+                f"• Генерировать изображения\n"
+                f"• Обрабатывать аудио\n\n"
+                f"✨ Спасибо за использование нашего сервиса!"
+            )
+            
+            await call.answer(details_text, show_alert=True)
+            logger.info(f"Показаны детали пополнения пользователю {call.from_user.id}: +{added_amount}, баланс: {current_balance}")
+        else:
+            await call.answer("❌ Ошибка в данных пополнения", show_alert=True)
+            
+    except Exception as e:
+        logger.exception(f"Ошибка при показе деталей баланса: {e}")
+        await call.answer("❌ Ошибка при получении информации о балансе", show_alert=True)
+
 @router.callback_query(F.data == "main_help")
 async def show_help(call: CallbackQuery):
     """

@@ -41,8 +41,20 @@ class FALTrainingService:
         if not self.test_mode:
             try:
                 import fal_client
-                self.fal_client = fal_client
-                self.fal_client.api_key = settings.FAL_API_KEY
+                import os
+                
+                # Проверяем наличие API ключа
+                api_key = settings.effective_fal_api_key
+                if api_key:
+                    # Устанавливаем переменную окружения для FAL клиента
+                    os.environ['FAL_KEY'] = api_key
+                    logger.info(f"FAL API ключ установлен: {api_key[:20]}...")
+                    
+                    # Инициализируем клиент
+                    self.fal_client = fal_client
+                else:
+                    logger.warning("FAL_API_KEY/FAL_KEY не установлен, переключение в тестовый режим")
+                    self.test_mode = True
             except ImportError:
                 logger.warning("fal_client не установлен, работа только в тестовом режиме")
                 self.test_mode = True
@@ -233,7 +245,8 @@ class FALTrainingService:
         """
         Обучение универсальной модели через Flux Pro Trainer
         """
-        if not self.fal_client:
+        # ИСПРАВЛЕНИЕ: В тестовом режиме не проверяем FAL клиент
+        if not self.test_mode and not self.fal_client:
             raise RuntimeError("FAL client не инициализирован")
         
         # Получаем данные аватара и пользователя для комментария
@@ -272,6 +285,15 @@ class FALTrainingService:
         
         logger.info(f"🎨 Запуск flux-pro-trainer: {finetune_comment}, trigger: {trigger_word}")
         logger.info(f"🎨 Параметры: iterations={iterations}, lr={learning_rate}, priority={priority}")
+        
+        # ИСПРАВЛЕНИЕ: В тестовом режиме возвращаем мок результат
+        if self.test_mode:
+            mock_request_id = f"test_{avatar_id.hex[:8] if avatar_id else 'unknown'}_{uuid.uuid4().hex[:8]}"
+            logger.info(f"🧪 ТЕСТ РЕЖИМ: Возвращаем мок request_id: {mock_request_id}")
+            return {
+                "finetune_id": mock_request_id,
+                "request_id": mock_request_id
+            }
         
         # Запускаем обучение
         result = await asyncio.get_event_loop().run_in_executor(
