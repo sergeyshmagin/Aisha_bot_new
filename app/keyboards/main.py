@@ -24,7 +24,7 @@ def get_main_menu() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text="❓ Помощь",
-                callback_data="help"
+                callback_data="main_help"
             )
         ]
     ]) 
