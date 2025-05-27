@@ -44,14 +44,15 @@ def main():
         from api_server.main import app
         
         print("✅ API приложение импортировано успешно")
-        print("📡 Webhook endpoint: http://0.0.0.0:8443/api/v1/avatar/status_update")
-        print("🔍 Health check: http://0.0.0.0:8443/health")
+        print("📡 API сервер: http://0.0.0.0:8000")
+        print("📡 Webhook endpoint (через Nginx): https://aibots.kz:8443/api/v1/avatar/status_update")
+        print("🔍 Health check: http://0.0.0.0:8000/health")
         
         # Запускаем сервер
         uvicorn.run(
             app,
             host="0.0.0.0",  # Слушаем все интерфейсы
-            port=8443,       # Правильный порт для webhook
+            port=8000,       # API сервер на 8000, Nginx на 8443
             log_level="info",
             reload=False
         )

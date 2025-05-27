@@ -110,13 +110,20 @@ sudo journalctl -u aisha-api.service | grep "req_abc123"
 
 #### Проверка webhook API
 ```bash
-# Статус API сервиса
-curl -k https://aishabot.aibots.kz:8443/health
+# Статус API сервиса (локально через Nginx)
+curl http://localhost:8443/health
 
-# Тест webhook endpoint
-curl -k -X POST https://aishabot.aibots.kz:8443/api/v1/avatar/status_update \
+# Статус API сервиса (напрямую к API серверу)
+curl http://localhost:8000/health
+
+# Тест webhook endpoint (через Nginx)
+curl -X POST http://localhost:8443/api/v1/avatar/status_update \
   -H "Content-Type: application/json" \
   -d '{"request_id": "test", "status": "completed"}'
+
+# Проверка что слушает на портах
+sudo lsof -i :8443
+sudo lsof -i :8000
 ```
 
 ## 🚨 Индикаторы проблем
@@ -202,16 +209,26 @@ sudo journalctl -u aisha-bot.service -n 50
 
 ### Если webhook не приходят
 ```bash
-# 1. Проверить API сервис
+# 1. Проверить API сервис и Nginx
 sudo systemctl status aisha-api.service
-curl -k https://aishabot.aibots.kz:8443/health
+sudo systemctl status nginx.service
+curl http://localhost:8000/health  # Прямо к API
+curl http://localhost:8443/health  # Через Nginx
 
-# 2. Проверить webhook URL в FAL AI
+# 2. Проверить что слушает на портах
+sudo lsof -i :8443  # Должен быть nginx
+sudo lsof -i :8000  # Должен быть python (API сервер)
+
+# 3. Проверить webhook URL в FAL AI
 echo $FAL_WEBHOOK_URL
 
-# 3. Проверить файрвол
+# 4. Проверить файрвол и конфликты портов
 sudo ufw status
-sudo lsof -i :8443
+sudo netstat -tulpn | grep -E ":(8000|8443)"
+
+# 5. Если порт 8443 занят не nginx
+sudo pkill -f "port.*8443"  # Осторожно! Убивает процессы на порту
+sudo systemctl restart nginx
 ```
 
 ## 🎯 Готовность к продакшену

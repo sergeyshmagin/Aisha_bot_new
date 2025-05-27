@@ -81,12 +81,18 @@ class TrainingHandler:
                     if not avatar:
                         raise RuntimeError("Аватар не найден")
                 
-                # Определяем тип обучения из данных аватара
-                training_type = getattr(avatar, 'training_type', 'portrait')
+                # ИСПРАВЛЕНИЕ: Получаем тип обучения из аватара корректно
                 if hasattr(avatar, 'training_type') and avatar.training_type:
-                    training_type = avatar.training_type.value if hasattr(avatar.training_type, 'value') else str(avatar.training_type)
+                    if hasattr(avatar.training_type, 'value'):
+                        training_type = avatar.training_type.value
+                    else:
+                        training_type = str(avatar.training_type)
+                    logger.info(f"🎯 Тип обучения из БД: {training_type}")
                 else:
-                    training_type = "portrait"  # По умолчанию портретный
+                    # Получаем из состояния FSM как fallback
+                    state_data = await state.get_data()
+                    training_type = state_data.get('training_type', 'portrait')
+                    logger.warning(f"⚠️ Тип обучения из состояния: {training_type} (аватар не содержит training_type)")
                 
                 logger.info(f"🎯 Запуск обучения аватара {avatar_id} с типом: {training_type}")
                 

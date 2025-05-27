@@ -27,7 +27,16 @@ class Settings(BaseSettings):
     FAL_API_KEY: str = Field("", env="FAL_API_KEY")
     FAL_WEBHOOK_URL: str = Field("https://aibots.kz:8443/api/v1/avatar/status_update", env="FAL_WEBHOOK_URL")
     
-    # FAL AI - Pro Trainer Settings
+    # FAL AI - Pro Trainer Settings (flux-pro-trainer)
+    FAL_PRO_MODE: str = Field("character", env="FAL_PRO_MODE")
+    FAL_PRO_ITERATIONS: int = Field(500, env="FAL_PRO_ITERATIONS") 
+    FAL_PRO_LEARNING_RATE: float = Field(1e-4, env="FAL_PRO_LEARNING_RATE")
+    FAL_PRO_PRIORITY: str = Field("quality", env="FAL_PRO_PRIORITY")
+    FAL_PRO_LORA_RANK: int = Field(32, env="FAL_PRO_LORA_RANK")
+    FAL_PRO_FINETUNE_TYPE: str = Field("lora", env="FAL_PRO_FINETUNE_TYPE")
+    FAL_PRO_CAPTIONING: bool = Field(True, env="FAL_PRO_CAPTIONING")
+    
+    # FAL AI - Legacy Settings (для обратной совместимости)
     FAL_DEFAULT_MODE: str = Field("character", env="FAL_MODE")
     FAL_DEFAULT_ITERATIONS: int = Field(500, env="FAL_ITERATIONS")
     FAL_DEFAULT_PRIORITY: str = Field("quality", env="FAL_PRIORITY")

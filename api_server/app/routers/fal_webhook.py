@@ -82,11 +82,14 @@ async def process_webhook_background(
         
         logger.info(f"[WEBHOOK BACKGROUND] Начинаем обработку {request_id}, статус: {status}")
         
-        if status == "IN_PROGRESS":
+        # Приводим статус к нижнему регистру для унификации
+        status_lower = status.lower() if status else ""
+        
+        if status_lower == "in_progress":
             await handle_training_progress(webhook_data, training_type, session)
-        elif status == "COMPLETED":
+        elif status_lower == "completed":
             await handle_training_completed(webhook_data, training_type, session)
-        elif status == "FAILED":
+        elif status_lower == "failed":
             await handle_training_failed(webhook_data, training_type, session)
         else:
             logger.warning(f"[WEBHOOK BACKGROUND] Неизвестный статус: {status}")

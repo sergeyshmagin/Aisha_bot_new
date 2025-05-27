@@ -11,6 +11,12 @@ from uuid import UUID
 
 from app.core.config import settings
 from app.core.logger import get_logger
+from app.core.di import get_user_service, get_avatar_service
+from app.utils.avatar_utils import (
+    format_finetune_comment,
+    generate_trigger_word,
+    format_training_duration
+)
 
 logger = get_logger(__name__)
 
@@ -95,13 +101,17 @@ class FALTrainingService:
                 # 🎨 ХУДОЖЕСТВЕННЫЙ СТИЛЬ → Flux Pro Trainer API
                 preset = settings_preset["general"]
                 
+                # Используем оптимизированный trigger_word
+                trigger = generate_trigger_word(str(avatar_id))
+                
                 result = await self._train_general_model(
                     images_data_url=training_data_url,
                     trigger_word=trigger,
                     iterations=preset["iterations"],
                     learning_rate=preset["learning_rate"],
                     priority=preset.get("priority", "quality"),
-                    webhook_url=webhook_url
+                    webhook_url=webhook_url,
+                    avatar_id=avatar_id
                 )
                 
                 logger.info(f"🎨 Художественное обучение запущено для аватара {avatar_id}: {result}")
@@ -217,7 +227,8 @@ class FALTrainingService:
         iterations: int,
         learning_rate: float,
         priority: str = "quality",
-        webhook_url: Optional[str] = None
+        webhook_url: Optional[str] = None,
+        avatar_id: Optional[UUID] = None
     ) -> Dict[str, Any]:
         """
         Обучение универсальной модели через Flux Pro Trainer
@@ -225,20 +236,42 @@ class FALTrainingService:
         if not self.fal_client:
             raise RuntimeError("FAL client не инициализирован")
         
-        # Конфигурация для универсального тренера
+        # Получаем данные аватара и пользователя для комментария
+        finetune_comment = "Художественный аватар"
+        if avatar_id:
+            try:
+                async with get_avatar_service() as avatar_service:
+                    avatar = await avatar_service.get_avatar(avatar_id)
+                    if avatar:
+                        async with get_user_service() as user_service:
+                            user = await user_service.get_user_by_id(avatar.user_id)
+                            if user:
+                                finetune_comment = format_finetune_comment(
+                                    avatar_name=avatar.name,
+                                    telegram_username=user.username or f"user_{user.id}"
+                                )
+            except Exception as e:
+                logger.warning(f"Не удалось получить данные для комментария: {e}")
+        
+        # Конфигурация для flux-pro-trainer с оптимизированными параметрами
         config = {
-            "images_data_url": images_data_url,
-            "trigger_word": trigger_word,
-            "create_masks": True,
+            "data_url": images_data_url,
+            "mode": settings.FAL_PRO_MODE,
             "iterations": iterations,
             "learning_rate": learning_rate,
-            "lora_rank": settings.FAL_LORA_RANK,
-            "batch_size": 1,
-            "auto_captioning": True,
+            "priority": priority,
+            "finetune_type": settings.FAL_PRO_FINETUNE_TYPE,
+            "lora_rank": settings.FAL_PRO_LORA_RANK,
+            "captioning": settings.FAL_PRO_CAPTIONING,
+            "trigger_word": trigger_word,
+            "finetune_comment": finetune_comment,
         }
         
         if webhook_url:
             config["webhook_url"] = webhook_url
+        
+        logger.info(f"🎨 Запуск flux-pro-trainer: {finetune_comment}, trigger: {trigger_word}")
+        logger.info(f"🎨 Параметры: iterations={iterations}, lr={learning_rate}, priority={priority}")
         
         # Запускаем обучение
         result = await asyncio.get_event_loop().run_in_executor(
