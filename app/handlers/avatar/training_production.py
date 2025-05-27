@@ -48,7 +48,7 @@ class TrainingHandler:
                 if not user:
                     await callback.answer("❌ Пользователь не найден", show_alert=True)
                     return
-                
+                 
                 # Сохраняем user_id перед закрытием сессии
                 user_id = user.id
                 
@@ -58,7 +58,7 @@ class TrainingHandler:
                 if not is_test_mode:
                     # В продакшн режиме - списываем средства с баланса
                     user_balance = await user_service.get_user_balance(user.id)
-                    avatar_cost = 150  # Можно получить из данных состояния
+                    avatar_cost = settings.AVATAR_CREATION_COST  # Используем значение из конфигурации
                     
                     if user_balance < avatar_cost:
                         await callback.message.edit_text(
@@ -67,9 +67,16 @@ class TrainingHandler:
                         )
                         return
                     
-                    # Списываем средства (здесь должна быть логика списания)
-                    # await user_service.deduct_balance(user.id, avatar_cost)
-                    logger.info(f"💰 ПРОДАКШН: Списано {avatar_cost} кредитов с баланса пользователя {user.id}")
+                    # Списываем средства с баланса
+                    new_balance = await user_service.remove_coins(user.id, avatar_cost)
+                    if new_balance is None:
+                        await callback.message.edit_text(
+                            text=f"❌ **Ошибка списания средств**\n\nПопробуйте еще раз или обратитесь в поддержку.",
+                            parse_mode="Markdown"
+                        )
+                        return
+                    
+                    logger.info(f"💰 ПРОДАКШН: Списано {avatar_cost} кредитов с баланса пользователя {user.id}, новый баланс: {new_balance}")
             
             # Показываем индикатор запуска
             status_text = "🧪 **Запускаем тестовое обучение...**" if is_test_mode else "🚀 **Запускаем обучение...**"
@@ -122,14 +129,9 @@ class TrainingHandler:
                 fal_client = FalAIClient()
                 
                 # Скачиваем фотографии и создаем архив
-                photo_paths = await fal_client.download_photos_from_minio(photo_urls, avatar_id)
-                if not photo_paths:
-                    raise RuntimeError("Не удалось скачать фотографии для создания архива")
-                
-                # Создаем и загружаем архив
-                training_data_url = await fal_client.create_and_upload_archive(photo_paths, avatar_id)
+                training_data_url = await fal_client._download_and_create_archive(photo_urls, avatar_id)
                 if not training_data_url:
-                    raise RuntimeError("Не удалось создать архив с фотографиями")
+                    raise RuntimeError("Не удалось скачать фотографии для создания архива")
                 
                 logger.info(f"Создан архив для обучения: {training_data_url}")
                 
@@ -213,32 +215,55 @@ class TrainingHandler:
             progress = avatar.training_progress if avatar.training_progress else 0
             status_text = self._get_status_text(avatar.status)
             
+            # Определяем этап обучения
+            if progress == 0:
+                stage_text = "🚀 **Запуск обучения**\n\nПодготавливаем модель и начинаем обучение..."
+                time_text = "⏱️ **Время:** ~15-30 минут"
+            elif progress < 25:
+                stage_text = "🔄 **Начальная стадия**\n\nМодель изучает ваши фотографии..."
+                time_text = f"⏱️ **Осталось:** ~{30 - int(progress * 0.3)} минут"
+            elif progress < 75:
+                stage_text = "🎯 **Активное обучение**\n\nМодель адаптируется под ваш стиль..."
+                time_text = f"⏱️ **Осталось:** ~{20 - int(progress * 0.2)} минут"
+            elif progress < 100:
+                stage_text = "🔥 **Финальная стадия**\n\nДоводим модель до совершенства..."
+                time_text = "⏱️ **Почти готово!**"
+            else:
+                stage_text = "✅ **Обучение завершено!**"
+                time_text = "🎉 **Готово к генерации**"
+            
             text = f"""
-🤖 **Обучение аватара в процессе**
+🤖 **Обучение аватара**
 
 🎭 **Аватар:** {avatar.name}
 📊 **Прогресс:** {progress}%
 ⚡ **Статус:** {status_text}
 
-⏱️ **Примерное время:** 15-30 минут
+{stage_text}
+
+{time_text}
 
 💡 Вы получите уведомление когда обучение завершится!
 """
             
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [
+            # Показываем кнопку обновления только если есть смысл (прогресс > 0)
+            buttons = []
+            if progress > 0 and progress < 100:
+                buttons.append([
                     InlineKeyboardButton(
                         text="🔄 Обновить прогресс",
                         callback_data=f"refresh_training_{avatar_id}"
                     )
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="◀️ К меню аватаров",
-                        callback_data="avatar_menu"
-                    )
-                ]
+                ])
+            
+            buttons.append([
+                InlineKeyboardButton(
+                    text="◀️ К меню аватаров",
+                    callback_data="avatar_menu"
+                )
             ])
+            
+            keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
             
             try:
                 await callback.message.edit_text(
@@ -307,21 +332,24 @@ class TrainingHandler:
                         await avatar_service.update_avatar_status(avatar_id, AvatarStatus.COMPLETED)
                         
                 else:
-                    # ИСПРАВЛЕНИЕ: Убираем кнопку отмены из промежуточных шагов
-                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                        [
+                    # Показываем кнопку обновления только если есть смысл (прогресс > 0)
+                    buttons = []
+                    if progress > 0:
+                        buttons.append([
                             InlineKeyboardButton(
                                 text="🔄 Обновить прогресс",
                                 callback_data=f"refresh_training_{avatar_id}"
                             )
-                        ],
-                        [
-                            InlineKeyboardButton(
-                                text="◀️ К меню аватаров",
-                                callback_data="avatar_menu"
-                            )
-                        ]
+                        ])
+                    
+                    buttons.append([
+                        InlineKeyboardButton(
+                            text="◀️ К меню аватаров",
+                            callback_data="avatar_menu"
+                        )
                     ])
+                    
+                    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
                 
                 try:
                     await callback.message.edit_text(

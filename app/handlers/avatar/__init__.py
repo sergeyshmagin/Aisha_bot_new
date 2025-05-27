@@ -13,13 +13,14 @@ from .cancel_handler import router as cancel_router
 from aiogram import Router
 
 router = Router()
-router.include_router(main_router)
+# Порядок важен: специфичные обработчики должны быть раньше общих
+router.include_router(create_router)  # Специфичные обработчики создания
 router.include_router(training_type_router)
-router.include_router(create_router)
 router.include_router(photo_upload_router)
 router.include_router(training_router)
 router.include_router(gallery_router)
 router.include_router(cancel_router)
+router.include_router(main_router)  # Общие обработчики в конце
 
 
 

@@ -17,14 +17,16 @@ router = Router()
 async def start_avatar_creation(callback: CallbackQuery, state: FSMContext):
     """Начинает процесс создания аватара с выбора типа обучения"""
     try:
+        logger.info(f"[CREATE_AVATAR] Получен callback create_avatar от пользователя {callback.from_user.id}")
+        
         # Переходим к выбору типа обучения
         from .training_type_selection import show_training_type_selection
         await show_training_type_selection(callback, state)
         
-        logger.info(f"Пользователь {callback.from_user.id} начал создание аватара")
+        logger.info(f"[CREATE_AVATAR] Пользователь {callback.from_user.id} успешно начал создание аватара")
         
     except Exception as e:
-        logger.exception(f"Ошибка при начале создания аватара: {e}")
+        logger.exception(f"[CREATE_AVATAR] Ошибка при начале создания аватара: {e}")
         await callback.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True)
 
 @router.callback_query(F.data == "select_gender")

@@ -89,19 +89,8 @@ async def show_avatar_help(callback: CallbackQuery):
     )
     await callback.answer(help_text, show_alert=True)
 
-@router.callback_query(F.data == "create_avatar")
-async def start_avatar_creation(callback: CallbackQuery, state: FSMContext):
-    """Начинает создание нового аватара"""
-    try:
-        # Переходим к выбору типа обучения (новая логика)
-        from .training_type_selection import show_training_type_selection
-        await show_training_type_selection(callback, state)
-        
-        logger.info(f"Пользователь {callback.from_user.id} начал создание аватара")
-        
-    except Exception as e:
-        logger.exception(f"Ошибка при начале создания аватара: {e}")
-        await callback.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True)
+# Обработчик create_avatar перенесен в app/handlers/avatar/create.py
+# чтобы избежать дублирования и конфликтов роутеров
 
 # Галерея аватаров обрабатывается в отдельном модуле gallery.py
 # Это сделано для лучшей организации кода и возможности повторного использования

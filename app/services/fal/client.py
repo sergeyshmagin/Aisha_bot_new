@@ -96,17 +96,11 @@ class FalAIClient:
                 f"photos={len(photo_urls)}, config={config}"
             )
             
-            # 1. Скачиваем фотографии из MinIO
-            photo_paths = await self._download_photos_from_minio(photo_urls, avatar_id)
-            
-            if not photo_paths:
-                raise RuntimeError("Не удалось скачать фотографии из MinIO")
-            
-            # 2. Создаем архив с фотографиями
-            data_url = await self._create_and_upload_archive(photo_paths, avatar_id)
+            # 1. Скачиваем фотографии и создаем архив
+            data_url = await self._download_and_create_archive(photo_urls, avatar_id)
             
             if not data_url:
-                raise RuntimeError("Не удалось создать архив с фотографиями")
+                raise RuntimeError("Не удалось скачать фотографии для создания архива")
             
             # 3. Запускаем обучение на FAL AI
             finetune_id = await self._submit_training(
@@ -203,6 +197,105 @@ class FalAIClient:
             logger.exception(f"[FAL AI] Ошибка генерации изображения: {e}")
             return None
 
+    async def _download_and_create_archive(
+        self, 
+        photo_urls: List[str], 
+        avatar_id: UUID
+    ) -> Optional[str]:
+        """
+        Скачивает фотографии из MinIO и создает архив для FAL AI
+        
+        Args:
+            photo_urls: Список URL фотографий в MinIO
+            avatar_id: ID аватара
+            
+        Returns:
+            Optional[str]: URL загруженного архива
+        """
+        import tempfile
+        import zipfile
+        
+        with tempfile.TemporaryDirectory(prefix=f"avatar_{avatar_id}_") as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            photo_paths = []
+            
+            try:
+                # Импортируем StorageService здесь чтобы избежать циклических импортов
+                from ..storage import StorageService
+                storage = StorageService()
+                
+                # Скачиваем фотографии
+                for i, minio_key in enumerate(photo_urls):
+                    try:
+                        # minio_key содержит полный путь, например: avatars/user_id/avatar_id/photo_1.jpeg
+                        # Используем весь путь как object_name, bucket всегда "avatars"
+                        bucket_name = "avatars"
+                        object_name = minio_key
+                        
+                        # Скачиваем файл из MinIO
+                        photo_data = await storage.download_file(bucket_name, object_name)
+                        
+                        if not photo_data:
+                            logger.warning(f"[FAL AI] Не удалось скачать фото {bucket_name}/{object_name}")
+                            continue
+                        
+                        # Сохраняем файл во временную директорию
+                        photo_path = temp_dir / f"photo_{i+1:02d}.jpg"
+                        
+                        # Проверяем и конвертируем изображение
+                        try:
+                            # Открываем изображение для валидации
+                            with Image.open(io.BytesIO(photo_data)) as img:
+                                # Конвертируем в RGB если нужно
+                                if img.mode != 'RGB':
+                                    img = img.convert('RGB')
+                                
+                                # Сохраняем в JPEG
+                                img.save(photo_path, 'JPEG', quality=95)
+                                photo_paths.append(photo_path)
+                                
+                                logger.debug(f"[FAL AI] Сохранено фото: {photo_path}")
+                        
+                        except Exception as img_error:
+                            logger.warning(f"[FAL AI] Ошибка обработки изображения {bucket_name}/{object_name}: {img_error}")
+                            continue
+                    
+                    except Exception as e:
+                        logger.warning(f"[FAL AI] Ошибка скачивания фото {minio_key}: {e}")
+                        continue
+                
+                if not photo_paths:
+                    logger.error(f"[FAL AI] Не удалось скачать ни одной фотографии для аватара {avatar_id}")
+                    return None
+                
+                logger.info(f"[FAL AI] Скачано {len(photo_paths)} фотографий для аватара {avatar_id}")
+                
+                # Создаем ZIP архив
+                zip_path = temp_dir / f"avatar_{avatar_id}.zip"
+                
+                with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+                    for photo_path in photo_paths:
+                        if photo_path.exists():
+                            # Используем только имя файла в архиве
+                            arcname = photo_path.name
+                            zipf.write(photo_path, arcname=arcname)
+                
+                logger.info(f"[FAL AI] Создан архив: {zip_path} ({len(photo_paths)} фото)")
+                
+                if self.test_mode:
+                    # В тестовом режиме возвращаем мок URL
+                    return f"https://fal.ai/test/archive_{avatar_id}.zip"
+                
+                # Загружаем архив на FAL AI
+                data_url = await fal_client.upload_file_async(str(zip_path))
+                
+                logger.info(f"[FAL AI] Архив загружен: {data_url}")
+                return data_url
+                
+            except Exception as e:
+                logger.exception(f"[FAL AI] Ошибка создания архива: {e}")
+                return None
+
     async def download_photos_from_minio(
         self, 
         photo_urls: List[str], 
@@ -218,68 +311,62 @@ class FalAIClient:
         Returns:
             List[Path]: Пути к скачанным файлам
         """
-        photo_paths = []
+        import tempfile
         
-        try:
-            # Создаем временную директорию для аватара
-            temp_dir = Path(settings.TEMP_DIR) / f"avatar_{avatar_id}"
-            temp_dir.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix=f"avatar_{avatar_id}_") as temp_dir_name:
+            temp_dir = Path(temp_dir_name)
+            photo_paths = []
             
-            # Импортируем StorageService здесь чтобы избежать циклических импортов
-            from ..storage import StorageService
-            storage = StorageService()
-            
-            for i, minio_key in enumerate(photo_urls):
-                try:
-                    # minio_key уже содержит полный путь, например: avatars/user_id/avatar_id/photo_1.jpeg
-                    # Разделяем на bucket и object_name
-                    if minio_key.startswith("avatars/"):
-                        bucket_name = "avatars"
-                        object_name = minio_key[8:]  # Убираем "avatars/" из начала
-                    else:
-                        # Fallback для других форматов
-                        parts = minio_key.split("/", 1)
-                        bucket_name = parts[0] if len(parts) > 1 else "avatars"
-                        object_name = parts[1] if len(parts) > 1 else minio_key
-                    
-                    # Скачиваем файл из MinIO
-                    photo_data = await storage.download_file(bucket_name, object_name)
-                    
-                    if not photo_data:
-                        logger.warning(f"[FAL AI] Не удалось скачать фото {bucket_name}/{object_name}")
-                        continue
-                    
-                    # Сохраняем файл во временную директорию
-                    photo_path = temp_dir / f"photo_{i+1:02d}.jpg"
-                    
-                    # Проверяем и конвертируем изображение
+            try:
+                # Импортируем StorageService здесь чтобы избежать циклических импортов
+                from ..storage import StorageService
+                storage = StorageService()
+                
+                for i, minio_key in enumerate(photo_urls):
                     try:
-                        # Открываем изображение для валидации
-                        with Image.open(io.BytesIO(photo_data)) as img:
-                            # Конвертируем в RGB если нужно
-                            if img.mode != 'RGB':
-                                img = img.convert('RGB')
-                            
-                            # Сохраняем в JPEG
-                            img.save(photo_path, 'JPEG', quality=95)
-                            photo_paths.append(photo_path)
-                            
-                            logger.debug(f"[FAL AI] Сохранено фото: {photo_path}")
+                        # minio_key содержит полный путь, например: avatars/user_id/avatar_id/photo_1.jpeg
+                        # Используем весь путь как object_name, bucket всегда "avatars"
+                        bucket_name = "avatars"
+                        object_name = minio_key
+                        
+                        # Скачиваем файл из MinIO
+                        photo_data = await storage.download_file(bucket_name, object_name)
+                        
+                        if not photo_data:
+                            logger.warning(f"[FAL AI] Не удалось скачать фото {bucket_name}/{object_name}")
+                            continue
+                        
+                        # Сохраняем файл во временную директорию
+                        photo_path = temp_dir / f"photo_{i+1:02d}.jpg"
+                        
+                        # Проверяем и конвертируем изображение
+                        try:
+                            # Открываем изображение для валидации
+                            with Image.open(io.BytesIO(photo_data)) as img:
+                                # Конвертируем в RGB если нужно
+                                if img.mode != 'RGB':
+                                    img = img.convert('RGB')
+                                
+                                # Сохраняем в JPEG
+                                img.save(photo_path, 'JPEG', quality=95)
+                                photo_paths.append(photo_path)
+                                
+                                logger.debug(f"[FAL AI] Сохранено фото: {photo_path}")
+                        
+                        except Exception as img_error:
+                            logger.warning(f"[FAL AI] Ошибка обработки изображения {bucket_name}/{object_name}: {img_error}")
+                            continue
                     
-                    except Exception as img_error:
-                        logger.warning(f"[FAL AI] Ошибка обработки изображения {bucket_name}/{object_name}: {img_error}")
+                    except Exception as e:
+                        logger.warning(f"[FAL AI] Ошибка скачивания фото {minio_key}: {e}")
                         continue
                 
-                except Exception as e:
-                    logger.warning(f"[FAL AI] Ошибка скачивания фото {minio_key}: {e}")
-                    continue
-            
-            logger.info(f"[FAL AI] Скачано {len(photo_paths)} фотографий для аватара {avatar_id}")
-            return photo_paths
-            
-        except Exception as e:
-            logger.exception(f"[FAL AI] Ошибка скачивания фотографий: {e}")
-            return []
+                logger.info(f"[FAL AI] Скачано {len(photo_paths)} фотографий для аватара {avatar_id}")
+                return photo_paths
+                
+            except Exception as e:
+                logger.exception(f"[FAL AI] Ошибка скачивания фотографий: {e}")
+                return []
 
     async def create_and_upload_archive(
         self, 

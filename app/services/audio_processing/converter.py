@@ -50,19 +50,31 @@ async def convert_to_mp3_ffmpeg(input_path: str) -> str:
     temp_file_mp3 = input_path.rsplit('.', 1)[0] + '.mp3'
     
     try:
+        # Улучшенные параметры FFmpeg для разных форматов, включая M4A
         proc = await asyncio.create_subprocess_exec(
             ffmpeg_path,
-            '-y',
+            '-y',  # Перезаписывать выходной файл
             '-i', input_path,
-            '-acodec', 'libmp3lame',
-            '-ab', '192k',
+            '-vn',  # Отключить видео
+            '-acodec', 'libmp3lame',  # Кодек MP3
+            '-ab', '192k',  # Битрейт
+            '-ar', '44100',  # Частота дискретизации
+            '-ac', '2',  # Стерео
+            '-f', 'mp3',  # Принудительно MP3 формат
             temp_file_mp3,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
         _, stderr = await proc.communicate()
         if proc.returncode != 0:
-            raise AudioProcessingError(f"ffmpeg error: {stderr.decode()}")
+            error_msg = stderr.decode()
+            logger.error(f"FFmpeg ошибка конвертации: {error_msg}")
+            raise AudioProcessingError(f"ffmpeg error: {error_msg}")
+        
+        # Проверяем, что файл создался и не пустой
+        if not os.path.exists(temp_file_mp3) or os.path.getsize(temp_file_mp3) == 0:
+            raise AudioProcessingError(f"Конвертированный файл пуст или не создался: {temp_file_mp3}")
+            
         return temp_file_mp3
     except FileNotFoundError:
         raise AudioProcessingError(f"ffmpeg не найден по пути: {ffmpeg_path}. Установите ffmpeg: sudo apt install ffmpeg")
@@ -75,13 +87,25 @@ class PydubAudioConverter(AudioConverter):
         if self.ffmpeg_path:
             AudioSegment.converter = self.ffmpeg_path
     
-    async def convert_to_mp3(self, audio_data: bytes, use_ffmpeg: bool = False) -> bytes:
+    async def convert_to_mp3(self, audio_data: bytes, use_ffmpeg: bool = False, input_format: str = None) -> bytes:
         """
         Конвертирует аудио в MP3 формат (через pydub или ffmpeg)
+        
+        Args:
+            audio_data: Исходные аудио данные
+            use_ffmpeg: Использовать FFmpeg вместо pydub
+            input_format: Формат входного файла (для правильного расширения)
         """
         if use_ffmpeg:
-            # Сохраняем во временный файл
-            with NamedTemporaryFile(suffix='.ogg', delete=False) as temp_in:
+            # Определяем правильное расширение для временного файла
+            if input_format:
+                suffix = f'.{input_format}'
+            else:
+                # Пытаемся определить формат по заголовку файла
+                suffix = self._detect_format_by_header(audio_data)
+            
+            # Сохраняем во временный файл с правильным расширением
+            with NamedTemporaryFile(suffix=suffix, delete=False) as temp_in:
                 temp_in.write(audio_data)
                 temp_in_path = temp_in.name
             
@@ -90,6 +114,7 @@ class PydubAudioConverter(AudioConverter):
                 mp3_path = await convert_to_mp3_ffmpeg(temp_in_path)
                 with open(mp3_path, 'rb') as f:
                     result = f.read()
+                logger.info(f"[CONVERTER] Успешно конвертирован {suffix} файл в MP3: {len(result)} байт")
                 return result
             finally:
                 Path(temp_in_path).unlink(missing_ok=True)
@@ -184,6 +209,12 @@ class PydubAudioConverter(AudioConverter):
                 return 'wav'
             elif 'Audio: aac' in format_info:
                 return 'aac'
+            elif 'Audio: m4a' in format_info or 'mov,mp4,m4a' in format_info:
+                return 'm4a'
+            elif 'Audio: ogg' in format_info:
+                return 'ogg'
+            elif 'Audio: flac' in format_info:
+                return 'flac'
             else:
                 return 'unknown'
                 
@@ -196,6 +227,53 @@ class PydubAudioConverter(AudioConverter):
                 Path(temp_path).unlink()
             except Exception as e:
                 logger.warning(f"Не удалось удалить временный файл {temp_path}: {e}")
+    
+    def _detect_format_by_header(self, audio_data: bytes) -> str:
+        """
+        Определяет формат аудио по заголовку файла (magic bytes)
+        
+        Args:
+            audio_data: Аудио данные
+            
+        Returns:
+            str: Расширение файла с точкой (например, '.m4a', '.mp3')
+        """
+        if len(audio_data) < 12:
+            return '.audio'  # Fallback для очень маленьких файлов
+        
+        # Проверяем magic bytes для разных форматов
+        header = audio_data[:12]
+        
+        # MP3 - начинается с ID3 или синхронизационного слова
+        if header.startswith(b'ID3') or (header[0] == 0xFF and (header[1] & 0xE0) == 0xE0):
+            return '.mp3'
+        
+        # WAV - RIFF заголовок
+        if header.startswith(b'RIFF') and b'WAVE' in audio_data[:20]:
+            return '.wav'
+        
+        # M4A/MP4 - ftyp заголовок
+        if b'ftyp' in header or header[4:8] == b'ftyp':
+            # Проверяем подтип
+            if b'M4A ' in audio_data[:32] or b'mp41' in audio_data[:32] or b'mp42' in audio_data[:32]:
+                return '.m4a'
+            return '.mp4'
+        
+        # OGG - OggS заголовок
+        if header.startswith(b'OggS'):
+            return '.ogg'
+        
+        # FLAC - fLaC заголовок
+        if header.startswith(b'fLaC'):
+            return '.flac'
+        
+        # AAC - ADTS заголовок
+        if len(audio_data) >= 2 and header[0] == 0xFF and (header[1] & 0xF0) == 0xF0:
+            return '.aac'
+        
+        # Fallback - используем общее расширение
+        logger.warning(f"[CONVERTER] Не удалось определить формат по заголовку: {header.hex()}")
+        return '.audio'
     
     async def get_metadata(self, audio_data: bytes) -> AudioMetadata:
         """

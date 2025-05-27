@@ -35,8 +35,6 @@ class ImageProcessingService(BaseService):
 
     def __init__(self):
         super().__init__()
-        self.temp_dir = Path(settings.TEMP_DIR) / "images"
-        self.temp_dir.mkdir(parents=True, exist_ok=True)
 
     async def process_image(
         self,
@@ -58,65 +56,67 @@ class ImageProcessingService(BaseService):
         Returns:
             ImageResult: Результат обработки
         """
+        import tempfile
+        
         try:
-            # Берем самое большое фото из списка
-            if isinstance(photo, list):
-                photo = max(photo, key=lambda x: x.file_size)
-            
-            # 1. Скачиваем файл
-            file_path = await self._download_image(photo)
-            
-            # 2. Создаем превью
-            thumbnail_path = await self._create_thumbnail(file_path)
-            
-            # 3. Сохраняем в MinIO
-            storage = StorageService()
-            
-            # Читаем данные из файла
-            async with aiofiles.open(file_path, 'rb') as f:
-                file_data = await f.read()
+            with tempfile.TemporaryDirectory(prefix="image_processing_") as temp_dir_name:
+                temp_dir = Path(temp_dir_name)
                 
-            # Имя объекта в MinIO
-            object_name = f"{user_id}/{Path(file_path).name}"
-            
-            # Загружаем в MinIO
-            minio_path = await storage.upload_file(
-                bucket="images",
-                object_name=object_name,
-                data=file_data,
-                content_type="image/jpeg"
-            )
-            
-            # Читаем данные превью
-            async with aiofiles.open(thumbnail_path, 'rb') as f:
-                thumbnail_data = await f.read()
+                # Берем самое большое фото из списка
+                if isinstance(photo, list):
+                    photo = max(photo, key=lambda x: x.file_size)
                 
-            # Имя объекта для превью
-            thumbnail_object_name = f"{user_id}/thumbnails/{Path(thumbnail_path).name}"
-            
-            # Загружаем превью
-            thumbnail_minio_path = await storage.upload_file(
-                bucket="thumbnails",
-                object_name=thumbnail_object_name,
-                data=thumbnail_data,
-                content_type="image/jpeg"
-            )
-            
-            return ImageResult(
-                file_id=photo.file_id,
-                width=photo.width,
-                height=photo.height,
-                file_size=photo.file_size,
-                file_path=minio_path,
-                thumbnail_path=thumbnail_minio_path
-            )
-            
+                # 1. Скачиваем файл
+                file_path = await self._download_image(photo, temp_dir)
+                
+                # 2. Создаем превью
+                thumbnail_path = await self._create_thumbnail(file_path)
+                
+                # 3. Сохраняем в MinIO
+                storage = StorageService()
+                
+                # Читаем данные из файла
+                async with aiofiles.open(file_path, 'rb') as f:
+                    file_data = await f.read()
+                    
+                # Имя объекта в MinIO
+                object_name = f"{user_id}/{Path(file_path).name}"
+                
+                # Загружаем в MinIO
+                minio_path = await storage.upload_file(
+                    bucket="images",
+                    object_name=object_name,
+                    data=file_data,
+                    content_type="image/jpeg"
+                )
+                
+                # Читаем данные превью
+                async with aiofiles.open(thumbnail_path, 'rb') as f:
+                    thumbnail_data = await f.read()
+                    
+                # Имя объекта для превью
+                thumbnail_object_name = f"{user_id}/thumbnails/{Path(thumbnail_path).name}"
+                
+                # Загружаем превью
+                thumbnail_minio_path = await storage.upload_file(
+                    bucket="thumbnails",
+                    object_name=thumbnail_object_name,
+                    data=thumbnail_data,
+                    content_type="image/jpeg"
+                )
+                
+                return ImageResult(
+                    file_id=photo.file_id,
+                    width=photo.width,
+                    height=photo.height,
+                    file_size=photo.file_size,
+                    file_path=minio_path,
+                    thumbnail_path=thumbnail_minio_path
+                )
+                
         except Exception as e:
             logger.exception("Ошибка при обработке изображения")
             raise
-        finally:
-            # Очищаем временные файлы
-            await self._cleanup_temp_files(file_path, thumbnail_path)
 
     async def search_images(
         self,
@@ -144,9 +144,9 @@ class ImageProcessingService(BaseService):
             logger.exception("Ошибка при поиске изображений")
             raise
 
-    async def _download_image(self, photo: PhotoSize) -> Path:
+    async def _download_image(self, photo: PhotoSize, temp_dir: Path) -> Path:
         """Скачивает изображение во временную директорию"""
-        file_path = self.temp_dir / f"{photo.file_id}.jpg"
+        file_path = temp_dir / f"{photo.file_id}.jpg"
         
         async with aiofiles.open(file_path, "wb") as f:
             await f.write(await photo.download())
@@ -169,11 +169,4 @@ class ImageProcessingService(BaseService):
         await process.communicate()
         return thumbnail_path
 
-    async def _cleanup_temp_files(self, *file_paths: Path):
-        """Удаляет временные файлы"""
-        for path in file_paths:
-            if path and path.exists():
-                try:
-                    path.unlink()
-                except Exception as e:
-                    logger.error(f"Ошибка при удалении {path}: {e}") 
+ 

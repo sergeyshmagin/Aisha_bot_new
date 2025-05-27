@@ -28,6 +28,7 @@ from app.keyboards.photo_upload import (
     get_photo_tips_keyboard
 )
 from app.keyboards.main import get_main_menu
+from app.core.config import settings
 
 logger = get_logger(__name__)
 router = Router()
@@ -776,8 +777,8 @@ class PhotoUploadHandler:
                 # ИСПРАВЛЕНИЕ: Получаем баланс через сервис, а не через lazy loading
                 user_balance = await user_service.get_user_balance(user.id)
             
-            # Определяем стоимость в зависимости от типа
-            avatar_cost = 150 if training_type == "style" else 120  # Художественный дороже портретного
+            # Определяем стоимость из конфигурации
+            avatar_cost = settings.AVATAR_CREATION_COST
             
             # Проверяем тестовый режим
             from app.core.config import settings

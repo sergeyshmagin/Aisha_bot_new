@@ -47,6 +47,29 @@ class AudioService:
         """
         try:
             logger.info("[AudioService] Начало process_audio (ffmpeg pipeline)")
+            
+            # Диагностика входных данных
+            logger.info(f"[AudioService] Размер входных данных: {len(audio_data)} байт")
+            if len(audio_data) >= 12:
+                header = audio_data[:12]
+                logger.info(f"[AudioService] Заголовок файла: {header.hex()}")
+                
+                # Попытка определить формат
+                if header.startswith(b'ID3') or (header[0] == 0xFF and (header[1] & 0xE0) == 0xE0):
+                    detected_format = "MP3"
+                elif header.startswith(b'RIFF'):
+                    detected_format = "WAV"
+                elif b'ftyp' in header or header[4:8] == b'ftyp':
+                    detected_format = "M4A/MP4"
+                elif header.startswith(b'OggS'):
+                    detected_format = "OGG"
+                elif header.startswith(b'fLaC'):
+                    detected_format = "FLAC"
+                else:
+                    detected_format = "UNKNOWN"
+                
+                logger.info(f"[AudioService] Определен формат: {detected_format}")
+            
             # Используем абсолютный путь для systemd
             temp_dir = "/opt/aisha-backend/storage/temp"
             os.makedirs(temp_dir, exist_ok=True)

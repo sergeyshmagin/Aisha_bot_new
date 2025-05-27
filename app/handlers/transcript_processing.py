@@ -140,11 +140,14 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                 duration = message.voice.duration
                 file_name = f"voice_{message.message_id}.ogg"
                 file_size = message.voice.file_size
+                file_format = "ogg"  # Voice всегда OGG
             else:
                 file_id = message.audio.file_id  
                 duration = message.audio.duration
                 file_name = message.audio.file_name or f"audio_{message.message_id}.mp3"
                 file_size = message.audio.file_size
+                # Определяем формат по имени файла или MIME типу
+                file_format = self._extract_audio_format(file_name, message.audio.mime_type)
             
             # Проверяем размер файла (используем настройки из конфигурации)
             max_file_size = settings.MAX_AUDIO_SIZE  # 1GB
@@ -171,8 +174,11 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                     f"📁 **Большой файл обнаружен**\n\n"
                     f"📊 Размер: {file_size / (1024*1024):.1f} МБ\n"
                     f"📏 Лимит Bot API: {telegram_api_limit / (1024*1024):.0f} МБ\n\n"
-                    f"🔄 **Обрабатываю альтернативным методом...**\n"
-                    f"⏳ Это может занять больше времени",
+                    f"🧠 **Умная обработка:**\n"
+                    f"• Анализирую паузы в аудио\n"
+                    f"• Разделяю на оптимальные части\n"
+                    f"• Добавляю перекрытия для контекста\n"
+                    f"⏳ Это займет несколько минут...",
                     parse_mode="Markdown"
                 )
                 
@@ -196,8 +202,9 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                     await processing_msg.edit_text(
                         f"📁 **Большой файл обнаружен**\n\n"
                         f"📊 Размер: {file_size / (1024*1024):.1f} МБ\n"
-                        f"🤖 **Использую специальный алгоритм обработки...**\n"
-                        f"⚡ Разбиваю на части и обрабатываю",
+                        f"🤖 **Запускаю умный алгоритм обработки...**\n"
+                        f"🔄 Скачиваю и анализирую структуру аудио\n"
+                        f"⚡ Разбиваю на части по естественным паузам",
                         parse_mode="Markdown"
                     )
                     
@@ -216,6 +223,16 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                     
                     if transcript_text:
                         logger.info(f"[AUDIO_UNIVERSAL] Большой файл успешно обработан: {len(transcript_text)} символов")
+                        
+                        # Обновляем сообщение о завершении
+                        await processing_msg.edit_text(
+                            f"✅ **Большой файл успешно обработан!**\n\n"
+                            f"📊 Размер: {file_size / (1024*1024):.1f} МБ\n"
+                            f"📝 Получен транскрипт: {len(transcript_text)} символов\n"
+                            f"🧹 Временные файлы очищены\n"
+                            f"💾 Сохраняю результат...",
+                            parse_mode="Markdown"
+                        )
                         
                         # Сохраняем результат
                         async with self.get_session() as session:
@@ -287,6 +304,8 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
             # Транскрибируем
             async with self.get_session() as session:
                 audio_service = get_audio_processing_service(session)
+                # Передаем информацию о формате для лучшей обработки
+                logger.info(f"[AUDIO_UNIVERSAL] Обрабатываем {file_format} файл: {file_name}")
                 result = await audio_service.process_audio(downloaded_file.getvalue())
                 
                 if not result.success:
@@ -814,6 +833,44 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
         """
         await call.answer()
         await state.set_state(TranscribeStates.waiting_text)
+    
+    def _extract_audio_format(self, file_name: Optional[str], mime_type: Optional[str]) -> str:
+        """
+        Извлекает формат аудио файла из имени файла или MIME типа
+        
+        Args:
+            file_name: Имя файла
+            mime_type: MIME тип файла
+            
+        Returns:
+            str: Формат файла (например, 'm4a', 'mp3', 'wav')
+        """
+        # Сначала пытаемся определить по расширению файла
+        if file_name:
+            file_name_lower = file_name.lower()
+            for ext in ['.m4a', '.mp3', '.wav', '.ogg', '.flac', '.aac', '.wma', '.opus']:
+                if file_name_lower.endswith(ext):
+                    return ext[1:]  # Убираем точку
+        
+        # Если не удалось по имени, пытаемся по MIME типу
+        if mime_type:
+            mime_to_format = {
+                'audio/mp4': 'm4a',
+                'audio/x-m4a': 'm4a',
+                'audio/mpeg': 'mp3',
+                'audio/mp3': 'mp3',
+                'audio/wav': 'wav',
+                'audio/x-wav': 'wav',
+                'audio/ogg': 'ogg',
+                'audio/flac': 'flac',
+                'audio/aac': 'aac',
+                'audio/x-aac': 'aac',
+                'audio/opus': 'opus'
+            }
+            return mime_to_format.get(mime_type, 'unknown')
+        
+        # Fallback
+        return 'unknown'
 
     async def _handle_audio_document(self, message: Message, state: FSMContext) -> None:
         """
@@ -858,11 +915,13 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
 
             file_size = message.document.file_size
             file_name = message.document.file_name
+            file_format = self._extract_audio_format(file_name, mime_type)
             
             # Показываем информацию о файле
             processing_msg = await message.answer(
                 f"🎵 **Обрабатываю аудио файл**\n\n"
                 f"📁 Файл: {file_name}\n"
+                f"🏷️ Формат: {file_format.upper()}\n"
                 f"📊 Размер: {file_size / (1024*1024):.1f} МБ\n"
                 f"🔄 Скачиваю и транскрибирую...",
                 parse_mode="Markdown"
@@ -885,6 +944,7 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
 
             async with self.get_session() as session:
                 audio_service = get_audio_processing_service(session)
+                logger.info(f"[AUDIO_DOCUMENT] Обрабатываем {file_format} файл: {file_name}")
                 result = await audio_service.process_audio(audio_data)
                 
                 if not result.success:

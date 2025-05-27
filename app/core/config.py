@@ -93,10 +93,9 @@ class Settings(BaseSettings):
     FFMPEG_PATH: str = "C:\\dev\\distr\\ffmpeg\\bin\\ffmpeg.exe"
     
     # Настройки аудио
-    MAX_AUDIO_SIZE: int = 1024 * 1024 * 1024  # 1 ГБ (наш лимит)
-    TELEGRAM_API_LIMIT: int = 20 * 1024 * 1024  # 20 МБ (лимит Telegram Bot API)
-    MAX_AUDIO_DURATION: int = 7200  # 2 часа (для больших файлов)
-    AUDIO_FORMATS: List[str] = ["mp3", "wav", "ogg", "m4a", "flac", "aac"]
+    MAX_AUDIO_SIZE: int = 1024 * 1024 * 1024  # 1GB
+    TELEGRAM_API_LIMIT: int = 20 * 1024 * 1024  # 20MB - лимит Telegram Bot API
+    AUDIO_FORMATS: List[str] = ["mp3", "wav", "ogg", "m4a", "flac", "aac", "wma", "opus"]
     
     # Настройки транскрибации
     DEFAULT_LANGUAGE: str = "ru"
@@ -107,7 +106,7 @@ class Settings(BaseSettings):
     # ========== НАСТРОЙКИ АВАТАРОВ ==========
     
     # Тестовый режим аватаров (для отладки)
-    AVATAR_TEST_MODE: bool = Field(True, env="AVATAR_TEST_MODE")
+    AVATAR_TEST_MODE: bool = Field(False, env="AVATAR_TEST_MODE")
     
     # Лимиты фотографий
     AVATAR_MIN_PHOTOS: int = Field(10, env="AVATAR_MIN_PHOTOS")
@@ -203,7 +202,7 @@ class Settings(BaseSettings):
     MINIO_BUCKET_PHOTOS: Optional[str] = Field(default="photos")
     MINIO_BUCKET_TEMP: Optional[str] = Field(default="temp")
     MINIO_PRESIGNED_EXPIRES: int = Field(default=3600)  # Время истечения presigned URL в секундах
-    TEMP_DIR: Path = Path("temp")
+    TEMP_DIR: Path = Path("/tmp") if os.name != 'nt' else Path(os.environ.get('TEMP', 'temp'))
     
     # Настройки алертов
     ENABLE_ALERTS: bool = False
@@ -234,6 +233,11 @@ class Settings(BaseSettings):
         "temp": "temp",
         "test": "test-bucket"
     }
+    
+    # Настройки временных файлов
+    TEMP_FILE_CLEANUP_INTERVAL: int = 3600  # Очистка каждый час (в секундах)
+    TEMP_FILE_MAX_AGE: int = 3600  # Максимальный возраст временных файлов (1 час)
+    AUTO_CLEANUP_ENABLED: bool = True  # Автоматическая очистка временных файлов
     
     class Config:
         """Конфигурация Pydantic"""
