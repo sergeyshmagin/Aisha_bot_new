@@ -267,7 +267,7 @@ async def show_avatar_gallery(callback: CallbackQuery, state: FSMContext):
         if not avatars:
             # Если аватаров нет
             text = """
-📁 **Мои аватары**
+🎭 **Мои аватары**
 
 🔍 У вас пока нет созданных аватаров
 
@@ -276,18 +276,25 @@ async def show_avatar_gallery(callback: CallbackQuery, state: FSMContext):
 • 🎭 Создавать персональные портреты
 • ✨ Экспериментировать со стилями
 
-👆 Нажмите \"Создать аватар\" чтобы начать!
+👆 Нажмите "Создать аватар" чтобы начать!
 """
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🆕 Создать аватар", callback_data="create_avatar")],
-                [InlineKeyboardButton(text="◀️ Главное меню", callback_data="back_to_main")]
+                [InlineKeyboardButton(text="🆕 Создать аватар", callback_data="avatar_create")],
+                [InlineKeyboardButton(text="◀️ Главное меню", callback_data="avatar_menu")]
             ])
             
-            await callback.message.edit_text(
-                text=text,
-                reply_markup=keyboard,
-                parse_mode="Markdown"
-            )
+            # Проверяем тип сообщения и выбираем правильный метод
+            if callback.message.photo:
+                # Если сообщение содержит фото, удаляем его и отправляем текстовое
+                try:
+                    await callback.message.delete()
+                except Exception:
+                    pass  # Игнорируем ошибки удаления
+                
+                await callback.message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
+            else:
+                # Если сообщение текстовое, просто редактируем
+                await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
             return
         
         # Сохраняем список аватаров в кэш
@@ -443,8 +450,36 @@ async def handle_delete_avatar(callback: CallbackQuery, state: FSMContext):
                     }
                     await send_avatar_card(callback, user.id, avatars, 0)
                 else:
-                    # Если аватаров не осталось, показываем заглушку
-                    await show_avatar_gallery(callback, state)
+                    # Если аватаров не осталось, показываем красивую заглушку
+                    text = """
+🎭 **Мои аватары**
+
+🔍 У вас больше нет аватаров
+
+🆕 Создайте новый аватар чтобы:
+• 🎨 Генерировать уникальные изображения
+• 🎭 Создавать персональные портреты
+• ✨ Экспериментировать со стилями
+
+👆 Нажмите "Создать аватар" чтобы начать!
+"""
+                    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="🆕 Создать аватар", callback_data="avatar_create")],
+                        [InlineKeyboardButton(text="◀️ Главное меню", callback_data="avatar_menu")]
+                    ])
+                    
+                    # Проверяем тип сообщения и выбираем правильный метод
+                    if callback.message.photo:
+                        # Если сообщение содержит фото, удаляем его и отправляем текстовое
+                        try:
+                            await callback.message.delete()
+                        except Exception:
+                            pass  # Игнорируем ошибки удаления
+                        
+                        await callback.message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
+                    else:
+                        # Если сообщение текстовое, просто редактируем
+                        await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
                 
                 await callback.answer("🗑️ Аватар удален")
             else:

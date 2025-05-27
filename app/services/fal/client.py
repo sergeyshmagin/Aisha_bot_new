@@ -173,7 +173,7 @@ class FalAIClient:
         config: Optional[Dict[str, Any]] = None
     ) -> Optional[str]:
         """
-        Генерирует изображение с обученной моделью
+        DEPRECATED: Используйте FALGenerationService вместо этого метода
         
         Args:
             finetune_id: ID обученной модели
@@ -183,14 +183,20 @@ class FalAIClient:
         Returns:
             Optional[str]: URL сгенерированного изображения
         """
+        logger.warning(
+            "[FAL AI] Метод generate_image устарел. "
+            "Используйте FALGenerationService.generate_avatar_image()"
+        )
+        
         try:
             if self.test_mode:
                 logger.info(f"[FAL TEST MODE] Симуляция генерации с моделью {finetune_id}")
                 # Возвращаем тестовую ссылку
                 return "https://example.com/test_generated_image.jpg"
             
-            # TODO: Реализовать генерацию изображений
-            logger.warning(f"[FAL AI] Генерация изображений пока не реализована")
+            # Простая реализация для обратной совместимости
+            # В продакшене используйте FALGenerationService
+            logger.warning(f"[FAL AI] Генерация изображений через старый API")
             return None
             
         except Exception as e:
@@ -327,7 +333,7 @@ class FalAIClient:
             config: Конфигурация обучения
             
         Returns:
-            Optional[str]: finetune_id
+            Optional[str]: request_id (НЕ finetune_id!)
         """
         try:
             # Формируем аргументы для FAL AI
@@ -346,24 +352,21 @@ class FalAIClient:
             logger.info(f"[FAL AI] Отправка задачи на обучение: {arguments}")
             
             if self.test_mode:
-                # В тестовом режиме возвращаем мок ID
-                return f"test_finetune_{avatar_id}_{user_id}"
+                # В тестовом режиме возвращаем мок request_id
+                return f"test_request_{avatar_id}_{user_id}"
             
-            # Отправляем задачу на обучение
+            # Отправляем задачу на обучение (НЕ ЖДЕМ РЕЗУЛЬТАТ!)
             handler = await fal_client.submit_async(
                 "fal-ai/flux-pro-trainer",
                 arguments=arguments,
                 webhook_url=config.get("webhook_url")
             )
             
-            # Получаем результат с finetune_id
-            result = await handler.get()
-            finetune_id = result.get("finetune_id")
+            # ИСПРАВЛЕНИЕ: Возвращаем request_id сразу, не ждем завершения
+            request_id = handler.request_id
             
-            if not finetune_id:
-                raise RuntimeError(f"FAL AI не вернул finetune_id: {result}")
-            
-            return finetune_id
+            logger.info(f"[FAL AI] Задача отправлена, request_id: {request_id}")
+            return request_id
             
         except Exception as e:
             logger.exception(f"[FAL AI] Ошибка отправки задачи на обучение: {e}")

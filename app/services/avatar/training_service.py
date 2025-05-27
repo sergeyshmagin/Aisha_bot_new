@@ -11,7 +11,7 @@ from sqlalchemy import select, update
 
 from ...core.config import settings
 from ...core.logger import get_logger
-from ...database.models import Avatar, AvatarPhoto, AvatarStatus
+from ...database.models import Avatar, AvatarPhoto, AvatarStatus, AvatarTrainingType
 from ..base import BaseService
 from ..fal.client import FalAIClient
 
@@ -94,12 +94,12 @@ class AvatarTrainingService(BaseService):
                 )
                 raise RuntimeError("FAL AI не смог запустить обучение")
             
-            # 5. Сохраняем finetune_id и обновляем конфигурацию
+            # 5. Сохраняем request_id и обновляем конфигурацию
             await self._save_training_info(avatar_id, finetune_id, custom_config)
             
             logger.info(
                 f"[TRAINING] Обучение аватара {avatar_id} запущено успешно: "
-                f"finetune_id={finetune_id}"
+                f"request_id={finetune_id}"
             )
             
             return True
@@ -130,32 +130,36 @@ class AvatarTrainingService(BaseService):
             bool: True если webhook обработан успешно
         """
         try:
-            # Извлекаем информацию из webhook
-            finetune_id = webhook_data.get("finetune_id")
+            # ИСПРАВЛЕНИЕ: Ищем по request_id, а не по finetune_id
+            request_id = webhook_data.get("request_id")
             status = webhook_data.get("status")
             progress = webhook_data.get("progress", 0)
             message = webhook_data.get("message", "")
             
-            if not finetune_id:
-                logger.warning("[WEBHOOK] Получен webhook без finetune_id")
+            if not request_id:
+                logger.warning("[WEBHOOK] Получен webhook без request_id")
                 return False
             
             logger.info(
                 f"[WEBHOOK] Получен статус обучения: "
-                f"finetune_id={finetune_id}, status={status}, progress={progress}"
+                f"request_id={request_id}, status={status}, progress={progress}"
             )
             
-            # Находим аватар по finetune_id
-            avatar_id = await self._find_avatar_by_finetune_id(finetune_id)
+            # Находим аватар по request_id
+            avatar = await self._find_avatar_by_request_id(request_id)
             
-            if not avatar_id:
-                logger.warning(f"[WEBHOOK] Аватар с finetune_id {finetune_id} не найден")
+            if not avatar:
+                logger.warning(f"[WEBHOOK] Аватар с request_id {request_id} не найден")
                 return False
             
-            # Обновляем статус аватара в зависимости от статуса FAL AI
-            await self._process_training_status_update(
-                avatar_id, status, progress, message
-            )
+            # ИСПРАВЛЕНИЕ: Обрабатываем результат в зависимости от статуса
+            if status == "completed":
+                await self._process_training_completion(avatar, webhook_data)
+            else:
+                # Обновляем статус аватара для промежуточных состояний
+                await self._process_training_status_update(
+                    avatar.id, status, progress, message
+                )
             
             return True
             
@@ -360,7 +364,7 @@ class AvatarTrainingService(BaseService):
     async def _save_training_info(
         self,
         avatar_id: UUID,
-        finetune_id: str,
+        request_id: str,
         training_config: Optional[Dict[str, Any]] = None
     ) -> None:
         """
@@ -368,12 +372,11 @@ class AvatarTrainingService(BaseService):
         
         Args:
             avatar_id: ID аватара
-            finetune_id: ID обучения FAL AI (может быть request_id)
+            request_id: Request ID от FAL AI для отслеживания
             training_config: Конфигурация обучения
         """
         update_data = {
-            "finetune_id": finetune_id,
-            "fal_request_id": finetune_id,  # Сохраняем как request_id тоже
+            "fal_request_id": request_id,  # ИСПРАВЛЕНИЕ: Сохраняем только request_id
             "updated_at": datetime.utcnow()
         }
         
@@ -417,6 +420,83 @@ class AvatarTrainingService(BaseService):
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
+    async def _process_training_completion(
+        self,
+        avatar: "Avatar",
+        webhook_data: Dict[str, Any]
+    ) -> None:
+        """
+        Обрабатывает завершение обучения аватара
+        
+        Args:
+            avatar: Аватар
+            webhook_data: Данные webhook от FAL AI
+        """
+        try:
+            result = webhook_data.get("result", {})
+            
+            # Базовые данные для обновления
+            update_data = {
+                "status": AvatarStatus.COMPLETED,
+                "training_progress": 100,
+                "training_completed_at": datetime.utcnow(),
+                "fal_response_data": result
+            }
+            
+            # ИСПРАВЛЕНИЕ: Обрабатываем результат в зависимости от типа обучения
+            if avatar.training_type == AvatarTrainingType.PORTRAIT:
+                # flux-lora-portrait-trainer возвращает файлы LoRA
+                diffusers_file = result.get("diffusers_lora_file", {})
+                config_file = result.get("config_file", {})
+                
+                update_data.update({
+                    "diffusers_lora_file_url": diffusers_file.get("url"),
+                    "config_file_url": config_file.get("url")
+                })
+                
+                logger.info(
+                    f"[WEBHOOK] Портретное обучение завершено для аватара {avatar.id}: "
+                    f"LoRA файл: {diffusers_file.get('url')}"
+                )
+                
+            else:
+                # flux-pro-trainer возвращает finetune_id
+                finetune_id = result.get("finetune_id")
+                
+                if finetune_id:
+                    update_data["finetune_id"] = finetune_id
+                    
+                    logger.info(
+                        f"[WEBHOOK] Стилевое обучение завершено для аватара {avatar.id}: "
+                        f"finetune_id: {finetune_id}"
+                    )
+                else:
+                    logger.warning(f"[WEBHOOK] Не получен finetune_id для аватара {avatar.id}")
+            
+            # Обновляем аватар в БД
+            stmt = (
+                update(Avatar)
+                .where(Avatar.id == avatar.id)
+                .values(**update_data)
+            )
+            
+            await self.session.execute(stmt)
+            await self.session.commit()
+            
+            # Удаляем фотографии после успешного завершения обучения
+            await self._cleanup_training_photos(avatar.id)
+            
+            logger.info(f"[WEBHOOK] Обучение аватара {avatar.id} успешно завершено")
+            
+        except Exception as e:
+            logger.exception(f"[WEBHOOK] Ошибка обработки завершения обучения {avatar.id}: {e}")
+            # Откатываемся к ошибке
+            await self._update_avatar_status(
+                avatar.id,
+                AvatarStatus.ERROR,
+                error_message=f"Ошибка обработки результата: {str(e)}"
+            )
+
     async def _process_training_status_update(
         self,
         avatar_id: UUID,
@@ -437,7 +517,6 @@ class AvatarTrainingService(BaseService):
         status_mapping = {
             "queued": AvatarStatus.TRAINING,
             "in_progress": AvatarStatus.TRAINING,
-            "completed": AvatarStatus.COMPLETED,
             "failed": AvatarStatus.ERROR,
             "cancelled": AvatarStatus.CANCELLED,
         }
@@ -449,14 +528,7 @@ class AvatarTrainingService(BaseService):
             "progress": progress,
         }
         
-        if new_status == AvatarStatus.COMPLETED:
-            update_params["training_completed_at"] = datetime.utcnow()
-            update_params["progress"] = 100
-            
-            # НОВОЕ: Удаляем фотографии после успешного завершения обучения
-            await self._cleanup_training_photos(avatar_id)
-            
-        elif new_status == AvatarStatus.ERROR:
+        if new_status == AvatarStatus.ERROR:
             update_params["error_message"] = message or "Ошибка обучения на FAL AI"
         
         await self._update_avatar_status(avatar_id, new_status, **update_params)
