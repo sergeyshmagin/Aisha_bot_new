@@ -5,11 +5,13 @@ import asyncio
 import logging
 import tempfile
 import shutil
+import os
 from typing import Optional
 from pathlib import Path
 from datetime import datetime
 
 from pydub import AudioSegment
+from app.core.temp_files import NamedTemporaryFile, mkdtemp
 from app.core.config import settings
 from app.services.audio_processing.types import AudioConverter, AudioMetadata
 from app.core.exceptions import AudioProcessingError
@@ -23,22 +25,47 @@ async def convert_to_mp3_ffmpeg(input_path: str) -> str:
     :return: путь к mp3-файлу
     :raises RuntimeError: если ffmpeg не установлен или произошла ошибка конвертации
     """
-    ffmpeg_path = shutil.which('ffmpeg') or settings.FFMPEG_PATH or 'ffmpeg'
+    # Пробуем найти ffmpeg в разных местах
+    ffmpeg_candidates = [
+        settings.FFMPEG_PATH,
+        '/usr/bin/ffmpeg',
+        '/usr/local/bin/ffmpeg',
+        '/bin/ffmpeg',
+        shutil.which('ffmpeg')
+    ]
+    
+    ffmpeg_path = None
+    for candidate in ffmpeg_candidates:
+        if candidate and os.path.exists(candidate):
+            ffmpeg_path = candidate
+            break
+    
+    if not ffmpeg_path:
+        # Последняя попытка через which
+        ffmpeg_path = shutil.which('ffmpeg')
+    
+    if not ffmpeg_path:
+        raise AudioProcessingError(f"ffmpeg не найден. Проверьте установку: sudo apt install ffmpeg")
+    
     temp_file_mp3 = input_path.rsplit('.', 1)[0] + '.mp3'
-    proc = await asyncio.create_subprocess_exec(
-        ffmpeg_path,
-        '-y',
-        '-i', input_path,
-        '-acodec', 'libmp3lame',
-        '-ab', '192k',
-        temp_file_mp3,
-        stdout=asyncio.subprocess.PIPE,
-        stderr=asyncio.subprocess.PIPE
-    )
-    _, stderr = await proc.communicate()
-    if proc.returncode != 0:
-        raise AudioProcessingError(f"ffmpeg error: {stderr.decode()}")
-    return temp_file_mp3
+    
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            ffmpeg_path,
+            '-y',
+            '-i', input_path,
+            '-acodec', 'libmp3lame',
+            '-ab', '192k',
+            temp_file_mp3,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        _, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            raise AudioProcessingError(f"ffmpeg error: {stderr.decode()}")
+        return temp_file_mp3
+    except FileNotFoundError:
+        raise AudioProcessingError(f"ffmpeg не найден по пути: {ffmpeg_path}. Установите ffmpeg: sudo apt install ffmpeg")
 
 class PydubAudioConverter(AudioConverter):
     """Конвертер аудио на основе pydub"""
@@ -54,9 +81,11 @@ class PydubAudioConverter(AudioConverter):
         """
         if use_ffmpeg:
             # Сохраняем во временный файл
-            with tempfile.NamedTemporaryFile(suffix='.ogg', delete=False) as temp_in:
+            with NamedTemporaryFile(suffix='.ogg', delete=False) as temp_in:
                 temp_in.write(audio_data)
                 temp_in_path = temp_in.name
+            
+            mp3_path = None
             try:
                 mp3_path = await convert_to_mp3_ffmpeg(temp_in_path)
                 with open(mp3_path, 'rb') as f:
@@ -64,16 +93,17 @@ class PydubAudioConverter(AudioConverter):
                 return result
             finally:
                 Path(temp_in_path).unlink(missing_ok=True)
-                Path(mp3_path).unlink(missing_ok=True)
+                if mp3_path:
+                    Path(mp3_path).unlink(missing_ok=True)
         else:
             try:
                 # Создаем временный файл для входных данных
-                with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_in:
+                with NamedTemporaryFile(suffix='.wav', delete=False) as temp_in:
                     temp_in.write(audio_data)
                     temp_in_path = temp_in.name
                 
                 # Создаем временный файл для выходных данных
-                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_out:
+                with NamedTemporaryFile(suffix='.mp3', delete=False) as temp_out:
                     temp_out_path = temp_out.name
                 
                 # Конвертируем в отдельном процессе
@@ -131,7 +161,7 @@ class PydubAudioConverter(AudioConverter):
             AudioProcessingError: При ошибке определения формата
         """
         try:
-            with tempfile.NamedTemporaryFile(suffix='.tmp', delete=False) as temp:
+            with NamedTemporaryFile(suffix='.tmp', delete=False) as temp:
                 temp.write(audio_data)
                 temp_path = temp.name
             
@@ -181,7 +211,7 @@ class PydubAudioConverter(AudioConverter):
             AudioProcessingError: При ошибке получения метаданных
         """
         try:
-            with tempfile.NamedTemporaryFile(suffix='.tmp', delete=False) as temp:
+            with NamedTemporaryFile(suffix='.tmp', delete=False) as temp:
                 temp.write(audio_data)
                 temp_path = temp.name
             

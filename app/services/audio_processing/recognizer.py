@@ -10,6 +10,7 @@ from datetime import datetime
 import io
 
 import aiohttp
+from app.core.temp_files import NamedTemporaryFile
 from app.core.config import settings
 from app.services.audio_processing.types import AudioRecognizer, TranscribeResult, AudioMetadata
 from app.core.exceptions import AudioProcessingError
@@ -41,7 +42,7 @@ class WhisperRecognizer(AudioRecognizer):
         """
         try:
             # Создаем временный файл
-            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp:
+            with NamedTemporaryFile(suffix='.mp3', delete=False) as temp:
                 temp.write(audio_data)
                 temp_path = temp.name
             

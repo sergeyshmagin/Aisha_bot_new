@@ -55,7 +55,7 @@ class AvatarMainHandler:
                 await callback.message.answer(text, reply_markup=keyboard)
             else:
                 # Если сообщение текстовое, просто редактируем
-            await callback.message.edit_text(text, reply_markup=keyboard)
+                await callback.message.edit_text(text, reply_markup=keyboard)
             
             await callback.answer()
             

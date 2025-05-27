@@ -183,3 +183,18 @@ tmp/
 # Файлы резервных копий
 *.backup
 *.orig
+
+# Временные скрипты развертывания (перемещены в archive/)
+fix_*.sh
+change_*.sh
+setup_*.sh
+install_*.sh
+test_*.py
+*_fixed.service
+*.service
+SYSTEMD_*.md
+FIREWALL_*.md
+INSTALL_*.md
+WINSCP_*.md
+nginx_*.conf
+env_example_*.txt

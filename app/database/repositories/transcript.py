@@ -5,7 +5,7 @@ import logging
 from typing import List, Optional, Union
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import select, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import UserTranscript
@@ -21,7 +21,38 @@ class TranscriptRepository(BaseRepository[UserTranscript]):
     def __init__(self, session: AsyncSession):
         super().__init__(session, UserTranscript)
 
-
+    async def get_user_transcripts(
+        self, 
+        user_id: Union[int, str, UUID], 
+        limit: int = 10, 
+        offset: int = 0
+    ) -> List[UserTranscript]:
+        """
+        Получить транскрипты пользователя с пагинацией
+        
+        Args:
+            user_id: ID пользователя
+            limit: Максимальное количество записей
+            offset: Смещение для пагинации
+            
+        Returns:
+            Список транскриптов пользователя
+        """
+        logger.info(f"[REPO] get_user_transcripts: user_id={user_id}, limit={limit}, offset={offset}")
+        
+        stmt = (
+            select(self.model)
+            .where(self.model.user_id == user_id)
+            .order_by(desc(self.model.created_at))
+            .limit(limit)
+            .offset(offset)
+        )
+        
+        result = await self.session.execute(stmt)
+        transcripts = result.scalars().all()
+        
+        logger.info(f"[REPO] get_user_transcripts: найдено {len(transcripts)} записей")
+        return list(transcripts)
 
     async def get_transcript_by_id(
         self, user_id: Union[int, str, UUID], transcript_id: UUID

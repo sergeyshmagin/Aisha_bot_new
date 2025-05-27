@@ -13,6 +13,7 @@ from pydub.silence import split_on_silence
 from app.core.config import settings
 from app.services.audio_processing.types import AudioProcessor
 from app.core.exceptions import AudioProcessingError
+from app.core.temp_files import NamedTemporaryFile, mkdtemp
 
 logger = logging.getLogger(__name__)
 
@@ -30,10 +31,10 @@ class AudioProcessor(AudioProcessor):
         """
         if use_ffmpeg:
             # Сохраняем во временный файл
-            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_in:
+            with NamedTemporaryFile(suffix='.mp3', delete=False) as temp_in:
                 temp_in.write(audio_data)
                 temp_in_path = temp_in.name
-            output_dir = tempfile.mkdtemp()
+            output_dir = mkdtemp()
             try:
                 chunk_paths = await self.split_audio_by_silence_ffmpeg(temp_in_path, output_dir)
                 # Читаем чанки в память
@@ -48,7 +49,7 @@ class AudioProcessor(AudioProcessor):
         else:
             try:
                 # Создаем временный файл
-                with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp:
+                with NamedTemporaryFile(suffix='.mp3', delete=False) as temp:
                     temp.write(audio_data)
                     temp_path = temp.name
                 
@@ -66,7 +67,7 @@ class AudioProcessor(AudioProcessor):
                 # Конвертируем части обратно в байты
                 result = []
                 for i, chunk in enumerate(chunks):
-                    with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_chunk:
+                    with NamedTemporaryFile(suffix='.mp3', delete=False) as temp_chunk:
                         chunk.export(temp_chunk.name, format="mp3")
                         try:
                             test_audio = AudioSegment.from_file(temp_chunk.name)
@@ -107,7 +108,7 @@ class AudioProcessor(AudioProcessor):
         """
         try:
             # Создаем временный файл
-            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp:
+            with NamedTemporaryFile(suffix='.mp3', delete=False) as temp:
                 temp.write(audio_data)
                 temp_path = temp.name
             
@@ -118,7 +119,7 @@ class AudioProcessor(AudioProcessor):
             normalized = audio.normalize()
             
             # Экспортируем результат
-            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_out:
+            with NamedTemporaryFile(suffix='.mp3', delete=False) as temp_out:
                 normalized.export(temp_out.name, format="mp3")
                 with open(temp_out.name, 'rb') as f:
                     result = f.read()
@@ -151,7 +152,7 @@ class AudioProcessor(AudioProcessor):
         """
         try:
             # Создаем временный файл
-            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp:
+            with NamedTemporaryFile(suffix='.mp3', delete=False) as temp:
                 temp.write(audio_data)
                 temp_path = temp.name
             
@@ -178,7 +179,7 @@ class AudioProcessor(AudioProcessor):
             trimmed = audio[start:end]
             
             # Экспортируем результат
-            with tempfile.NamedTemporaryFile(suffix='.mp3', delete=False) as temp_out:
+            with NamedTemporaryFile(suffix='.mp3', delete=False) as temp_out:
                 trimmed.export(temp_out.name, format="mp3")
                 with open(temp_out.name, 'rb') as f:
                     result = f.read()

@@ -47,7 +47,8 @@ class AudioService:
         """
         try:
             logger.info("[AudioService] Начало process_audio (ffmpeg pipeline)")
-            temp_dir = os.path.join(os.getcwd(), "storage", "temp")
+            # Используем абсолютный путь для systemd
+            temp_dir = "/opt/aisha-backend/storage/temp"
             os.makedirs(temp_dir, exist_ok=True)
             ogg_path = os.path.join(temp_dir, f"{uuid.uuid4()}.ogg")
             mp3_path = os.path.join(temp_dir, f"{uuid.uuid4()}.mp3")
