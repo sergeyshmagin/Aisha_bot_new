@@ -313,7 +313,7 @@ class PhotoUploadService(BaseService):
 
     async def _check_duplicates(self, avatar_id: UUID, photo_hash: str) -> None:
         """
-        Проверяет на дубликаты фотографий
+        Проверяет на дубликаты фотографий используя PhotoValidationService
         
         Args:
             avatar_id: ID аватара
@@ -322,17 +322,19 @@ class PhotoUploadService(BaseService):
         Raises:
             ValueError: При обнаружении дубликата
         """
-        existing_query = (
-            select(AvatarPhoto.id)
-            .where(
-                AvatarPhoto.avatar_id == avatar_id,
-                AvatarPhoto.file_hash == photo_hash
-            )
-        )
-        result = await self.session.execute(existing_query)
-        existing = result.scalar_one_or_none()
+        # РЕФАКТОРИНГ: Используем PhotoValidationService вместо дублирования логики
+        from .photo_validation import PhotoValidationService
         
-        if existing:
+        validator = PhotoValidationService(self.session)
+        
+        # Создаем фиктивные данные для проверки дубликата
+        result = PhotoValidationResult(is_valid=True)
+        result.metadata['photo_hash'] = photo_hash
+        
+        # Используем существующий метод валидации
+        await validator._validate_duplicates(b'', avatar_id, result)
+        
+        if not result.is_valid:
             raise ValueError("Такая фотография уже была загружена")
 
     async def _get_next_upload_order(self, avatar_id: UUID) -> int:

@@ -240,8 +240,6 @@ class AvatarPhoto(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     validated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     
-    # =================== LEGACY FIELD - ЗАКОММЕНТИРОВАНО ===================    # LEGACY: Поле для совместимости    # TODO: Удалить после выполнения миграции Alembic e3da12f2e9cc    # order: Mapped[int] = mapped_column(Integer, default=0)  # LEGACY: используйте upload_order вместо этого    # =================== END LEGACY FIELD ===================
-
     # Связи
     avatar: Mapped[Avatar] = relationship(back_populates="photos")
     user: Mapped[User] = relationship(back_populates="avatar_photos")

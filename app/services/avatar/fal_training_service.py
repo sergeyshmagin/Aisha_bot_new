@@ -205,6 +205,7 @@ class FALTrainingService:
     ) -> str:
         """
         Обучение портретной модели через Flux LoRA Portrait Trainer
+        Исправлено согласно официальной документации FAL AI
         """
         if not self.fal_client:
             raise RuntimeError("FAL client не инициализирован")
@@ -220,17 +221,45 @@ class FALTrainingService:
             "create_masks": settings.FAL_PORTRAIT_CREATE_MASKS,
         }
         
-        # Запускаем обучение с webhook
-        result = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: self.fal_client.submit(
+        logger.info(f"🎭 Запуск flux-lora-portrait-trainer: trigger={trigger_phrase}")
+        logger.info(f"🎭 Параметры: steps={steps}, lr={learning_rate}")
+        logger.info(f"🎭 Webhook URL: {webhook_url}")
+        logger.info(f"🎭 Полная конфигурация: {json.dumps(config, indent=2)}")
+        
+        # Используем submit_async согласно документации FAL AI
+        try:
+            # Детальное логирование для отладки webhook
+            logger.info(f"🔗 ОТЛАДКА WEBHOOK (ПОРТРЕТ):")
+            logger.info(f"   Webhook URL перед отправкой: {webhook_url}")
+            logger.info(f"   Тип webhook_url: {type(webhook_url)}")
+            logger.info(f"   Webhook пустой?: {not webhook_url}")
+            
+            if webhook_url:
+                logger.info(f"   ✅ Webhook будет передан в FAL AI")
+            else:
+                logger.warning(f"   ⚠️ Webhook НЕ будет передан (пустой)")
+            
+            logger.info(f"🚀 Отправка запроса в FAL AI...")
+            logger.info(f"   Endpoint: fal-ai/flux-lora-portrait-trainer")
+            logger.info(f"   Arguments: {json.dumps(config, indent=2)}")
+            logger.info(f"   Webhook URL: {webhook_url}")
+            
+            handler = await self.fal_client.submit_async(
                 "fal-ai/flux-lora-portrait-trainer",
                 arguments=config,
                 webhook_url=webhook_url
             )
-        )
-        
-        return result.request_id
+            
+            request_id = handler.request_id
+            logger.info(f"🎭 Успешно отправлен запрос в FAL AI: {request_id}")
+            logger.info(f"🔗 Webhook должен быть настроен для: {webhook_url}")
+            
+            return request_id
+            
+        except Exception as e:
+            logger.exception(f"Ошибка отправки запроса в FAL AI: {e}")
+            logger.error(f"🔗 Webhook URL при ошибке: {webhook_url}")
+            raise
     
     async def _train_general_model(
         self,
@@ -244,6 +273,7 @@ class FALTrainingService:
     ) -> Dict[str, Any]:
         """
         Обучение универсальной модели через Flux Pro Trainer
+        Исправлено согласно официальной документации FAL AI
         """
         # ИСПРАВЛЕНИЕ: В тестовом режиме не проверяем FAL клиент
         if not self.test_mode and not self.fal_client:
@@ -266,23 +296,24 @@ class FALTrainingService:
             except Exception as e:
                 logger.warning(f"Не удалось получить данные для комментария: {e}")
         
-        # Конфигурация для flux-pro-trainer с оптимизированными параметрами
+        # Конфигурация для flux-pro-trainer согласно официальной документации
         config = {
-            "data_url": images_data_url,
+            "data_url": images_data_url,  # Правильное имя параметра согласно документации
             "mode": settings.FAL_PRO_MODE,
+            "finetune_comment": finetune_comment,  # Обязательный параметр согласно документации
             "iterations": iterations,
             "learning_rate": learning_rate,
             "priority": priority,
-            "finetune_type": settings.FAL_PRO_FINETUNE_TYPE,
-            "lora_rank": settings.FAL_PRO_LORA_RANK,
             "captioning": settings.FAL_PRO_CAPTIONING,
             "trigger_word": trigger_word,
-            "finetune_comment": finetune_comment,
+            "lora_rank": settings.FAL_PRO_LORA_RANK,
+            "finetune_type": settings.FAL_PRO_FINETUNE_TYPE,
         }
         
         logger.info(f"🎨 Запуск flux-pro-trainer: {finetune_comment}, trigger: {trigger_word}")
         logger.info(f"🎨 Параметры: iterations={iterations}, lr={learning_rate}, priority={priority}")
         logger.info(f"🎨 Webhook URL: {webhook_url}")
+        logger.info(f"🎨 Полная конфигурация: {json.dumps(config, indent=2)}")
         
         # ИСПРАВЛЕНИЕ: В тестовом режиме возвращаем мок результат
         if self.test_mode:
@@ -293,38 +324,72 @@ class FALTrainingService:
                 "request_id": mock_request_id
             }
         
-        # ИСПРАВЛЕНИЕ: Запускаем обучение с webhook_url как отдельным параметром
-        result = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: self.fal_client.submit(
+        # ИСПРАВЛЕНИЕ: Используем submit_async согласно документации FAL AI
+        try:
+            # Детальное логирование для отладки webhook
+            logger.info(f"🔗 ОТЛАДКА WEBHOOK:")
+            logger.info(f"   Webhook URL перед отправкой: {webhook_url}")
+            logger.info(f"   Тип webhook_url: {type(webhook_url)}")
+            logger.info(f"   Webhook пустой?: {not webhook_url}")
+            
+            if webhook_url:
+                logger.info(f"   ✅ Webhook будет передан в FAL AI")
+            else:
+                logger.warning(f"   ⚠️ Webhook НЕ будет передан (пустой)")
+            
+            logger.info(f"🚀 Отправка запроса в FAL AI...")
+            logger.info(f"   Endpoint: fal-ai/flux-pro-trainer")
+            logger.info(f"   Arguments: {json.dumps(config, indent=2)}")
+            logger.info(f"   Webhook URL: {webhook_url}")
+            
+            handler = await self.fal_client.submit_async(
                 "fal-ai/flux-pro-trainer",
                 arguments=config,
                 webhook_url=webhook_url
             )
-        )
-        
-        return {
-            "finetune_id": result.request_id,
-            "request_id": result.request_id
-        }
+            
+            request_id = handler.request_id
+            logger.info(f"🎨 Успешно отправлен запрос в FAL AI: {request_id}")
+            logger.info(f"🔗 Webhook должен быть настроен для: {webhook_url}")
+            
+            return {
+                "finetune_id": request_id,
+                "request_id": request_id
+            }
+            
+        except Exception as e:
+            logger.exception(f"Ошибка отправки запроса в FAL AI: {e}")
+            logger.error(f"🔗 Webhook URL при ошибке: {webhook_url}")
+            raise
     
     def _get_webhook_url(self, training_type: str) -> Optional[str]:
         """
         Формирует URL webhook с учетом типа обучения
         Теперь использует новый API сервер с SSL
         """
+        logger.info(f"🔗 ФОРМИРОВАНИЕ WEBHOOK URL:")
+        logger.info(f"   Training type: {training_type}")
+        logger.info(f"   Base webhook URL: {self.webhook_url}")
+        
         if not self.webhook_url:
+            logger.warning(f"   ❌ Base webhook URL пустой!")
             return None
             
         # Используем новый endpoint API сервера
         base_url = "https://aibots.kz:8443/api/v1/avatar/status_update"
+        logger.info(f"   Используем base_url: {base_url}")
         
         # Добавляем параметр типа обучения
         separator = "&" if "?" in base_url else "?"
-        return f"{base_url}{separator}training_type={training_type}"
+        final_url = f"{base_url}{separator}training_type={training_type}"
+        
+        logger.info(f"   Separator: '{separator}'")
+        logger.info(f"   ✅ Итоговый webhook URL: {final_url}")
+        
+        return final_url
     
     async def check_training_status(self, request_id: str, training_type: str) -> Dict[str, Any]:
-        """Проверяет статус обучения"""
+        """Проверяет статус обучения согласно документации FAL AI"""
         try:
             # 🧪 Тестовый режим
             if self.test_mode:
@@ -333,17 +398,16 @@ class FALTrainingService:
             if not self.fal_client:
                 raise RuntimeError("FAL client не инициализирован")
             
-            # Проверяем статус через FAL API
+            # Проверяем статус через FAL API согласно документации
             if training_type == "portrait":
                 endpoint = "fal-ai/flux-lora-portrait-trainer"
             else:
                 endpoint = "fal-ai/flux-pro-trainer"
             
-            status = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self.fal_client.status(endpoint, request_id, with_logs=True)
-            )
+            # Используем status_async согласно документации
+            status = await self.fal_client.status_async(endpoint, request_id, with_logs=True)
             
+            logger.info(f"🔍 Статус обучения {request_id}: {status}")
             return status
                 
         except Exception as e:
@@ -390,7 +454,7 @@ class FALTrainingService:
         }
     
     async def get_training_result(self, request_id: str, training_type: str) -> Dict[str, Any]:
-        """Получает результат обучения"""
+        """Получает результат обучения согласно документации FAL AI"""
         try:
             # 🧪 Тестовый режим
             if self.test_mode:
@@ -408,17 +472,16 @@ class FALTrainingService:
             if not self.fal_client:
                 raise RuntimeError("FAL client не инициализирован")
             
-            # Получаем результат через FAL API
+            # Получаем результат через FAL API согласно документации
             if training_type == "portrait":
                 endpoint = "fal-ai/flux-lora-portrait-trainer"
             else:
                 endpoint = "fal-ai/flux-pro-trainer"
             
-            result = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self.fal_client.result(endpoint, request_id)
-            )
+            # Используем result_async согласно документации
+            result = await self.fal_client.result_async(endpoint, request_id)
             
+            logger.info(f"🎯 Результат обучения {request_id}: {result}")
             return result
                 
         except Exception as e:

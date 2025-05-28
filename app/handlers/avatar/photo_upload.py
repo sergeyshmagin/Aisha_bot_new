@@ -92,8 +92,7 @@ class PhotoUploadHandler:
                 # Показываем обычные инструкции
                 intro_text = self._get_upload_intro_text(avatar_name, training_type, avatar_gender)
                 await callback.message.edit_text(
-                    text=intro_text,
-                    parse_mode="Markdown"
+                    text=intro_text
                 )
             
             logger.info(f"Пользователь {user_id} начал загрузку фото для аватара {avatar_id}")
@@ -119,31 +118,30 @@ class PhotoUploadHandler:
         type_text = "🎨 Портретный"  # Значение по умолчанию
         
         text = f"""
-🔄 **Продолжение создания аватара**
+🔄 Продолжение создания аватара
 
-🎭 **Имя:** {avatar_name}
-📸 **Уже загружено:** {existing_count}/{self.max_photos} фото
-👤 **Пол:** {gender_text}
-🎨 **Тип:** {type_text}
+🎭 Имя: {avatar_name}
+📸 Уже загружено: {existing_count}/{self.max_photos} фото
+👤 Пол: {gender_text}
+🎨 Тип: {type_text}
 
-✅ **Отлично!** Вы можете продолжить загрузку фотографий с того места, где остановились.
+✅ Отлично! Вы можете продолжить загрузку фотографий с того места, где остановились.
 
-📤 **Варианты действий:**
+📤 Варианты действий:
 • Загрузить еще фото для улучшения качества
 • Посмотреть уже загруженные фото  
 • Начать обучение (если загружено ≥{self.min_photos} фото)
 
-💡 **Совет:** Для лучшего результата рекомендуется {self.max_photos} фото
+💡 Совет: Для лучшего результата рекомендуется {self.max_photos} фото
 
-📸 **Продолжайте отправлять фотографии:**
+📸 Продолжайте отправлять фотографии:
 """
         
         keyboard = get_photo_upload_keyboard(existing_count, self.min_photos, self.max_photos)
         
         await callback.message.edit_text(
             text=text,
-            reply_markup=keyboard,
-            parse_mode="Markdown"
+            reply_markup=keyboard
         )
     
     async def handle_photo_upload(self, message: Message, state: FSMContext, bot: Bot):
@@ -180,11 +178,10 @@ class PhotoUploadHandler:
                 photos, total = await avatar_service.get_avatar_photos(avatar_id)
                 if total >= self.max_photos:
                     await message.answer(
-                        f"📸 **Достигнут лимит фотографий!**\n\n"
+                        f"📸 Достигнут лимит фотографий!\n\n"
                         f"Максимум: {self.max_photos} фото\n"
                         f"Загружено: {total}\n\n"
-                        f"Можете удалить ненужные фото в галерее или начать обучение.",
-                        parse_mode="Markdown"
+                        f"Можете удалить ненужные фото в галерее или начать обучение."
                     )
                     return
             
@@ -286,11 +283,11 @@ class PhotoUploadHandler:
             
             # Создаем caption с ошибкой и советами
             caption = f"""
-❌ **Фото не принято:** {error_text}
+❌ Фото не принято: {error_text}
 
-📸 **Совет:** Используйте четкие фото без фильтров, хорошего разрешения и качества.
+📸 Совет: Используйте четкие фото без фильтров, хорошего разрешения и качества.
 
-💡 **Рекомендации:**
+💡 Рекомендации:
 • Размер от 512×512 пикселей
 • Формат JPG или PNG
 • Без размытия и фильтров
@@ -303,8 +300,7 @@ class PhotoUploadHandler:
                 chat_id=message.chat.id,
                 photo=photo_input,
                 caption=caption,
-                reply_markup=keyboard,
-                parse_mode="Markdown"
+                reply_markup=keyboard
             )
             
             logger.warning(f"Показано фото с ошибкой валидации: {error}")
@@ -312,7 +308,7 @@ class PhotoUploadHandler:
         except Exception as e:
             logger.exception(f"Ошибка при показе фото с ошибкой: {e}")
             # Fallback на обычное текстовое сообщение
-            await message.answer(f"❌ **Ошибка загрузки**\n\n{str(error)}", parse_mode="Markdown")
+            await message.answer(f"❌ Ошибка загрузки\n\n{str(error)}")
 
     # Остальные методы аналогично из оригинального файла...
     
@@ -328,23 +324,23 @@ class PhotoUploadHandler:
             tips = "• Качественные фото с хорошим освещением\n• Разные позы и углы\n• Без фильтров и масок"
         
         return f"""
-📸 **Загрузка фотографий**
+📸 Загрузка фотографий
 
-{gender_emoji} **Аватар:** {name}
-🎯 **Тип:** {training_type.title()}
+{gender_emoji} Аватар: {name}
+🎯 Тип: {training_type.title()}
 
-📋 **Рекомендации:**
+📋 Рекомендации:
 {tips}
 
-📊 **Требования:**
+📊 Требования:
 • Минимум: {self.min_photos} фото
 • Рекомендуется: {self.max_photos} фото
 • Формат: JPG, PNG (до 20MB)
 • Размер: минимум 512×512 пикселей
 
-💡 **Совет:** Чем больше качественных фото, тем лучше результат!
+💡 Совет: Чем больше качественных фото, тем лучше результат!
 
-📤 **Начните отправлять фотографии:**
+📤 Начните отправлять фотографии:
 """
 
     async def _show_upload_progress(self, message: Message, photos_count: int, avatar_id: UUID):
@@ -354,24 +350,24 @@ class PhotoUploadHandler:
         progress_percent = int((photos_count / self.min_photos) * 100) if photos_count <= self.min_photos else 100
         
         if photos_count < self.min_photos:
-            status = "📤 **Загрузка продолжается**"
+            status = "📤 Загрузка продолжается"
             need_more = self.min_photos - photos_count
             next_step = f"Загрузите еще {need_more} фото для продолжения"
         elif photos_count < self.max_photos:
-            status = "✅ **Готово к обучению!**"
+            status = "✅ Готово к обучению!"
             remaining = self.max_photos - photos_count
             next_step = f"Для максимального качества рекомендуем загрузить еще {remaining} фото (до {self.max_photos} в общей сложности)"
         else:
-            status = "🔥 **Отличная коллекция!**"
+            status = "🔥 Отличная коллекция!"
             next_step = "Достигнут максимум фото. Можете начинать обучение!"
         
         text = f"""
 {status}
 
-📊 **Прогресс:** `{progress_bar}` {progress_percent}%
-📸 **Загружено:** {photos_count}/{self.max_photos}
+📊 Прогресс: `{progress_bar}` {progress_percent}%
+📸 Загружено: {photos_count}/{self.max_photos}
 
-💡 **Далее:** {next_step}
+💡 Далее: {next_step}
 """
         
         keyboard = get_photo_upload_keyboard(photos_count, self.min_photos, self.max_photos)
@@ -385,8 +381,7 @@ class PhotoUploadHandler:
                 prev_message = user_progress_messages[user_id]
                 await prev_message.edit_text(
                     text=text,
-                    reply_markup=keyboard,
-                    parse_mode="Markdown"
+                    reply_markup=keyboard
                 )
                 return
             except Exception:
@@ -397,8 +392,7 @@ class PhotoUploadHandler:
         try:
             sent_message = await message.answer(
                 text=text,
-                reply_markup=keyboard,
-                parse_mode="Markdown"
+                reply_markup=keyboard
             )
             user_progress_messages[user_id] = sent_message
         except Exception as e:
@@ -415,21 +409,21 @@ class PhotoUploadHandler:
         
         if "не прошло валидацию" in error_msg:
             if "размер" in error_msg:
-                text = "❌ **Фото слишком маленькое**\n\nМинимальный размер: 512×512 пикселей"
+                text = "❌ Фото слишком маленькое\n\nМинимальный размер: 512×512 пикселей"
             elif "дубликат" in error_msg or "уже загружено" in error_msg:
-                text = "❌ **Дубликат фотографии**\n\nЭто фото уже было загружено ранее"
+                text = "❌ Дубликат фотографии\n\nЭто фото уже было загружено ранее"
             elif "формат" in error_msg:
-                text = "❌ **Неподдерживаемый формат**\n\nИспользуйте JPG или PNG"
+                text = "❌ Неподдерживаемый формат\n\nИспользуйте JPG или PNG"
             elif "размер файла" in error_msg:
-                text = "❌ **Файл слишком большой**\n\nМаксимальный размер: 20MB"
+                text = "❌ Файл слишком большой\n\nМаксимальный размер: 20MB"
             else:
-                text = f"❌ **Ошибка валидации**\n\n{str(error)}"
+                text = f"❌ Ошибка валидации\n\n{str(error)}"
         elif "превышен лимит" in error_msg:
-            text = f"❌ **Достигнут лимит**\n\nМаксимум {self.max_photos} фотографий"
+            text = f"❌ Достигнут лимит\n\nМаксимум {self.max_photos} фотографий"
         else:
-            text = "❌ **Ошибка загрузки**\n\nПопробуйте другую фотографию"
+            text = "❌ Ошибка загрузки\n\nПопробуйте другую фотографию"
         
-        await message.answer(text, parse_mode="Markdown")
+        await message.answer(text)
         logger.warning(f"Ошибка загрузки фото: {error}")
 
     async def _update_gallery_if_open(self, user_id: int, avatar_id: UUID, photos: List[AvatarPhoto]):
@@ -475,7 +469,7 @@ class PhotoUploadHandler:
             
             # Показываем подтверждение
             text = f"""
-🗑️ **Создание аватара отменено**
+🗑️ Создание аватара отменено
 
 Драфт аватара "{avatar_name}" и все загруженные фотографии удалены.
 
@@ -487,8 +481,7 @@ class PhotoUploadHandler:
             
             await callback.message.edit_text(
                 text=text,
-                reply_markup=keyboard,
-                parse_mode="Markdown"
+                reply_markup=keyboard
             )
             
         except Exception as e:
@@ -568,11 +561,11 @@ class PhotoUploadHandler:
                 
                 # Создаем caption
                 caption = f"""
-📸 **Галерея: {avatar_name}**
+📸 Галерея: {avatar_name}
 
-🖼️ **Фото {photo_index} из {total}**
-📅 **Загружено:** {photo.created_at.strftime("%d.%m.%Y %H:%M") if photo.created_at else "Неизвестно"}
-📏 **Размер:** {photo.width}×{photo.height} px
+🖼️ Фото {photo_index} из {total}
+📅 Загружено: {photo.created_at.strftime("%d.%m.%Y %H:%M") if photo.created_at else "Неизвестно"}
+📏 Размер: {photo.width}×{photo.height} px
 """
                 
                 # Создаем клавиатуру
@@ -581,7 +574,7 @@ class PhotoUploadHandler:
                 # Обновляем фото и caption на месте
                 from aiogram.types import InputMediaPhoto
                 photo_input = BufferedInputFile(file_data, filename=f"photo_{photo_index}.jpg")
-                media = InputMediaPhoto(media=photo_input, caption=caption, parse_mode="Markdown")
+                media = InputMediaPhoto(media=photo_input, caption=caption)
                 
                 try:
                     await callback.message.edit_media(media=media, reply_markup=keyboard)
@@ -593,8 +586,7 @@ class PhotoUploadHandler:
                         chat_id=callback.message.chat.id,
                         photo=photo_input,
                         caption=caption,
-                        reply_markup=keyboard,
-                        parse_mode="Markdown"
+                        reply_markup=keyboard
                     )
                 
             except Exception as storage_error:
@@ -661,23 +653,23 @@ class PhotoUploadHandler:
             
             # Создаем новое текстовое сообщение с экраном загрузки
             text = f"""
-🔄 **Продолжение создания аватара**
+🔄 Продолжение создания аватара
 
-🎭 **Имя:** {avatar_name}
-📸 **Уже загружено:** {total}/{self.max_photos} фото
-👤 **Пол:** Мужской
-🎨 **Тип:** Портретный
+🎭 Имя: {avatar_name}
+📸 Уже загружено: {total}/{self.max_photos} фото
+👤 Пол: Мужской
+🎨 Тип: Портретный
 
-✅ **Отлично!** Вы можете продолжить загрузку фотографий с того места, где остановились.
+✅ Отлично! Вы можете продолжить загрузку фотографий с того места, где остановились.
 
-📤 **Варианты действий:**
+📤 Варианты действий:
 • Загрузить еще фото для улучшения качества
 • Посмотреть уже загруженные фото  
 • Начать обучение (если загружено ≥{self.min_photos} фото)
 
-💡 **Совет:** Для лучшего результата рекомендуется {self.max_photos} фото
+💡 Совет: Для лучшего результата рекомендуется {self.max_photos} фото
 
-📸 **Продолжайте отправлять фотографии:**
+📸 Продолжайте отправлять фотографии:
 """
             
             keyboard = get_photo_upload_keyboard(total, self.min_photos, self.max_photos)
@@ -685,8 +677,7 @@ class PhotoUploadHandler:
             await callback.bot.send_message(
                 chat_id=callback.message.chat.id,
                 text=text,
-                reply_markup=keyboard,
-                parse_mode="Markdown"
+                reply_markup=keyboard
             )
             
             logger.info(f"Пользователь {user_id} вернулся к загрузке фото")
@@ -781,7 +772,6 @@ class PhotoUploadHandler:
             avatar_cost = settings.AVATAR_CREATION_COST
             
             # Проверяем тестовый режим
-            from app.core.config import settings
             is_test_mode = getattr(settings, 'AVATAR_TEST_MODE', False)
             
             # Формируем текст подтверждения
@@ -789,25 +779,25 @@ class PhotoUploadHandler:
             type_text = "🖼️ Художественный" if training_type == "style" else "🎨 Портретный"
             
             text = f"""
-🦋 **ПРОВЕРЬТЕ ДАННЫЕ АВАТАРА**
+🦋 ПРОВЕРЬТЕ ДАННЫЕ АВАТАРА
 
-👤 **Имя:** {avatar_name}
-🚻 **Пол:** {gender_text}
-📸 **Загружено фото:** {photos_count}
+👤 Имя: {avatar_name}
+🚻 Пол: {gender_text}
+📸 Загружено фото: {photos_count}
 
-💎 **Стоимость аватара:** {avatar_cost}
-💰 **Ваш баланс:** {user_balance}
+💎 Стоимость аватара: {avatar_cost}
+💰 Ваш баланс: {user_balance}
 """
             
             if is_test_mode:
-                text += "\n🧪 **ТЕСТОВЫЙ РЕЖИМ** - обучение имитируется без реальных затрат\n"
+                text += "\n🧪 ТЕСТОВЫЙ РЕЖИМ - обучение имитируется без реальных затрат\n"
             
             text += "\nЕсли всё верно, нажмите Создать аватар:"
             
             # Проверяем достаточность баланса
             if not is_test_mode and user_balance < avatar_cost:
                 # Недостаточно средств
-                text += f"\n\n❌ **Недостаточно средств!**\nНеобходимо: {avatar_cost - user_balance} кредитов"
+                text += f"\n\n❌ Недостаточно средств!\nНеобходимо: {avatar_cost - user_balance} кредитов"
                 
                 keyboard = InlineKeyboardMarkup(inline_keyboard=[
                     [
@@ -842,8 +832,7 @@ class PhotoUploadHandler:
             
             await callback.message.edit_text(
                 text=text,
-                reply_markup=keyboard,
-                parse_mode="Markdown"
+                reply_markup=keyboard
             )
             
             logger.info(f"Показан экран подтверждения обучения для пользователя {user_id}, аватар {avatar_id}")

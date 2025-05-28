@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     
     # FAL AI - Pro Trainer Settings (flux-pro-trainer)
     FAL_PRO_MODE: str = Field("character", env="FAL_PRO_MODE")
-    FAL_PRO_ITERATIONS: int = Field(500, env="FAL_PRO_ITERATIONS") 
+    FAL_PRO_ITERATIONS: int = Field(100, env="FAL_PRO_ITERATIONS") 
     FAL_PRO_LEARNING_RATE: float = Field(1e-4, env="FAL_PRO_LEARNING_RATE")
     FAL_PRO_PRIORITY: str = Field("quality", env="FAL_PRO_PRIORITY")
     FAL_PRO_LORA_RANK: int = Field(32, env="FAL_PRO_LORA_RANK")
@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     FAL_CAPTIONING: bool = Field(True, env="FAL_CAPTIONING")
     
     # FAL AI - Portrait Trainer Settings
-    FAL_PORTRAIT_STEPS: int = Field(1000, env="FAL_PORTRAIT_STEPS")
+    FAL_PORTRAIT_STEPS: int = Field(100, env="FAL_PORTRAIT_STEPS")
     FAL_PORTRAIT_LEARNING_RATE: float = Field(0.0002, env="FAL_PORTRAIT_LEARNING_RATE")
     FAL_PORTRAIT_SUBJECT_CROP: bool = Field(True, env="FAL_PORTRAIT_SUBJECT_CROP")
     FAL_PORTRAIT_CREATE_MASKS: bool = Field(True, env="FAL_PORTRAIT_CREATE_MASKS")
@@ -75,16 +75,16 @@ class Settings(BaseSettings):
     
     # FAL AI - Quality Presets
     FAL_PRESET_FAST: Dict[str, Any] = {
-        "portrait": {"steps": 500, "learning_rate": 0.0003},
-        "general": {"iterations": 200, "learning_rate": 2e-4, "priority": "speed"}
+        "portrait": {"steps": 100, "learning_rate": 0.0003},
+        "general": {"iterations": 100, "learning_rate": 2e-4, "priority": "speed"}
     }
     FAL_PRESET_BALANCED: Dict[str, Any] = {
-        "portrait": {"steps": 1000, "learning_rate": 0.0002},
-        "general": {"iterations": 500, "learning_rate": 1e-4, "priority": "quality"}
+        "portrait": {"steps": 100, "learning_rate": 0.0002},
+        "general": {"iterations": 100, "learning_rate": 1e-4, "priority": "quality"}
     }
     FAL_PRESET_QUALITY: Dict[str, Any] = {
-        "portrait": {"steps": 2500, "learning_rate": 0.0001},
-        "general": {"iterations": 1000, "learning_rate": 5e-5, "priority": "quality"}
+        "portrait": {"steps": 100, "learning_rate": 0.0001},
+        "general": {"iterations": 100, "learning_rate": 5e-5, "priority": "quality"}
     }
     
     # Пути

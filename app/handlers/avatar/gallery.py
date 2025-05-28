@@ -283,7 +283,7 @@ async def show_avatar_gallery(callback: CallbackQuery, state: FSMContext):
 👆 Нажмите "Создать аватар" чтобы начать!
 """
             keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🆕 Создать аватар", callback_data="avatar_create")],
+                [InlineKeyboardButton(text="🆕 Создать аватар", callback_data="create_avatar")],
                 [InlineKeyboardButton(text="◀️ Главное меню", callback_data="avatar_menu")]
             ])
             
@@ -476,7 +476,7 @@ async def handle_delete_avatar(callback: CallbackQuery, state: FSMContext):
 👆 Нажмите "Создать аватар" чтобы начать!
 """
                     keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                        [InlineKeyboardButton(text="🆕 Создать аватар", callback_data="avatar_create")],
+                        [InlineKeyboardButton(text="🆕 Создать аватар", callback_data="create_avatar")],
                         [InlineKeyboardButton(text="◀️ Главное меню", callback_data="avatar_menu")]
                     ])
                     

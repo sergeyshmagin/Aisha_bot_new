@@ -29,6 +29,8 @@ async def start_avatar_creation(callback: CallbackQuery, state: FSMContext):
         logger.exception(f"[CREATE_AVATAR] Ошибка при начале создания аватара: {e}")
         await callback.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True)
 
+
+
 @router.callback_query(F.data == "select_gender")
 async def show_gender_selection(callback: CallbackQuery, state: FSMContext):
     """Показывает выбор пола аватара"""
@@ -43,8 +45,7 @@ async def show_gender_selection(callback: CallbackQuery, state: FSMContext):
         
         await callback.message.edit_text(
             text=text,
-            reply_markup=keyboard,
-            parse_mode="Markdown"
+            reply_markup=keyboard
         )
         await state.set_state(AvatarStates.selecting_gender)
         
@@ -85,8 +86,7 @@ async def select_avatar_gender(callback: CallbackQuery, state: FSMContext):
 """
         
         await callback.message.edit_text(
-            text=text,
-            parse_mode="Markdown"
+            text=text
         )
         
         await state.set_state(AvatarStates.entering_name)
@@ -159,18 +159,18 @@ async def process_avatar_name(message: Message, state: FSMContext):
         
         # Показываем успешное сохранение имени и переход к загрузке фото
         text = f"""
-✅ **Аватар создан!**
+✅ Аватар создан!
 
-🎭 **Имя:** {name}
-👤 **Пол:** {"Мужской" if gender == "male" else "Женский"}
-🎯 **Тип:** {"Портретный" if training_type == "portrait" else "Художественный"}
+🎭 Имя: {name}
+👤 Пол: {"Мужской" if gender == "male" else "Женский"}
+🎯 Тип: {"Портретный" if training_type == "portrait" else "Художественный"}
 
-📸 **Следующий шаг:** Загрузка фотографий
+📸 Следующий шаг: Загрузка фотографий
 
 Минимум 10 фотографий для качественного обучения.
 Рекомендуется 15-20 фото для лучшего результата.
 
-🚀 **Готовы загружать фото?**
+🚀 Готовы загружать фото?
 """
         
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
@@ -190,8 +190,7 @@ async def process_avatar_name(message: Message, state: FSMContext):
         
         await message.answer(
             text=text,
-            reply_markup=keyboard,
-            parse_mode="Markdown"
+            reply_markup=keyboard
         )
         
         logger.info(f"Пользователь {message.from_user.id} создал аватар: {name} (ID: {avatar.id})")

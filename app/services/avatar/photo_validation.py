@@ -376,33 +376,5 @@ class PhotoValidationService:
         """Вычисляет MD5 хеш фотографии (из legacy проекта)"""
         return hashlib.md5(photo_data).hexdigest()
 
-    async def check_photo_duplicate(
-        self, 
-        avatar_id: UUID, 
-        photo_hash: str
-    ) -> bool:
-        """
-        Проверяет есть ли дубликат фото по хешу (из legacy проекта)
-        
-        Args:
-            avatar_id: ID аватара
-            photo_hash: MD5 хеш фотографии
-            
-        Returns:
-            bool: True если дубликат найден
-        """
-        try:
-            query = (
-                select(AvatarPhoto.id)
-                .where(
-                    AvatarPhoto.avatar_id == avatar_id,
-                    AvatarPhoto.file_hash == photo_hash
-                )
-            )
-            
-            result = await self.session.execute(query)
-            return result.scalar_one_or_none() is not None
-        
-        except Exception as e:
-            logger.exception(f"Ошибка при проверке дубликатов: {e}")
-            return False 
+    # УДАЛЕН: check_photo_duplicate() - дублирует функциональность _validate_duplicates()
+    # Используйте _validate_duplicates() вместо этого метода 
