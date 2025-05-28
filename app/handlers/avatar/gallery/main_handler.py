@@ -67,6 +67,17 @@ class GalleryHandler:
             F.data.startswith("avatar_delete:")
         )
         
+        # Подтверждение удаления аватара
+        self.router.callback_query.register(
+            self.handle_delete_avatar_confirm,
+            F.data.startswith("avatar_delete_confirm:")
+        )
+        
+        self.router.callback_query.register(
+            self.handle_delete_avatar_cancel,
+            F.data.startswith("avatar_delete_cancel:")
+        )
+        
         # Фотогалерея
         self.router.callback_query.register(
             self.handle_view_avatar_photos,
@@ -157,6 +168,14 @@ class GalleryHandler:
     async def handle_delete_avatar(self, callback: CallbackQuery, state: FSMContext):
         """Делегирует удаление аватара"""
         await self.actions_handler.handle_delete_avatar(callback)
+
+    async def handle_delete_avatar_confirm(self, callback: CallbackQuery, state: FSMContext):
+        """Делегирует подтверждение удаления аватара"""
+        await self.actions_handler.handle_delete_avatar_confirm(callback)
+
+    async def handle_delete_avatar_cancel(self, callback: CallbackQuery, state: FSMContext):
+        """Делегирует отмену удаления аватара"""
+        await self.actions_handler.handle_delete_avatar_cancel(callback)
 
     async def handle_view_avatar_photos(self, callback: CallbackQuery, state: FSMContext):
         """Делегирует просмотр фотографий аватара"""

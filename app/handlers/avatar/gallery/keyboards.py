@@ -73,6 +73,22 @@ class GalleryKeyboards:
         return InlineKeyboardMarkup(inline_keyboard=buttons)
 
     @staticmethod
+    def get_delete_confirmation_keyboard(avatar_id: str) -> InlineKeyboardMarkup:
+        """Создает клавиатуру подтверждения удаления аватара"""
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="❌ Да, удалить", 
+                    callback_data=f"avatar_delete_confirm:{avatar_id}"
+                ),
+                InlineKeyboardButton(
+                    text="✅ Отмена", 
+                    callback_data=f"avatar_delete_cancel:{avatar_id}"
+                )
+            ]
+        ])
+
+    @staticmethod
     def get_avatar_photo_gallery_keyboard(
         photo_idx: int, 
         total_photos: int, 

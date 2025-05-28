@@ -204,13 +204,24 @@ class FALStatusChecker:
             result_data = await self._get_training_result(request_id, training_type)
             
             if result_data:
-                # Имитируем webhook данные для обработки
-                # FAL AI возвращает результат напрямую, без обёртки "response"
-                webhook_data = {
-                    "request_id": request_id,
-                    "status": "completed",
-                    "result": result_data  # Передаём результат как есть
-                }
+                # ИСПРАВЛЕНИЕ: Для портретных аватаров извлекаем request_id из результата
+                # FAL AI возвращает результат напрямую, но нужно правильно обработать
+                if training_type == "portrait":
+                    # Портретные аватары возвращают JSON с файлами, а не ID
+                    # Используем исходный request_id для webhook
+                    webhook_data = {
+                        "request_id": request_id,
+                        "status": "completed",
+                        "result": result_data  # Передаём результат как есть
+                    }
+                else:
+                    # Для художественных аватаров может быть finetune_id в результате
+                    finetune_id = result_data.get("finetune_id", request_id)
+                    webhook_data = {
+                        "request_id": finetune_id,
+                        "status": "completed", 
+                        "result": result_data
+                    }
                 
                 # Используем существующий webhook обработчик с сессией
                 async with get_session() as session:
