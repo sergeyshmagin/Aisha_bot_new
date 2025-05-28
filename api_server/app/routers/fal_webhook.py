@@ -1,8 +1,7 @@
 """
-Webhook роутер для обработки уведомлений от FAL AI
-Обновленная версия для продакшн использования с Aisha v2
+Роутер для обработки webhook от FAL AI
+Интегрирован с основной БД и сервисами бота
 """
-import asyncio
 from typing import Dict, Any, Optional
 from fastapi import APIRouter, Request, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import JSONResponse
@@ -10,7 +9,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from aiogram import Bot
 import aiohttp
 from uuid import UUID
+import sys
+import os
 
+# Добавляем путь к основному приложению
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+
+from app.database.connection import get_async_session
+from app.services.avatar.training_service import AvatarTrainingService
+from app.services.user import get_user_service_with_session
+from app.core.config import settings as main_settings
 from ..core.config import settings
 from ..core.logger import get_webhook_logger
 
@@ -18,10 +26,11 @@ logger = get_webhook_logger()
 
 router = APIRouter(prefix="/api/v1/avatar", tags=["avatar"])
 
-# Заглушка для сессии БД (в реальной реализации будет подключение к БД)
-async def get_db_session():
-    """Заглушка для получения сессии БД"""
-    return None
+# Используем реальную сессию БД из основного приложения
+async def get_db_session() -> AsyncSession:
+    """Получение сессии БД из основного приложения"""
+    async for session in get_async_session():
+        return session
 
 @router.post("/status_update")
 async def handle_fal_webhook(
@@ -55,8 +64,7 @@ async def handle_fal_webhook(
         background_tasks.add_task(
             process_webhook_background,
             webhook_data,
-            training_type,
-            session
+            training_type
         )
         
         return JSONResponse(
@@ -70,11 +78,10 @@ async def handle_fal_webhook(
 
 async def process_webhook_background(
     webhook_data: Dict[str, Any],
-    training_type: str,
-    session: Optional[AsyncSession]
+    training_type: str
 ):
     """
-    Фоновая обработка webhook от FAL AI
+    Фоновая обработка webhook от FAL AI с использованием основных сервисов
     """
     try:
         request_id = webhook_data.get("request_id")
@@ -82,118 +89,96 @@ async def process_webhook_background(
         
         logger.info(f"[WEBHOOK BACKGROUND] Начинаем обработку {request_id}, статус: {status}")
         
-        # Приводим статус к нижнему регистру для унификации
-        status_lower = status.lower() if status else ""
-        
-        if status_lower == "in_progress":
-            await handle_training_progress(webhook_data, training_type, session)
-        elif status_lower == "completed":
-            await handle_training_completed(webhook_data, training_type, session)
-        elif status_lower == "failed":
-            await handle_training_failed(webhook_data, training_type, session)
-        else:
-            logger.warning(f"[WEBHOOK BACKGROUND] Неизвестный статус: {status}")
-        
-        logger.info(f"[WEBHOOK BACKGROUND] Обработка завершена для {request_id}")
+        # Получаем новую сессию для фоновой задачи
+        async for session in get_async_session():
+            try:
+                # Используем основной сервис обучения аватаров
+                training_service = AvatarTrainingService(session)
+                
+                # Обрабатываем webhook через основной сервис
+                success = await training_service.handle_webhook(webhook_data)
+                
+                if success:
+                    logger.info(f"[WEBHOOK BACKGROUND] Webhook {request_id} обработан успешно")
+                    
+                    # Если обучение завершено - отправляем уведомление
+                    if status and status.lower() == "completed":
+                        await send_completion_notification(webhook_data, session)
+                else:
+                    logger.warning(f"[WEBHOOK BACKGROUND] Webhook {request_id} не был обработан")
+                
+                break  # Выходим из цикла после успешной обработки
+                
+            except Exception as e:
+                logger.exception(f"[WEBHOOK BACKGROUND] Ошибка обработки в сессии: {e}")
+                await session.rollback()
+                raise
+            finally:
+                await session.close()
         
     except Exception as e:
-        logger.exception(f"[WEBHOOK BACKGROUND] Ошибка фоновой обработки: {e}")
+        logger.exception(f"[WEBHOOK BACKGROUND] Критическая ошибка фоновой обработки: {e}")
 
-async def handle_training_progress(
+async def send_completion_notification(
     webhook_data: Dict[str, Any],
-    training_type: str,
-    session: Optional[AsyncSession]
+    session: AsyncSession
 ):
-    """Обработка прогресса обучения"""
+    """
+    Отправляет уведомление пользователю о завершении обучения
+    """
     try:
         request_id = webhook_data.get("request_id")
-        logs = webhook_data.get("logs", [])
         
-        logger.info(f"[TRAINING PROGRESS] {request_id}: обучение в процессе")
+        # Находим аватар по request_id
+        training_service = AvatarTrainingService(session)
+        avatar = await training_service._find_avatar_by_request_id(request_id)
         
-        # Логируем последние записи
-        if logs:
-            latest_logs = logs[-3:]  # Последние 3 записи
-            for log_entry in latest_logs:
-                logger.info(f"[TRAINING LOG] {request_id}: {log_entry.get('message', '')}")
+        if not avatar:
+            logger.warning(f"[NOTIFICATION] Аватар с request_id {request_id} не найден")
+            return
         
-        # В реальной реализации здесь будет:
-        # 1. Обновление статуса в БД
-        # 2. Отправка уведомления пользователю через Telegram
+        # Получаем пользователя
+        user_service = get_user_service_with_session(session)
+        user = await user_service.get_user_by_id(avatar.user_id)
         
-        logger.info(f"[TRAINING PROGRESS] {request_id}: прогресс обработан")
+        if not user or not user.telegram_id:
+            logger.warning(f"[NOTIFICATION] Пользователь не найден для аватара {avatar.id}")
+            return
+        
+        # Отправляем уведомление через Telegram
+        bot = Bot(token=main_settings.TELEGRAM_TOKEN)
+        
+        try:
+            # Формируем сообщение
+            training_type = webhook_data.get("training_type", "portrait")
+            if training_type == "portrait":
+                emoji = "🎭"
+                type_name = "Портретный"
+            else:
+                emoji = "🎨"
+                type_name = "Художественный"
+            
+            message = (
+                f"🎉 **Ваш аватар готов!**\n\n"
+                f"{emoji} **{avatar.name}** ({type_name} стиль)\n"
+                f"✅ Обучение завершено успешно\n\n"
+                f"Теперь вы можете использовать аватар для генерации изображений!\n\n"
+                f"Перейдите в меню → Аватары для использования."
+            )
+            
+            await bot.send_message(
+                chat_id=user.telegram_id,
+                text=message,
+                parse_mode="Markdown"
+            )
+            
+            logger.info(f"[NOTIFICATION] Уведомление отправлено пользователю {user.telegram_id}")
+            
+        finally:
+            await bot.session.close()
         
     except Exception as e:
-        logger.exception(f"[TRAINING PROGRESS] Ошибка обработки прогресса: {e}")
-
-async def handle_training_completed(
-    webhook_data: Dict[str, Any],
-    training_type: str,
-    session: Optional[AsyncSession]
-):
-    """Обработка завершения обучения"""
-    try:
-        request_id = webhook_data.get("request_id")
-        result = webhook_data.get("result", {})
-        
-        logger.info(f"[TRAINING COMPLETED] {request_id}: обучение завершено успешно")
-        
-        # Извлекаем результаты в зависимости от типа обучения
-        if training_type == "portrait":
-            # FLUX LoRA Portrait Trainer результаты
-            lora_url = result.get("lora_url")
-            config_url = result.get("config_url")
-            
-            logger.info(f"[TRAINING COMPLETED] {request_id}: LoRA URL: {lora_url}")
-            logger.info(f"[TRAINING COMPLETED] {request_id}: Config URL: {config_url}")
-            
-        else:
-            # FLUX Pro Trainer результаты
-            finetune_id = result.get("finetune_id")
-            
-            logger.info(f"[TRAINING COMPLETED] {request_id}: Finetune ID: {finetune_id}")
-        
-        # В реальной реализации здесь будет:
-        # 1. Сохранение результатов в БД
-        # 2. Обновление статуса аватара
-        # 3. Отправка уведомления пользователю
-        # 4. Активация аватара для использования
-        
-        logger.info(f"[TRAINING COMPLETED] {request_id}: результаты сохранены")
-        
-    except Exception as e:
-        logger.exception(f"[TRAINING COMPLETED] Ошибка обработки завершения: {e}")
-
-async def handle_training_failed(
-    webhook_data: Dict[str, Any],
-    training_type: str,
-    session: Optional[AsyncSession]
-):
-    """Обработка ошибки обучения"""
-    try:
-        request_id = webhook_data.get("request_id")
-        error = webhook_data.get("error", {})
-        logs = webhook_data.get("logs", [])
-        
-        logger.error(f"[TRAINING FAILED] {request_id}: обучение завершилось с ошибкой")
-        logger.error(f"[TRAINING FAILED] {request_id}: ошибка: {error}")
-        
-        # Логируем последние записи для диагностики
-        if logs:
-            latest_logs = logs[-5:]  # Последние 5 записей
-            for log_entry in latest_logs:
-                logger.error(f"[TRAINING ERROR LOG] {request_id}: {log_entry.get('message', '')}")
-        
-        # В реальной реализации здесь будет:
-        # 1. Обновление статуса аватара как "failed"
-        # 2. Сохранение информации об ошибке
-        # 3. Отправка уведомления пользователю
-        # 4. Возможно, автоматический перезапуск обучения
-        
-        logger.info(f"[TRAINING FAILED] {request_id}: ошибка обработана")
-        
-    except Exception as e:
-        logger.exception(f"[TRAINING FAILED] Ошибка обработки неудачи: {e}")
+        logger.exception(f"[NOTIFICATION] Ошибка отправки уведомления: {e}")
 
 @router.get("/test_webhook")
 async def test_webhook():
@@ -202,5 +187,6 @@ async def test_webhook():
         "status": "ok",
         "message": "Webhook API работает",
         "fal_webhook_url": settings.FAL_WEBHOOK_URL,
-        "ssl_enabled": settings.SSL_ENABLED
+        "ssl_enabled": settings.SSL_ENABLED,
+        "main_settings_webhook": main_settings.FAL_WEBHOOK_URL
     } 

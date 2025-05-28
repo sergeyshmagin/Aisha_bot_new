@@ -51,7 +51,7 @@ class Settings(BaseSettings):
     FAL_FINETUNE_TYPE: str = Field("lora", env="FAL_FINETUNE_TYPE")  # "full" или "lora"
     FAL_CAPTIONING: bool = Field(True, env="FAL_CAPTIONING")
     
-    # FAL AI - Portrait Trainer Settings  
+    # FAL AI - Portrait Trainer Settings
     FAL_PORTRAIT_STEPS: int = Field(1000, env="FAL_PORTRAIT_STEPS")
     FAL_PORTRAIT_LEARNING_RATE: float = Field(0.0002, env="FAL_PORTRAIT_LEARNING_RATE")
     FAL_PORTRAIT_SUBJECT_CROP: bool = Field(True, env="FAL_PORTRAIT_SUBJECT_CROP")

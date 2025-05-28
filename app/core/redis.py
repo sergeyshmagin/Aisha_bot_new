@@ -2,6 +2,7 @@
 Redis утилиты
 """
 import logging
+import uuid
 from typing import Optional
 import redis.asyncio as redis
 from redis.backoff import ExponentialBackoff

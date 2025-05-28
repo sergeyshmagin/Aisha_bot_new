@@ -3,7 +3,6 @@
 """
 import asyncio
 import logging
-import os
 import sys
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage

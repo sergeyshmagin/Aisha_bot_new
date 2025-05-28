@@ -280,11 +280,9 @@ class FALTrainingService:
             "finetune_comment": finetune_comment,
         }
         
-        if webhook_url:
-            config["webhook_url"] = webhook_url
-        
         logger.info(f"🎨 Запуск flux-pro-trainer: {finetune_comment}, trigger: {trigger_word}")
         logger.info(f"🎨 Параметры: iterations={iterations}, lr={learning_rate}, priority={priority}")
+        logger.info(f"🎨 Webhook URL: {webhook_url}")
         
         # ИСПРАВЛЕНИЕ: В тестовом режиме возвращаем мок результат
         if self.test_mode:
@@ -295,12 +293,13 @@ class FALTrainingService:
                 "request_id": mock_request_id
             }
         
-        # Запускаем обучение
+        # ИСПРАВЛЕНИЕ: Запускаем обучение с webhook_url как отдельным параметром
         result = await asyncio.get_event_loop().run_in_executor(
             None,
             lambda: self.fal_client.submit(
                 "fal-ai/flux-pro-trainer",
-                arguments=config
+                arguments=config,
+                webhook_url=webhook_url
             )
         )
         

@@ -1,7 +1,6 @@
 """
 FastAPI сервер для обработки webhook от FAL AI
 """
-import asyncio
 from typing import Dict, Any
 from fastapi import FastAPI, HTTPException, Request, BackgroundTasks
 from fastapi.responses import JSONResponse
