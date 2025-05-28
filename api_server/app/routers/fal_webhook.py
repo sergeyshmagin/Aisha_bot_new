@@ -11,6 +11,7 @@ import aiohttp
 from uuid import UUID
 import sys
 import os
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 # ИСПРАВЛЕНИЕ: Добавляем правильные пути для production
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
@@ -203,12 +204,25 @@ async def send_completion_notification(
                 f"Перейдите в меню → Аватары для использования."
             )
             
+            # Создаем кнопку для перехода в меню аватаров
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(
+                    text="🎭 Мои аватары",
+                    callback_data="avatar_gallery"
+                )],
+                [InlineKeyboardButton(
+                    text="🎨 Создать изображение",
+                    callback_data=f"avatar_generate:{avatar.id}"
+                )]
+            ])
+            
             logger.info(f"[NOTIFICATION] Отправляем сообщение пользователю {user.telegram_id}")
             
             await bot.send_message(
                 chat_id=user.telegram_id,
                 text=message,
-                parse_mode="Markdown"
+                parse_mode="Markdown",
+                reply_markup=keyboard
             )
             
             logger.info(f"[NOTIFICATION] ✅ Уведомление отправлено пользователю {user.telegram_id}")

@@ -42,20 +42,52 @@ def main():
     # Импортируем и запускаем API
     try:
         from api_server.main import app
+        from api_server.app.core.config import settings
         
         print("✅ API приложение импортировано успешно")
-        print("📡 API сервер: http://0.0.0.0:8000")
-        print("📡 Webhook endpoint (через Nginx): https://aibots.kz:8443/api/v1/avatar/status_update")
-        print("🔍 Health check: http://0.0.0.0:8000/health")
+        
+        # Используем настройки из конфигурации
+        api_host = getattr(settings, 'API_HOST', '0.0.0.0')
+        api_port = getattr(settings, 'API_PORT', 8443)
+        ssl_enabled = getattr(settings, 'SSL_ENABLED', False)
+        webhook_url = getattr(settings, 'FAL_WEBHOOK_URL', 'not_configured')
+        
+        print(f"📡 API сервер: {'https' if ssl_enabled else 'http'}://{api_host}:{api_port}")
+        print(f"📡 Webhook endpoint: {webhook_url}")
+        print(f"🔍 Health check: {'https' if ssl_enabled else 'http'}://{api_host}:{api_port}/health")
+        
+        # Настройки для запуска
+        run_config = {
+            "app": app,
+            "host": api_host,
+            "port": api_port,
+            "log_level": "info",
+            "reload": False
+        }
+        
+        # Добавляем SSL если включен
+        if ssl_enabled:
+            ssl_cert_path = getattr(settings, 'SSL_CERT_PATH', '')
+            ssl_key_path = getattr(settings, 'SSL_KEY_PATH', '')
+            
+            if ssl_cert_path and ssl_key_path:
+                ssl_cert = project_root / ssl_cert_path
+                ssl_key = project_root / ssl_key_path
+                
+                if ssl_cert.exists() and ssl_key.exists():
+                    run_config.update({
+                        "ssl_certfile": str(ssl_cert),
+                        "ssl_keyfile": str(ssl_key)
+                    })
+                    print(f"🔒 SSL Cert: {ssl_cert}")
+                    print(f"🔒 SSL Key: {ssl_key}")
+                else:
+                    print("⚠️  SSL файлы не найдены, запуск без SSL")
+            else:
+                print("⚠️  SSL пути не настроены, запуск без SSL")
         
         # Запускаем сервер
-        uvicorn.run(
-            app,
-            host="0.0.0.0",  # Слушаем все интерфейсы
-            port=8000,       # API сервер на 8000, Nginx на 8443
-            log_level="info",
-            reload=False
-        )
+        uvicorn.run(**run_config)
         
     except ImportError as e:
         print(f"❌ Ошибка импорта API: {e}")

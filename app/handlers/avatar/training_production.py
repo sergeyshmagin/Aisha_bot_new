@@ -140,7 +140,7 @@ class TrainingHandler:
                     avatar_id=avatar_id,
                     training_type=training_type,
                     training_data_url=training_data_url,
-                    user_preferences={"quality": "balanced"}
+                    user_preferences={"quality": settings.FAL_DEFAULT_QUALITY_PRESET}
                 )
                 
                 if request_id:

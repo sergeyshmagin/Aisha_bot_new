@@ -31,6 +31,26 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def startup_tasks():
+    """
+    Задачи, выполняемые при запуске приложения
+    """
+    logger.info("🚀 Выполнение задач запуска...")
+    
+    try:
+        # Проверяем и восстанавливаем мониторинг зависших аватаров
+        from app.services.avatar.fal_training_service.startup_checker import startup_checker
+        await startup_checker.check_and_restore_monitoring()
+        
+        # Запускаем периодические проверки в фоне
+        asyncio.create_task(startup_checker.schedule_periodic_checks())
+        
+        logger.info("✅ Задачи запуска выполнены успешно")
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка при выполнении задач запуска: {e}")
+
+
 async def main():
     """
     Основная функция запуска бота
@@ -70,6 +90,9 @@ async def main():
         except Exception as e:
             logger.error(f"Ошибка в команде /start: {e}")
             await message.answer("❌ Произошла ошибка. Попробуйте позже.")
+
+    # Выполняем задачи запуска
+    await startup_tasks()
 
     # Запуск бота
     try:

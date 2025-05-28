@@ -58,6 +58,25 @@ class Settings(BaseSettings):
     FAL_PORTRAIT_CREATE_MASKS: bool = Field(True, env="FAL_PORTRAIT_CREATE_MASKS")
     FAL_PORTRAIT_MULTIRESOLUTION: bool = Field(True, env="FAL_PORTRAIT_MULTIRESOLUTION")
     
+    # FAL AI - Quality Presets Settings (можно переопределить через .env)
+    FAL_FAST_PORTRAIT_STEPS: int = Field(300, env="FAL_FAST_PORTRAIT_STEPS")
+    FAL_FAST_GENERAL_ITERATIONS: int = Field(200, env="FAL_FAST_GENERAL_ITERATIONS")
+    FAL_FAST_PORTRAIT_LR: float = Field(0.0003, env="FAL_FAST_PORTRAIT_LR")
+    FAL_FAST_GENERAL_LR: float = Field(2e-4, env="FAL_FAST_GENERAL_LR")
+    
+    FAL_BALANCED_PORTRAIT_STEPS: int = Field(600, env="FAL_BALANCED_PORTRAIT_STEPS")
+    FAL_BALANCED_GENERAL_ITERATIONS: int = Field(350, env="FAL_BALANCED_GENERAL_ITERATIONS")
+    FAL_BALANCED_PORTRAIT_LR: float = Field(0.0002, env="FAL_BALANCED_PORTRAIT_LR")
+    FAL_BALANCED_GENERAL_LR: float = Field(1e-4, env="FAL_BALANCED_GENERAL_LR")
+    
+    FAL_QUALITY_PORTRAIT_STEPS: int = Field(1000, env="FAL_QUALITY_PORTRAIT_STEPS")
+    FAL_QUALITY_GENERAL_ITERATIONS: int = Field(500, env="FAL_QUALITY_GENERAL_ITERATIONS")
+    FAL_QUALITY_PORTRAIT_LR: float = Field(0.0001, env="FAL_QUALITY_PORTRAIT_LR")
+    FAL_QUALITY_GENERAL_LR: float = Field(5e-5, env="FAL_QUALITY_GENERAL_LR")
+    
+    # FAL AI - Пресет качества по умолчанию
+    FAL_DEFAULT_QUALITY_PRESET: str = Field("balanced", env="FAL_DEFAULT_QUALITY_PRESET")
+    
     # FAL AI - Advanced Settings
     FAL_TRAINING_TIMEOUT: int = Field(1800, env="FAL_TRAINING_TIMEOUT")  # 30 минут
     FAL_STATUS_CHECK_INTERVAL: int = Field(30, env="FAL_STATUS_CHECK_INTERVAL")  # секунд
@@ -74,18 +93,26 @@ class Settings(BaseSettings):
     FAL_WEBHOOK_STYLE_URL: Optional[str] = Field(None, env="FAL_WEBHOOK_STYLE_URL")
     
     # FAL AI - Quality Presets
-    FAL_PRESET_FAST: Dict[str, Any] = {
-        "portrait": {"steps": 100, "learning_rate": 0.0003},
-        "general": {"iterations": 100, "learning_rate": 2e-4, "priority": "speed"}
-    }
-    FAL_PRESET_BALANCED: Dict[str, Any] = {
-        "portrait": {"steps": 100, "learning_rate": 0.0002},
-        "general": {"iterations": 100, "learning_rate": 1e-4, "priority": "quality"}
-    }
-    FAL_PRESET_QUALITY: Dict[str, Any] = {
-        "portrait": {"steps": 100, "learning_rate": 0.0001},
-        "general": {"iterations": 100, "learning_rate": 5e-5, "priority": "quality"}
-    }
+    @property
+    def FAL_PRESET_FAST(self) -> Dict[str, Any]:
+        return {
+            "portrait": {"steps": self.FAL_FAST_PORTRAIT_STEPS, "learning_rate": self.FAL_FAST_PORTRAIT_LR},
+            "general": {"iterations": self.FAL_FAST_GENERAL_ITERATIONS, "learning_rate": self.FAL_FAST_GENERAL_LR, "priority": "speed"}
+        }
+    
+    @property
+    def FAL_PRESET_BALANCED(self) -> Dict[str, Any]:
+        return {
+            "portrait": {"steps": self.FAL_BALANCED_PORTRAIT_STEPS, "learning_rate": self.FAL_BALANCED_PORTRAIT_LR},
+            "general": {"iterations": self.FAL_BALANCED_GENERAL_ITERATIONS, "learning_rate": self.FAL_BALANCED_GENERAL_LR, "priority": "quality"}
+        }
+    
+    @property
+    def FAL_PRESET_QUALITY(self) -> Dict[str, Any]:
+        return {
+            "portrait": {"steps": self.FAL_QUALITY_PORTRAIT_STEPS, "learning_rate": self.FAL_QUALITY_PORTRAIT_LR},
+            "general": {"iterations": self.FAL_QUALITY_GENERAL_ITERATIONS, "learning_rate": self.FAL_QUALITY_GENERAL_LR, "priority": "quality"}
+        }
     
     # Пути
     BASE_DIR: Path = Path(__file__).parent.parent.parent

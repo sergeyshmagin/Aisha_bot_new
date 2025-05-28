@@ -5,7 +5,8 @@
 import os
 from pathlib import Path
 from pydantic_settings import BaseSettings
-from pydantic import ConfigDict
+from pydantic import ConfigDict, validator
+from typing import Dict, Any, Optional
 
 class Settings(BaseSettings):
     """Настройки API сервера"""
@@ -17,20 +18,32 @@ class Settings(BaseSettings):
         extra="ignore"  # Игнорируем лишние поля
     )
     
-    # API Server настройки
-    API_HOST: str = "0.0.0.0"
-    API_PORT: int = 8443  # HTTPS порт для SSL
-    API_DEBUG: bool = False
-    API_RELOAD: bool = False
+    # API Server настройки (читаем из переменных окружения)
+    API_HOST: str = os.getenv("API_HOST", "0.0.0.0")
+    API_PORT: int = int(os.getenv("API_PORT", "8000"))  # По умолчанию 8000 для Nginx проксирования
+    API_DEBUG: bool = os.getenv("API_DEBUG", "false").lower() == "true"
+    API_RELOAD: bool = os.getenv("API_RELOAD", "false").lower() == "true"
     
-    # SSL настройки для FAL AI webhook
-    SSL_ENABLED: bool = True
-    SSL_CERT_PATH: str = "ssl/aibots_kz.crt"
-    SSL_KEY_PATH: str = "ssl/aibots.kz.key"
-    SSL_CA_BUNDLE_PATH: str = "ssl/aibots_kz.ca-bundle"
+    # SSL настройки для FAL AI webhook (читаем из переменных окружения)
+    SSL_ENABLED: bool = os.getenv("SSL_ENABLED", "false").lower() == "true"  # По умолчанию false (SSL в Nginx)
+    SSL_CERT_PATH: str = os.getenv("SSL_CERT_PATH", "ssl/aibots_kz.crt")
+    SSL_KEY_PATH: str = os.getenv("SSL_KEY_PATH", "ssl/aibots.kz.key")
+    SSL_CA_BUNDLE_PATH: str = os.getenv("SSL_CA_BUNDLE_PATH", "ssl/aibots_kz.ca-bundle")
     
-    # Database URL (используем ту же БД что и основной бот)
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "postgresql+asyncpg://aisha_user:secure_password@localhost/aisha_v2")
+    # PostgreSQL настройки (синхронизированы с основным ботом)
+    POSTGRES_HOST: Optional[str] = os.getenv("POSTGRES_HOST", "192.168.0.4")
+    POSTGRES_PORT: Optional[int] = int(os.getenv("POSTGRES_PORT", "5432"))
+    POSTGRES_DB: Optional[str] = os.getenv("POSTGRES_DB", "aisha")
+    POSTGRES_USER: Optional[str] = os.getenv("POSTGRES_USER", "aisha_user")
+    POSTGRES_PASSWORD: Optional[str] = os.getenv("POSTGRES_PASSWORD", "KbZZGJHX09KSH7r9ev4m")
+    DATABASE_URL: Optional[str] = None
+    
+    @validator("DATABASE_URL", pre=True)
+    def assemble_db_url(cls, v: Optional[str], values: Dict[str, Any]) -> str:
+        """Автоматически собираем DATABASE_URL из переменных PostgreSQL (как в основном боте)"""
+        if isinstance(v, str) and v:
+            return v
+        return f"postgresql+asyncpg://{values.get('POSTGRES_USER')}:{values.get('POSTGRES_PASSWORD')}@{values.get('POSTGRES_HOST')}:{values.get('POSTGRES_PORT')}/{values.get('POSTGRES_DB')}"
     
     # Telegram Bot
     TELEGRAM_BOT_TOKEN: str = os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -41,11 +54,11 @@ class Settings(BaseSettings):
     FAL_WEBHOOK_URL: str = os.getenv("FAL_WEBHOOK_URL", "https://aibots.kz:8443/api/v1/avatar/status_update")
     FAL_WEBHOOK_SECRET: str = os.getenv("FAL_WEBHOOK_SECRET", "")
     
-    # MinIO настройки (для загрузки архивов)
-    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "localhost:9000")
+    # MinIO настройки (синхронизированы с основным ботом)
+    MINIO_ENDPOINT: str = os.getenv("MINIO_ENDPOINT", "192.168.0.4:9000")
     MINIO_ACCESS_KEY: str = os.getenv("MINIO_ACCESS_KEY", "minioadmin")
-    MINIO_SECRET_KEY: str = os.getenv("MINIO_SECRET_KEY", "minioadmin123")
-    MINIO_BUCKET_AVATARS: str = os.getenv("MINIO_BUCKET_AVATARS", "aisha-v2-avatars")
+    MINIO_SECRET_KEY: str = os.getenv("MINIO_SECRET_KEY", "")
+    MINIO_BUCKET_AVATARS: str = os.getenv("MINIO_BUCKET_AVATARS", "avatars")
     
     # Логирование
     LOG_LEVEL: str = "INFO"
