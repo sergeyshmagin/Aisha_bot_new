@@ -205,10 +205,11 @@ class FALStatusChecker:
             
             if result_data:
                 # Имитируем webhook данные для обработки
+                # FAL AI возвращает результат напрямую, без обёртки "response"
                 webhook_data = {
                     "request_id": request_id,
                     "status": "completed",
-                    "result": result_data.get("response", {})
+                    "result": result_data  # Передаём результат как есть
                 }
                 
                 # Используем существующий webhook обработчик с сессией

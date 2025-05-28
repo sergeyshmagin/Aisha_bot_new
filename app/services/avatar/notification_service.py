@@ -4,6 +4,7 @@
 from typing import Optional
 from uuid import UUID
 from datetime import datetime, timedelta
+import redis.asyncio as redis
 
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -11,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.logger import get_logger
+from app.core.resources import RedisConfig
 from app.database.models import Avatar, User
 from app.services.user import UserService
 
@@ -20,13 +22,25 @@ logger = get_logger(__name__)
 class AvatarNotificationService:
     """Сервис для отправки уведомлений о готовности аватаров"""
     
+    # Минимальный интервал между уведомлениями (в секундах)
+    _min_notification_interval = 30
+    
     def __init__(self, session: AsyncSession):
         self.session = session
         self.user_service = UserService(session)
-        # Кэш отправленных уведомлений (avatar_id -> timestamp)
-        self._notification_cache = {}
-        # Минимальный интервал между уведомлениями (в секундах)
-        self._min_notification_interval = 30
+        
+        # Конфигурация Redis для кэша уведомлений
+        self._redis_config = {
+            "host": settings.REDIS_HOST,
+            "port": settings.REDIS_PORT,
+            "db": settings.REDIS_DB,
+            "password": settings.REDIS_PASSWORD,
+            "ssl": settings.REDIS_SSL,
+            "socket_timeout": 5.0,
+            "socket_connect_timeout": 5.0,
+            "decode_responses": True,
+            "encoding": "utf-8"
+        }
     
     async def send_completion_notification(self, avatar: Avatar) -> bool:
         """
@@ -40,7 +54,7 @@ class AvatarNotificationService:
         """
         try:
             # Проверяем, не отправляли ли уже уведомление недавно
-            if self._is_notification_recently_sent(avatar.id):
+            if await self._is_notification_recently_sent(avatar.id):
                 logger.info(f"[NOTIFICATION] Уведомление для аватара {avatar.id} уже отправлено недавно, пропускаем")
                 return True  # Считаем успешным, чтобы не логировать как ошибку
             
@@ -94,8 +108,8 @@ class AvatarNotificationService:
                     reply_markup=keyboard
                 )
                 
-                # Записываем в кэш время отправки уведомления
-                self._mark_notification_sent(avatar.id)
+                # Записываем в Redis время отправки уведомления
+                await self._mark_notification_sent(avatar.id)
                 
                 logger.info(f"[NOTIFICATION] ✅ Уведомление отправлено пользователю {user.telegram_id}")
                 return True
@@ -107,9 +121,9 @@ class AvatarNotificationService:
             logger.exception(f"[NOTIFICATION] ❌ Ошибка отправки уведомления для аватара {avatar.id}: {e}")
             return False
     
-    def _is_notification_recently_sent(self, avatar_id: UUID) -> bool:
+    async def _is_notification_recently_sent(self, avatar_id: UUID) -> bool:
         """
-        Проверяет, было ли недавно отправлено уведомление для аватара
+        Проверяет, было ли недавно отправлено уведомление для аватара через Redis
         
         Args:
             avatar_id: ID аватара
@@ -117,29 +131,61 @@ class AvatarNotificationService:
         Returns:
             bool: True если уведомление было отправлено недавно
         """
-        if avatar_id not in self._notification_cache:
+        redis_client = None
+        try:
+            redis_client = redis.Redis(**self._redis_config)
+            
+            # Формируем ключ для Redis
+            cache_key = f"{RedisConfig.KEY_PREFIXES['avatar_cache']}notification:{avatar_id}"
+            
+            # Проверяем существование ключа в Redis
+            exists = await redis_client.exists(cache_key)
+            
+            if exists:
+                logger.debug(f"[NOTIFICATION] Найдена запись в Redis для аватара {avatar_id}")
+                return True
+            
             return False
-        
-        last_sent = self._notification_cache[avatar_id]
-        time_diff = (datetime.utcnow() - last_sent).total_seconds()
-        
-        return time_diff < self._min_notification_interval
+            
+        except Exception as e:
+            logger.warning(f"[NOTIFICATION] Ошибка проверки Redis кэша для аватара {avatar_id}: {e}")
+            # В случае ошибки Redis возвращаем False, чтобы не блокировать уведомления
+            return False
+            
+        finally:
+            if redis_client:
+                await redis_client.close()
     
-    def _mark_notification_sent(self, avatar_id: UUID) -> None:
+    async def _mark_notification_sent(self, avatar_id: UUID) -> None:
         """
-        Отмечает, что уведомление для аватара было отправлено
+        Отмечает в Redis, что уведомление для аватара было отправлено
         
         Args:
             avatar_id: ID аватара
         """
-        self._notification_cache[avatar_id] = datetime.utcnow()
-        
-        # Очищаем старые записи из кэша (старше 1 часа)
-        cutoff_time = datetime.utcnow() - timedelta(hours=1)
-        self._notification_cache = {
-            aid: timestamp for aid, timestamp in self._notification_cache.items()
-            if timestamp > cutoff_time
-        }
+        redis_client = None
+        try:
+            redis_client = redis.Redis(**self._redis_config)
+            
+            # Формируем ключ для Redis
+            cache_key = f"{RedisConfig.KEY_PREFIXES['avatar_cache']}notification:{avatar_id}"
+            
+            # Записываем в Redis с TTL равным интервалу защиты
+            await redis_client.setex(
+                cache_key,
+                self._min_notification_interval,
+                datetime.utcnow().isoformat()
+            )
+            
+            logger.debug(f"[NOTIFICATION] Записана отметка в Redis для аватара {avatar_id} (TTL: {self._min_notification_interval}s)")
+            
+        except Exception as e:
+            logger.warning(f"[NOTIFICATION] Ошибка записи в Redis кэш для аватара {avatar_id}: {e}")
+            # В случае ошибки Redis не прерываем процесс
+            
+        finally:
+            if redis_client:
+                await redis_client.close()
     
     async def send_completion_notification_by_id(self, avatar_id: UUID) -> bool:
         """
