@@ -58,10 +58,10 @@ class FalAIClient:
             name: Имя аватара
             gender: Пол аватара
             photo_urls: Список URL фотографий в MinIO
-            training_config: Конфигурация обучения
+            training_config: Конфигурация обучения (включая training_type)
             
         Returns:
-            Optional[str]: finetune_id или None при ошибке
+            Optional[str]: request_id или None при ошибке
             
         Raises:
             RuntimeError: При критических ошибках
@@ -69,31 +69,18 @@ class FalAIClient:
         try:
             if self.test_mode:
                 logger.info(f"[FAL TEST MODE] Симуляция обучения аватара {avatar_id}")
-                # В тестовом режиме возвращаем мок finetune_id
-                mock_finetune_id = f"test_finetune_{avatar_id}"
+                # В тестовом режиме возвращаем мок request_id
+                mock_request_id = f"test_request_{avatar_id}"
                 await asyncio.sleep(0.1)  # Симуляция задержки
-                return mock_finetune_id
+                return mock_request_id
             
-            # Настройки по умолчанию
-            config = {
-                "mode": settings.FAL_DEFAULT_MODE,
-                "iterations": settings.FAL_DEFAULT_ITERATIONS,
-                "priority": settings.FAL_DEFAULT_PRIORITY,
-                "captioning": True,
-                "trigger_word": settings.FAL_TRIGGER_WORD,
-                "lora_rank": settings.FAL_LORA_RANK,
-                "finetune_type": settings.FAL_FINETUNE_TYPE,
-                "webhook_url": settings.FAL_WEBHOOK_URL,
-            }
-            
-            # Обновляем конфигурацию пользовательскими параметрами
-            if training_config:
-                config.update(training_config)
+            # Получаем тип обучения из конфигурации
+            training_type = training_config.get("training_type", "style") if training_config else "style"
             
             logger.info(
                 f"[FAL AI] Начало обучения аватара {avatar_id}: "
                 f"user_id={user_id}, name='{name}', gender={gender}, "
-                f"photos={len(photo_urls)}, config={config}"
+                f"photos={len(photo_urls)}, training_type={training_type}"
             )
             
             # 1. Скачиваем фотографии и создаем архив
@@ -102,16 +89,26 @@ class FalAIClient:
             if not data_url:
                 raise RuntimeError("Не удалось скачать фотографии для создания архива")
             
-            # 3. Запускаем обучение на FAL AI
-            finetune_id = await self._submit_training(
-                data_url=data_url,
-                user_id=user_id,
-                avatar_id=avatar_id,
-                config=config
-            )
+            # 2. Запускаем обучение в зависимости от типа
+            if training_type == "portrait":
+                # Портретное обучение через flux-lora-portrait-trainer
+                request_id = await self._train_portrait_avatar(
+                    data_url=data_url,
+                    user_id=user_id,
+                    avatar_id=avatar_id,
+                    config=training_config or {}
+                )
+            else:
+                # Художественное обучение через flux-pro-trainer
+                request_id = await self._train_style_avatar(
+                    data_url=data_url,
+                    user_id=user_id,
+                    avatar_id=avatar_id,
+                    config=training_config or {}
+                )
             
-            logger.info(f"[FAL AI] Обучение запущено успешно: finetune_id={finetune_id}")
-            return finetune_id
+            logger.info(f"[FAL AI] Обучение запущено успешно: request_id={request_id}")
+            return request_id
             
         except Exception as e:
             logger.exception(f"[FAL AI] Критическая ошибка при обучении аватара {avatar_id}: {e}")
@@ -120,6 +117,103 @@ class FalAIClient:
         finally:
             # Очищаем временные файлы
             await self._cleanup_temp_files()
+
+    async def _train_portrait_avatar(
+        self,
+        data_url: str,
+        user_id: UUID,
+        avatar_id: UUID,
+        config: Dict[str, Any]
+    ) -> Optional[str]:
+        """
+        Запускает портретное обучение через flux-lora-portrait-trainer
+        
+        Args:
+            data_url: URL архива с фотографиями
+            user_id: ID пользователя
+            avatar_id: ID аватара
+            config: Конфигурация обучения
+            
+        Returns:
+            Optional[str]: request_id
+        """
+        try:
+            # Получаем настройки портретного обучения
+            trigger_phrase = config.get("trigger_phrase", f"PERSON_{avatar_id.hex[:8]}")
+            steps = config.get("steps", settings.FAL_PORTRAIT_STEPS)
+            learning_rate = config.get("learning_rate", settings.FAL_PORTRAIT_LEARNING_RATE)
+            multiresolution_training = config.get("multiresolution_training", settings.FAL_PORTRAIT_MULTIRESOLUTION)
+            subject_crop = config.get("subject_crop", settings.FAL_PORTRAIT_SUBJECT_CROP)
+            create_masks = config.get("create_masks", settings.FAL_PORTRAIT_CREATE_MASKS)
+            webhook_url = config.get("webhook_url", settings.FAL_WEBHOOK_URL)
+            
+            logger.info(f"[FAL AI] Портретное обучение аватара {avatar_id}: trigger='{trigger_phrase}', steps={steps}")
+            
+            # Запускаем портретное обучение
+            request_id = await self.train_portrait_model(
+                images_data_url=data_url,
+                trigger_phrase=trigger_phrase,
+                steps=steps,
+                learning_rate=learning_rate,
+                multiresolution_training=multiresolution_training,
+                subject_crop=subject_crop,
+                create_masks=create_masks,
+                webhook_url=webhook_url
+            )
+            
+            return request_id
+            
+        except Exception as e:
+            logger.exception(f"[FAL AI] Ошибка портретного обучения аватара {avatar_id}: {e}")
+            return None
+
+    async def _train_style_avatar(
+        self,
+        data_url: str,
+        user_id: UUID,
+        avatar_id: UUID,
+        config: Dict[str, Any]
+    ) -> Optional[str]:
+        """
+        Запускает художественное обучение через flux-pro-trainer
+        
+        Args:
+            data_url: URL архива с фотографиями
+            user_id: ID пользователя
+            avatar_id: ID аватара
+            config: Конфигурация обучения
+            
+        Returns:
+            Optional[str]: request_id
+        """
+        try:
+            # Настройки по умолчанию для художественного обучения
+            style_config = {
+                "mode": config.get("mode", settings.FAL_DEFAULT_MODE),
+                "iterations": config.get("iterations", settings.FAL_DEFAULT_ITERATIONS),
+                "priority": config.get("priority", settings.FAL_DEFAULT_PRIORITY),
+                "captioning": config.get("captioning", True),
+                "trigger_word": config.get("trigger_word", f"TOK_{avatar_id.hex[:8]}"),
+                "lora_rank": config.get("lora_rank", settings.FAL_LORA_RANK),
+                "finetune_type": config.get("finetune_type", settings.FAL_FINETUNE_TYPE),
+                "webhook_url": config.get("webhook_url", settings.FAL_WEBHOOK_URL),
+            }
+            
+            logger.info(f"[FAL AI] Художественное обучение аватара {avatar_id}: trigger='{style_config['trigger_word']}'")
+            
+            # Запускаем художественное обучение через существующий метод
+            request_id = await self._submit_training(
+                data_url=data_url,
+                user_id=user_id,
+                avatar_id=avatar_id,
+                config=style_config
+            )
+            
+            return request_id
+            
+        except Exception as e:
+            logger.exception(f"[FAL AI] Ошибка художественного обучения аватара {avatar_id}: {e}")
+            return None
 
     async def get_training_status(self, finetune_id: str) -> Dict[str, Any]:
         """
@@ -465,6 +559,70 @@ class FalAIClient:
             
         except Exception as e:
             logger.exception(f"[FAL AI] Ошибка отправки задачи на обучение: {e}")
+            return None
+
+    async def train_portrait_model(
+        self,
+        images_data_url: str,
+        trigger_phrase: Optional[str] = None,
+        steps: int = 1000,
+        learning_rate: float = 0.0002,
+        multiresolution_training: bool = True,
+        subject_crop: bool = True,
+        create_masks: bool = False,
+        webhook_url: Optional[str] = None
+    ) -> Optional[str]:
+        """
+        Обучение портретной модели через FAL AI flux-lora-portrait-trainer
+        
+        Args:
+            images_data_url: URL архива с изображениями
+            trigger_phrase: Триггерная фраза (если None, будет использоваться trigger_word)
+            steps: Количество шагов обучения (по умолчанию 1000)
+            learning_rate: Скорость обучения (по умолчанию 0.0002)
+            multiresolution_training: Мультиразрешающее обучение
+            subject_crop: Автообрезка субъекта
+            create_masks: Создание масок
+            webhook_url: URL для webhook уведомлений
+            
+        Returns:
+            Optional[str]: request_id или None при ошибке
+        """
+        try:
+            if self.test_mode:
+                logger.info(f"[FAL TEST MODE] Симуляция портретного обучения")
+                await asyncio.sleep(0.1)
+                return f"test_portrait_request_{int(asyncio.get_event_loop().time())}"
+            
+            # Формируем аргументы согласно FAL AI API
+            arguments = {
+                "images_data_url": images_data_url,
+                "learning_rate": learning_rate,
+                "steps": steps,
+                "multiresolution_training": multiresolution_training,
+                "subject_crop": subject_crop,
+                "create_masks": create_masks
+            }
+            
+            # Добавляем trigger_phrase если указан
+            if trigger_phrase:
+                arguments["trigger_phrase"] = trigger_phrase
+            
+            logger.info(f"[FAL AI] Запуск портретного обучения: {arguments}")
+            
+            # Отправляем задачу на обучение
+            handler = await fal_client.submit_async(
+                "fal-ai/flux-lora-portrait-trainer",
+                arguments=arguments,
+                webhook_url=webhook_url
+            )
+            
+            request_id = handler.request_id
+            logger.info(f"[FAL AI] Портретное обучение запущено, request_id: {request_id}")
+            return request_id
+            
+        except Exception as e:
+            logger.exception(f"[FAL AI] Ошибка запуска портретного обучения: {e}")
             return None
 
     async def _cleanup_temp_files(self):
