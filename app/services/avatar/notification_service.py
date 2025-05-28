@@ -3,6 +3,7 @@
 """
 from typing import Optional
 from uuid import UUID
+from datetime import datetime, timedelta
 
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
@@ -22,6 +23,10 @@ class AvatarNotificationService:
     def __init__(self, session: AsyncSession):
         self.session = session
         self.user_service = UserService(session)
+        # Кэш отправленных уведомлений (avatar_id -> timestamp)
+        self._notification_cache = {}
+        # Минимальный интервал между уведомлениями (в секундах)
+        self._min_notification_interval = 30
     
     async def send_completion_notification(self, avatar: Avatar) -> bool:
         """
@@ -34,6 +39,11 @@ class AvatarNotificationService:
             bool: True если уведомление отправлено успешно
         """
         try:
+            # Проверяем, не отправляли ли уже уведомление недавно
+            if self._is_notification_recently_sent(avatar.id):
+                logger.info(f"[NOTIFICATION] Уведомление для аватара {avatar.id} уже отправлено недавно, пропускаем")
+                return True  # Считаем успешным, чтобы не логировать как ошибку
+            
             # Получаем пользователя
             user = await self.user_service.get_user_by_id(avatar.user_id)
             
@@ -84,6 +94,9 @@ class AvatarNotificationService:
                     reply_markup=keyboard
                 )
                 
+                # Записываем в кэш время отправки уведомления
+                self._mark_notification_sent(avatar.id)
+                
                 logger.info(f"[NOTIFICATION] ✅ Уведомление отправлено пользователю {user.telegram_id}")
                 return True
                 
@@ -93,6 +106,40 @@ class AvatarNotificationService:
         except Exception as e:
             logger.exception(f"[NOTIFICATION] ❌ Ошибка отправки уведомления для аватара {avatar.id}: {e}")
             return False
+    
+    def _is_notification_recently_sent(self, avatar_id: UUID) -> bool:
+        """
+        Проверяет, было ли недавно отправлено уведомление для аватара
+        
+        Args:
+            avatar_id: ID аватара
+            
+        Returns:
+            bool: True если уведомление было отправлено недавно
+        """
+        if avatar_id not in self._notification_cache:
+            return False
+        
+        last_sent = self._notification_cache[avatar_id]
+        time_diff = (datetime.utcnow() - last_sent).total_seconds()
+        
+        return time_diff < self._min_notification_interval
+    
+    def _mark_notification_sent(self, avatar_id: UUID) -> None:
+        """
+        Отмечает, что уведомление для аватара было отправлено
+        
+        Args:
+            avatar_id: ID аватара
+        """
+        self._notification_cache[avatar_id] = datetime.utcnow()
+        
+        # Очищаем старые записи из кэша (старше 1 часа)
+        cutoff_time = datetime.utcnow() - timedelta(hours=1)
+        self._notification_cache = {
+            aid: timestamp for aid, timestamp in self._notification_cache.items()
+            if timestamp > cutoff_time
+        }
     
     async def send_completion_notification_by_id(self, avatar_id: UUID) -> bool:
         """

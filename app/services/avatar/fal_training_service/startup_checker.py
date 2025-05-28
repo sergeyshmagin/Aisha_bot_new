@@ -147,27 +147,37 @@ class StartupChecker:
             # Проверяем статус в FAL AI
             async with aiohttp.ClientSession() as session:
                 async with session.get(status_url, headers=headers) as response:
-                    if response.status == 200:
-                        status_data = await response.json()
-                        fal_status = status_data.get("status")
-                        
-                        if fal_status == "COMPLETED":
-                            logger.info(f"🔍 Аватар {avatar.name} завершён в FAL AI, обрабатываем...")
+                    # 200 - статус получен, 202 - запрос принят и обрабатывается
+                    if response.status in [200, 202]:
+                        try:
+                            status_data = await response.json()
+                            fal_status = status_data.get("status")
                             
-                            # Обрабатываем завершение через status_checker
-                            await status_checker._handle_training_completion(
-                                avatar.id, 
-                                avatar.fal_request_id, 
-                                training_type, 
-                                status_data
-                            )
-                            
-                            return True
-                        else:
-                            logger.info(f"🔍 Аватар {avatar.name} ещё в процессе: {fal_status}")
-                            return False
+                            if fal_status == "COMPLETED":
+                                logger.info(f"🔍 Аватар {avatar.name} завершён в FAL AI, обрабатываем...")
+                                
+                                # Обрабатываем завершение через status_checker
+                                await status_checker._handle_training_completion(
+                                    avatar.id, 
+                                    avatar.fal_request_id, 
+                                    training_type, 
+                                    status_data
+                                )
+                                
+                                return True
+                            else:
+                                logger.info(f"🔍 Аватар {avatar.name} ещё в процессе: {fal_status}")
+                                return False
+                        except Exception as json_error:
+                            # Если 202 без JSON - это нормально, запрос ещё обрабатывается
+                            if response.status == 202:
+                                logger.debug(f"🔍 FAL AI обрабатывает запрос для аватара {avatar.name} (HTTP 202)")
+                                return False  # Продолжаем мониторинг
+                            else:
+                                logger.warning(f"🔍 Ошибка парсинга JSON от FAL AI для аватара {avatar.id}: {json_error}")
+                                return False
                     else:
-                        logger.warning(f"🔍 Ошибка проверки статуса FAL AI для аватара {avatar.id}: {response.status}")
+                        logger.warning(f"🔍 Ошибка проверки статуса FAL AI для аватара {avatar.id}: HTTP {response.status}")
                         return False
                         
         except Exception as e:

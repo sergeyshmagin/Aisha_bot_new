@@ -135,12 +135,22 @@ class FALStatusChecker:
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(status_url, headers=headers) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        logger.debug(f"🔍 Статус FAL AI: {data}")
-                        return data
+                    # 200 - статус получен, 202 - запрос принят и обрабатывается
+                    if response.status in [200, 202]:
+                        try:
+                            data = await response.json()
+                            logger.debug(f"🔍 Статус FAL AI (HTTP {response.status}): {data}")
+                            return data
+                        except Exception as json_error:
+                            # Если 202 без JSON - это нормально, запрос ещё обрабатывается
+                            if response.status == 202:
+                                logger.debug(f"🔍 FAL AI обрабатывает запрос (HTTP 202)")
+                                return {"status": "IN_PROGRESS", "message": "Request is being processed"}
+                            else:
+                                logger.warning(f"🔍 Ошибка парсинга JSON от FAL AI: {json_error}")
+                                return None
                     else:
-                        logger.warning(f"🔍 Ошибка запроса статуса FAL AI: {response.status}")
+                        logger.warning(f"🔍 Ошибка запроса статуса FAL AI: HTTP {response.status}")
                         return None
                         
         except Exception as e:
@@ -218,12 +228,12 @@ class FALStatusChecker:
                             notification_sent = await notification_service.send_completion_notification_by_id(avatar_id)
                             
                             if notification_sent:
-                                logger.info(f"🔍 ✅ Уведомление о завершении отправлено для аватара {avatar_id}")
+                                logger.info(f"🔍 ✅ Уведомление о завершении отправлено для аватара {avatar_id} (через status_checker)")
                             else:
-                                logger.warning(f"🔍 ⚠️ Не удалось отправить уведомление для аватара {avatar_id}")
+                                logger.warning(f"🔍 ⚠️ Не удалось отправить уведомление для аватара {avatar_id} (через status_checker)")
                                 
                         except Exception as notification_error:
-                            logger.error(f"🔍 ❌ Ошибка отправки уведомления для аватара {avatar_id}: {notification_error}")
+                            logger.error(f"🔍 ❌ Ошибка отправки уведомления для аватара {avatar_id} (через status_checker): {notification_error}")
                         
                     else:
                         logger.error(f"🔍 Ошибка обработки webhook для аватара {avatar_id}")
@@ -263,12 +273,22 @@ class FALStatusChecker:
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.get(result_url, headers=headers) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        logger.info(f"🔍 Получен результат обучения: {data}")
-                        return data
+                    # 200 - результат получен, 202 - запрос принят и обрабатывается
+                    if response.status in [200, 202]:
+                        try:
+                            data = await response.json()
+                            logger.info(f"🔍 Получен результат обучения (HTTP {response.status}): {data}")
+                            return data
+                        except Exception as json_error:
+                            # Если 202 без JSON - это нормально, запрос ещё обрабатывается
+                            if response.status == 202:
+                                logger.debug(f"🔍 FAL AI ещё обрабатывает запрос результата (HTTP 202)")
+                                return None  # Результат ещё не готов
+                            else:
+                                logger.warning(f"🔍 Ошибка парсинга JSON результата от FAL AI: {json_error}")
+                                return None
                     else:
-                        logger.warning(f"🔍 Ошибка получения результата: {response.status}")
+                        logger.warning(f"🔍 Ошибка получения результата: HTTP {response.status}")
                         return None
                         
         except Exception as e:

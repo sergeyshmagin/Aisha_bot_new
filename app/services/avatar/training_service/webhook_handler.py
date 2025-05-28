@@ -136,12 +136,12 @@ class WebhookHandler:
                 notification_sent = await notification_service.send_completion_notification(avatar)
                 
                 if notification_sent:
-                    logger.info(f"[WEBHOOK] ✅ Уведомление о завершении отправлено для аватара {avatar.id}")
+                    logger.info(f"[WEBHOOK] ✅ Уведомление о завершении отправлено для аватара {avatar.id} (через webhook_handler)")
                 else:
-                    logger.warning(f"[WEBHOOK] ⚠️ Не удалось отправить уведомление для аватара {avatar.id}")
+                    logger.warning(f"[WEBHOOK] ⚠️ Не удалось отправить уведомление для аватара {avatar.id} (через webhook_handler)")
                     
             except Exception as notification_error:
-                logger.error(f"[WEBHOOK] ❌ Ошибка отправки уведомления для аватара {avatar.id}: {notification_error}")
+                logger.error(f"[WEBHOOK] ❌ Ошибка отправки уведомления для аватара {avatar.id} (через webhook_handler): {notification_error}")
             
             logger.info(f"[WEBHOOK] Обучение аватара {avatar.id} успешно завершено")
             
