@@ -2,23 +2,34 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 def get_main_menu() -> InlineKeyboardMarkup:
     """
-    Создает главное меню бота с inline-кнопками.
+    Создает обновленное главное меню бота с разделением функций.
     
     Returns:
         InlineKeyboardMarkup: Клавиатура главного меню
     """
     return InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(text="🎤 Транскрибация", callback_data="transcribe_menu")],
         [
             InlineKeyboardButton(
-                text="🖼 Галерея",
-                callback_data="business_gallery"
+                text="🎨 Создать изображение",
+                callback_data="generation_menu"
             )
         ],
         [
             InlineKeyboardButton(
-                text="🧑‍🎨 Аватары",
-                callback_data="business_avatar"
+                text="🎭 Мои аватары",
+                callback_data="avatar_menu"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🖼️ Моя галерея",
+                callback_data="my_gallery"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="🎤 Транскрибация",
+                callback_data="transcribe_menu"
             )
         ],
         [

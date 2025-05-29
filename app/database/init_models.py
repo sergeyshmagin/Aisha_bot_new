@@ -4,9 +4,15 @@
 from app.database.base import Base, mapper_registry
 
 # Импортируем все модели для регистрации
-from app.database.models import (
+from app.database.models.models import (
     User, UserBalance, UserState, Avatar, AvatarPhoto,
     UserTranscript, UserProfile, UserTranscriptCache
+)
+
+# Импортируем модели генерации
+from app.database.models.generation import (
+    StyleCategory, StyleSubcategory, StyleTemplate, 
+    ImageGeneration, UserFavoriteTemplate, GenerationStatus
 )
 
 def init_models():

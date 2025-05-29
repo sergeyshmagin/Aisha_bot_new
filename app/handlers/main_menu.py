@@ -12,44 +12,129 @@ from app.core.logger import get_logger
 logger = get_logger(__name__)
 router = Router()
 
-@router.message(Command("start"))
-async def cmd_start(message: Message, state: FSMContext):
+@router.message(F.text == "/start")
+async def start_command(message: Message, state: FSMContext):
     """
     Обработчик команды /start.
-    Регистрирует пользователя и показывает главное меню.
     """
-    try:
-        async with get_user_service() as user_service:
-            user = await user_service.get_user_by_telegram_id(message.from_user.id)
-            
-            if not user:
-                user_data = {
-                    "id": message.from_user.id,
-                    "username": message.from_user.username,
-                    "first_name": message.from_user.first_name,
-                    "last_name": message.from_user.last_name,
-                    "language_code": message.from_user.language_code or "ru",
-                    "is_bot": message.from_user.is_bot,
-                    "is_premium": getattr(message.from_user, "is_premium", False)
-                }
-                user = await user_service.register_user(user_data)
-                if user:
-                    logger.info(f"Создан новый пользователь: {user.telegram_id}")
-                else:
-                    logger.error("Не удалось создать пользователя")
-                    await message.answer("❌ Ошибка при регистрации. Попробуйте позже.")
-                    return
-            
-            await message.answer(
-                "👋 Добро пожаловать! Выберите действие:",
-                reply_markup=get_main_menu()
-            )
-            
-    except Exception as e:
-        logger.exception("Ошибка при регистрации пользователя")
-        await message.answer(
-            "❌ Произошла ошибка при регистрации. Попробуйте позже или обратитесь в поддержку."
-        )
+    await state.clear()
+    
+    welcome_text = f"""👋 Привет, {message.from_user.first_name}!
+
+🤖 Я Aisha Bot - ваш персональный помощник для создания изображений с ИИ.
+
+✨ **Что я умею:**
+• 🎨 Создавать изображения с вашими аватарами
+• 🎭 Обучать персональные аватары
+• 🖼️ Сохранять историю ваших генераций
+• 🎤 Транскрибировать аудио и видео
+
+🚀 Выберите действие в меню ниже!"""
+
+    await message.answer(
+        welcome_text,
+        reply_markup=get_main_menu()
+    )
+
+@router.callback_query(F.data == "main_menu")
+async def show_main_menu(call: CallbackQuery, state: FSMContext):
+    """
+    Показывает главное меню.
+    """
+    await state.clear()
+    
+    await call.message.edit_text(
+        "🏠 **Главное меню**\n\nВыберите действие:",
+        reply_markup=get_main_menu(),
+        parse_mode="Markdown"
+    )
+
+@router.callback_query(F.data == "avatar_menu")
+async def show_avatar_menu(call: CallbackQuery, state: FSMContext):
+    """
+    Показывает меню аватаров - перенаправляет на правильный обработчик.
+    """
+    # Импортируем новый обработчик аватаров
+    from app.handlers.avatar import avatar_main_handler
+    
+    # Вызываем метод нового обработчика
+    await avatar_main_handler.show_avatar_menu(call, state)
+
+@router.callback_query(F.data == "my_gallery")
+async def show_my_gallery(call: CallbackQuery):
+    """
+    Показывает персональную галерею пользователя.
+    """
+    await call.answer("🔄 Переход в галерею...", show_alert=False)
+    
+    # TODO: Реализовать персональную галерею
+    await call.message.edit_text(
+        "🖼️ **Моя галерея**\n\n🚧 Раздел в разработке...\n\nЗдесь будет:\n• История ваших генераций\n• Избранные изображения\n• Статистика\n• Поиск и фильтры",
+        reply_markup=get_main_menu()
+    )
+
+@router.callback_query(F.data == "transcribe_menu")
+async def show_transcribe_menu(call: CallbackQuery):
+    """
+    Показывает меню транскрибации.
+    """
+    await call.answer("🔄 Переход к транскрибации...", show_alert=False)
+    
+    # TODO: Реализовать меню транскрибации
+    await call.message.edit_text(
+        "🎤 **Транскрибация**\n\n🚧 Раздел в разработке...\n\nЗдесь будет:\n• Транскрибация аудио\n• Транскрибация видео\n• История транскрибаций",
+        reply_markup=get_main_menu()
+    )
+
+@router.callback_query(F.data == "main_help")
+async def show_help(call: CallbackQuery):
+    """
+    Показывает справку.
+    """
+    help_text = """❓ **Справка по боту**
+
+🎨 **Создание изображений:**
+• Выберите "🎨 Создать изображение"
+• Выберите стиль из галереи или введите свой промпт
+• Дождитесь генерации (30-90 секунд)
+
+🎭 **Аватары:**
+• Создайте персональный аватар из ваших фото
+• Портретные аватары - для реалистичных изображений
+• Стилевые аватары - для художественных образов
+
+🖼️ **Галерея:**
+• Просматривайте историю генераций
+• Сохраняйте избранные изображения
+• Делитесь результатами
+
+💡 **Советы:**
+• Загружайте качественные фото для аватаров
+• Используйте детальные описания в промптах
+• Экспериментируйте с разными стилями
+
+📞 **Поддержка:** @support_username"""
+
+    await call.message.edit_text(
+        help_text,
+        reply_markup=get_main_menu(),
+        parse_mode="Markdown"
+    )
+
+# Legacy обработчики для совместимости
+@router.callback_query(F.data == "business_gallery")
+async def show_gallery_legacy(call: CallbackQuery):
+    """
+    Legacy обработчик галереи - перенаправляет на новую галерею.
+    """
+    await show_my_gallery(call)
+
+@router.callback_query(F.data == "business_avatar")
+async def show_avatar_menu_legacy(call: CallbackQuery, state: FSMContext):
+    """
+    Legacy обработчик аватаров - перенаправляет на новое меню.
+    """
+    await show_avatar_menu(call, state)
 
 @router.callback_query(F.data.startswith("balance_details_"))
 async def show_balance_details(call: CallbackQuery):
@@ -84,42 +169,6 @@ async def show_balance_details(call: CallbackQuery):
         logger.exception(f"Ошибка при показе деталей баланса: {e}")
         await call.answer("❌ Ошибка при получении информации о балансе", show_alert=True)
 
-@router.callback_query(F.data == "main_help")
-async def show_help(call: CallbackQuery):
-    """
-    Показывает всплывающее окно с помощью.
-    """
-    help_text = (
-        "ℹ️ Помощь:\n\n"
-        "🎤 Транскрибация — аудио в текст\n"
-        "🖼 Галерея — управление изображениями\n"
-        "🧑‍🎨 Аватары — создание AI-аватаров\n\n"
-        "Команда /start — главное меню"
-    )
-    await call.answer(help_text, show_alert=True)
-
-@router.callback_query(F.data == "business_gallery")
-async def show_gallery(call: CallbackQuery):
-    """
-    Показывает галерею.
-    """
-    await call.answer("🔄 Переход в галерею...", show_alert=False)
-    await call.message.edit_text(
-        "🖼 Галерея\n\nВыберите действие:",
-        reply_markup=get_gallery_menu()
-    )
-
-@router.callback_query(F.data == "business_avatar")
-async def show_avatar_menu(call: CallbackQuery, state: FSMContext):
-    """
-    Показывает меню аватаров - перенаправляет на правильный обработчик.
-    """
-    # Импортируем новый обработчик аватаров
-    from app.handlers.avatar import avatar_main_handler
-    
-    # Вызываем метод нового обработчика
-    await avatar_main_handler.show_avatar_menu(call, state)
-
 @router.callback_query(F.data == "back_to_main")
 async def back_to_main(call: CallbackQuery):
     """
@@ -129,13 +178,4 @@ async def back_to_main(call: CallbackQuery):
     await call.message.edit_text(
         "👋 Главное меню\n\nВыберите действие:",
         reply_markup=get_main_menu()
-    )
-
-@router.callback_query(F.data == "transcribe_menu")
-async def show_transcribe_menu(call: CallbackQuery, state: FSMContext):
-    """
-    Показывает меню транскрибации (обработка аудио и текста).
-    """
-    from app.handlers.transcript_main import TranscriptMainHandler
-    handler = TranscriptMainHandler()
-    await handler._handle_transcribe_command(call.message, state) 
+    ) 

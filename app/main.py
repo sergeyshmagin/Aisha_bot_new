@@ -18,6 +18,7 @@ from app.handlers import (
 )
 from app.handlers.gallery import router as gallery_router
 from app.handlers.avatar import router as avatar_router  # Заменяем Legacy register_avatar_handlers
+from app.handlers.generation.main_handler import router as generation_router  # Новый роутер генерации
 from app.handlers.fallback import fallback_router
 from app.keyboards.main import get_main_menu
 
@@ -68,6 +69,9 @@ async def main():
     
     # Регистрация роутера аватаров (новая архитектура заменяет Legacy register_avatar_handlers)
     dp.include_router(avatar_router)
+    
+    # Регистрация роутера генерации изображений
+    dp.include_router(generation_router)
     
     # Регистрация обработчиков транскриптов
     await transcript_main_handler.register_handlers()
