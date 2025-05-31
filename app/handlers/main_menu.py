@@ -4,7 +4,7 @@ from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 
 from app.keyboards.main import get_main_menu
-from app.keyboards.gallery import get_gallery_menu
+# LEGACY: from app.keyboards.gallery import get_gallery_menu  # Заменено на новую систему генерации
 from app.core.di import get_user_service
 from app.services.user import UserService
 from app.core.logger import get_logger
@@ -121,18 +121,20 @@ async def show_help(call: CallbackQuery):
         parse_mode="Markdown"
     )
 
-# Legacy обработчики для совместимости
+# LEGACY обработчики для совместимости
 @router.callback_query(F.data == "business_gallery")
 async def show_gallery_legacy(call: CallbackQuery):
     """
-    Legacy обработчик галереи - перенаправляет на новую галерею.
+    LEGACY обработчик галереи - перенаправляет на новую галерею.
+    ЗАМЕНЕНО НА: app/handlers/generation/main_handler.py (кнопка "🖼️ Моя галерея")
     """
     await show_my_gallery(call)
 
 @router.callback_query(F.data == "business_avatar")
 async def show_avatar_menu_legacy(call: CallbackQuery, state: FSMContext):
     """
-    Legacy обработчик аватаров - перенаправляет на новое меню.
+    LEGACY обработчик аватаров - перенаправляет на новое меню.
+    ЗАМЕНЕНО НА: app/handlers/avatar/ (новая архитектура аватаров)
     """
     await show_avatar_menu(call, state)
 

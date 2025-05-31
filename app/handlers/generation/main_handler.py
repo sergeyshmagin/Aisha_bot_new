@@ -44,7 +44,7 @@ class GenerationMainHandler:
             
             # Получаем основной аватар
             async with get_avatar_service() as avatar_service:
-                main_avatar = await avatar_service.get_user_main_avatar(user.id)
+                main_avatar = await avatar_service.get_main_avatar(user.id)
                 if not main_avatar:
                     await callback.answer("❌ У вас нет основного аватара. Создайте аватар сначала!", show_alert=True)
                     return
@@ -208,7 +208,7 @@ class GenerationMainHandler:
             
             # Получаем основной аватар
             async with get_avatar_service() as avatar_service:
-                main_avatar = await avatar_service.get_user_main_avatar(user.id)
+                main_avatar = await avatar_service.get_main_avatar(user.id)
                 if not main_avatar:
                     await callback.answer("❌ Аватар не найден", show_alert=True)
                     return
