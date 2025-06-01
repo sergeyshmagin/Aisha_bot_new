@@ -176,7 +176,12 @@ class ImageGenerationService:
         processed_prompt = prompt_result["processed"]
         negative_prompt = prompt_result["negative_prompt"]
         logger.info(f"Промпт обработан: '{custom_prompt[:50]}...' → '{processed_prompt[:50]}...'")
-        logger.info(f"Negative prompt создан: {len(negative_prompt)} символов")
+        
+        # Безопасная проверка negative_prompt
+        if negative_prompt:
+            logger.info(f"Negative prompt создан: {len(negative_prompt)} символов")
+        else:
+            logger.info("Negative prompt встроен в основной промпт (FLUX Pro модель)")
         
         # Создаем запись генерации
         generation = ImageGeneration(
@@ -347,24 +352,24 @@ class ImageGenerationService:
     
     def _build_final_prompt(self, original_prompt: str, avatar: Avatar) -> str:
         """
-        Строит финальный промпт с триггерными словами аватара
+        Строит финальный промпт с триггерными словами аватара (согласно FAL AI документации)
         
         Args:
             original_prompt: Оригинальный промпт
             avatar: Аватар
             
         Returns:
-            str: Финальный промпт
+            str: Финальный промпт (простой и эффективный)
         """
         trigger_word = avatar.trigger_word or "TOK"
         
-        # Добавляем триггерное слово в начало промпта
+        # 🎯 ПРОСТОЙ ПОДХОД согласно FAL AI документации
+        # Только триггер + пользовательский промпт
         final_prompt = f"{trigger_word}, {original_prompt}"
         
-        # Добавляем информацию о поле
-        if avatar.gender:
-            gender_word = "woman" if avatar.gender.value == "female" else "man"
-            final_prompt = f"{gender_word}, {final_prompt}"
+        # ❌ УБИРАЕМ автоматическое добавление gender - пусть пользователь сам указывает если нужно
+        # ❌ НЕ ДОБАВЛЯЕМ: "man"/"woman" автоматически
+        # ✅ FAL AI документация рекомендует простые промпты
         
         return final_prompt
     
@@ -452,10 +457,29 @@ class ImageGenerationService:
             
             # КРИТИЧЕСКИ ВАЖНО: Сохраняем изображения в MinIO
             if fal_urls:
+                logger.info(f"[Generation] Получено {len(fal_urls)} изображений от FAL AI для генерации {generation.id}")
+                logger.debug(f"[Generation] FAL URLs: {[url[:50]+'...' for url in fal_urls]}")
+                
                 saved_urls = await self._save_images_to_minio(generation, fal_urls)
-                result_urls = saved_urls if saved_urls else fal_urls  # Fallback к FAL URLs
+                
+                if saved_urls and len(saved_urls) == len(fal_urls):
+                    # Все изображения успешно сохранены в MinIO
+                    result_urls = saved_urls
+                    logger.info(f"[Generation] ✅ Используем MinIO URLs: {len(saved_urls)} изображений")
+                elif saved_urls and len(saved_urls) > 0:
+                    # Частично сохранены в MinIO - используем что получилось
+                    result_urls = saved_urls
+                    logger.warning(f"[Generation] ⚠️ Частично сохранено в MinIO: {len(saved_urls)}/{len(fal_urls)} изображений")
+                else:
+                    # MinIO не сработал - используем исходные FAL URLs
+                    result_urls = fal_urls
+                    logger.warning(f"[Generation] ⚠️ MinIO недоступен, используем FAL URLs: {len(fal_urls)} изображений")
+                
+                # TODO: Добавить поле fal_urls в модель ImageGeneration для fallback
+                # generation.fal_urls = fal_urls
             else:
                 result_urls = []
+                logger.error(f"[Generation] ❌ FAL AI не вернул изображений для генерации {generation.id}")
             
             generation_time = time.time() - start_time
             
@@ -471,7 +495,7 @@ class ImageGenerationService:
             await self._notify_user(generation)
             
             logger.info(f"Генерация {generation.id} завершена успешно за {generation_time:.1f}с")
-            logger.info(f"Сохранено {len(result_urls)} изображений в MinIO")
+            logger.info(f"Результат: {len(result_urls)} URL(s) для отображения пользователю")
             
         except Exception as e:
             logger.exception(f"Ошибка генерации {generation.id}: {e}")
@@ -522,7 +546,8 @@ class ImageGenerationService:
             "num_images": num_images,
             "enable_safety_checker": True,
             "output_format": "jpeg",
-            "output_quality": 95
+            "output_quality": 95,
+            "aspect_ratio": aspect_ratio
         }
         
         # Настройки качества
@@ -560,6 +585,9 @@ class ImageGenerationService:
         
         if aspect_ratio in aspect_ratio_settings:
             config.update(aspect_ratio_settings[aspect_ratio])
+        
+        # ✅ ДОБАВЛЯЕМ ОТЛАДОЧНОЕ ЛОГИРОВАНИЕ
+        logger.info(f"[Generation Config] aspect_ratio={aspect_ratio}, config содержит: aspect_ratio={config.get('aspect_ratio')}")
         
         return config
     
@@ -638,15 +666,21 @@ class ImageGenerationService:
             storage = MinioStorage()
             saved_urls = []
             
+            logger.info(f"[MinIO] Начинаем сохранение {len(fal_urls)} изображений для генерации {generation.id}")
+            
             for i, fal_url in enumerate(fal_urls):
                 try:
+                    logger.info(f"[MinIO] Скачиваем изображение {i+1}/{len(fal_urls)}: {fal_url}")
+                    
                     # Скачиваем изображение с FAL AI
                     async with aiohttp.ClientSession() as session:
                         async with session.get(fal_url) as response:
                             if response.status == 200:
                                 image_data = await response.read()
+                                content_type = response.headers.get('content-type', 'image/jpeg')
+                                logger.info(f"[MinIO] Изображение {i+1} скачано: {len(image_data)} байт, Content-Type: {content_type}")
                             else:
-                                logger.warning(f"Ошибка скачивания изображения {fal_url}: {response.status}")
+                                logger.warning(f"[MinIO] Ошибка скачивания изображения {fal_url}: HTTP {response.status}")
                                 continue
                     
                     # Генерируем путь для сохранения в MinIO
@@ -657,7 +691,9 @@ class ImageGenerationService:
                     # Сохраняем в MinIO
                     bucket = "generated"  # Или settings.MINIO_BUCKETS.get("generated", "generated")
                     
-                    # Загружаем файл
+                    logger.info(f"[MinIO] Загружаем в MinIO: bucket={bucket}, path={object_path}")
+                    
+                    # Загружаем файл с правильным Content-Type
                     success = await storage.upload_file(
                         bucket=bucket,
                         object_name=object_path,
@@ -666,32 +702,33 @@ class ImageGenerationService:
                     )
                     
                     if success:
-                        # Генерируем presigned URL для доступа
+                        # Генерируем presigned URL для доступа (1 день для безопасности)
                         minio_url = await storage.generate_presigned_url(
                             bucket=bucket,
                             object_name=object_path,
-                            expires=7*24*3600  # 7 дней
+                            expires=86400  # 1 день в секундах - безопасное значение
                         )
                         
                         if minio_url:
                             saved_urls.append(minio_url)
-                            logger.info(f"Изображение {i+1} сохранено в MinIO: {object_path}")
+                            logger.info(f"[MinIO] ✅ Изображение {i+1} сохранено: {object_path}")
+                            logger.debug(f"[MinIO] Presigned URL: {minio_url[:100]}...")
                         else:
-                            logger.warning(f"Не удалось получить URL для {object_path}")
+                            logger.warning(f"[MinIO] ❌ Не удалось получить presigned URL для {object_path}")
                     else:
-                        logger.warning(f"Не удалось загрузить изображение {i+1} в MinIO")
+                        logger.warning(f"[MinIO] ❌ Не удалось загрузить изображение {i+1} в MinIO")
                         
                 except Exception as e:
-                    logger.exception(f"Ошибка сохранения изображения {i+1} в MinIO: {e}")
+                    logger.exception(f"[MinIO] Ошибка сохранения изображения {i+1} в MinIO: {e}")
                     continue
             
             if saved_urls:
-                logger.info(f"Успешно сохранено {len(saved_urls)}/{len(fal_urls)} изображений в MinIO")
+                logger.info(f"[MinIO] ✅ Успешно сохранено {len(saved_urls)}/{len(fal_urls)} изображений в MinIO")
             else:
-                logger.warning("Не удалось сохранить ни одного изображения в MinIO")
+                logger.warning(f"[MinIO] ❌ Не удалось сохранить ни одного изображения в MinIO, используем fallback к FAL URLs")
                 
             return saved_urls
             
         except Exception as e:
-            logger.exception(f"Критическая ошибка сохранения в MinIO: {e}")
+            logger.exception(f"[MinIO] Критическая ошибка сохранения в MinIO: {e}")
             return [] 

@@ -75,6 +75,19 @@ class MinioStorage:
     async def generate_presigned_url(self, bucket: str, object_name: str, expires: int = 3600) -> str:
         loop = asyncio.get_event_loop()
         try:
+            # Проверяем валидный диапазон для MinIO (от 1 секунды до 7 дней)
+            max_expires = 7 * 24 * 3600  # 7 дней в секундах
+            min_expires = 1
+            
+            if expires > max_expires:
+                expires = max_expires
+                print(f"DEBUG: MinioStorage.generate_presigned_url: expires сокращен до максимального значения {max_expires}")
+            elif expires < min_expires:
+                expires = min_expires
+                print(f"DEBUG: MinioStorage.generate_presigned_url: expires увеличен до минимального значения {min_expires}")
+            
+            print(f"DEBUG: MinioStorage.generate_presigned_url: bucket={bucket}, object={object_name}, expires={expires}s")
+            
             url = await loop.run_in_executor(
                 None,
                 lambda: self.client.presigned_get_object(
@@ -83,6 +96,7 @@ class MinioStorage:
                     expires=timedelta(seconds=expires)
                 )
             )
+            print(f"DEBUG: MinioStorage.generate_presigned_url: URL создан успешно")
             return url
         except Exception as e:
             print(f"DEBUG: MinioStorage.generate_presigned_url: ОШИБКА {str(e)}")

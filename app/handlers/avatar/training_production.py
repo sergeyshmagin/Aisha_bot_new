@@ -154,6 +154,15 @@ class TrainingHandler:
                             progress=0
                         )
                     
+                    # 🔍 КРИТИЧЕСКИ ВАЖНО: Запускаем мониторинг status_checker
+                    try:
+                        from app.services.avatar.fal_training_service.status_checker import status_checker
+                        await status_checker.start_status_monitoring(avatar_id, request_id, training_type)
+                        logger.info(f"🔍 Запущен мониторинг status_checker для аватара {avatar_id}, request_id: {request_id}")
+                    except Exception as monitor_error:
+                        logger.warning(f"🔍 Не удалось запустить мониторинг для аватара {avatar_id}: {monitor_error}")
+                        # Продолжаем работу - это не критическая ошибка
+                    
                     # Обновляем состояние
                     await state.set_state(AvatarStates.training_in_progress)
                     await state.update_data(

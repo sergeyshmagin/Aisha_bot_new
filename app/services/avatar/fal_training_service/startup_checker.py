@@ -163,36 +163,59 @@ class StartupChecker:
                                     if result_response.status == 200:
                                         result_data = await result_response.json()
                                         
-                                        # КРИТИЧЕСКИ ВАЖНО: Проверяем наличие LoRA данных
+                                        # 🔍 ИСПРАВЛЕНИЕ: Правильная проверка LoRA данных для портретных аватаров
                                         result = result_data or {}
-                                        has_lora_data = False
+                                        has_valid_lora = False
+                                        
+                                        logger.info(f"🔍 Проверка результата обучения для {avatar.name} ({training_type})")
+                                        logger.debug(f"🔍 Структура результата: {list(result.keys())}")
                                         
                                         if training_type == "portrait":
+                                            # Portrait аватары должны иметь diffusers_lora_file.url
                                             diffusers_file = result.get("diffusers_lora_file", {})
-                                            has_lora_data = bool(diffusers_file.get("url"))
-                                        else:
-                                            diffusers_file = result.get("diffusers_lora_file", {})
-                                            if isinstance(diffusers_file, dict):
-                                                has_lora_data = bool(diffusers_file.get("url"))
+                                            if isinstance(diffusers_file, dict) and diffusers_file.get("url"):
+                                                lora_url = diffusers_file["url"]
+                                                # Проверяем что это реальный URL, а не fallback
+                                                if ("fal.media" in lora_url or "v3.fal.media" in lora_url) and "fallback" not in lora_url:
+                                                    has_valid_lora = True
+                                                    logger.info(f"🔍 ✅ Найден валидный LoRA URL: {lora_url[:50]}...")
+                                                else:
+                                                    logger.warning(f"🔍 ⚠️ LoRA URL выглядит как fallback: {lora_url}")
                                             else:
-                                                has_lora_data = bool(result.get("diffusers_lora_file_url"))
+                                                logger.warning(f"🔍 ⚠️ diffusers_lora_file отсутствует или неправильного формата: {diffusers_file}")
+                                        else:
+                                            # Style аватары должны иметь finetune_id  
+                                            finetune_id = result.get("finetune_id")
+                                            if finetune_id and "fallback" not in finetune_id:
+                                                has_valid_lora = True
+                                                logger.info(f"🔍 ✅ Найден валидный finetune_id: {finetune_id}")
+                                            else:
+                                                logger.warning(f"🔍 ⚠️ finetune_id отсутствует или является fallback: {finetune_id}")
                                         
-                                        if not has_lora_data:
-                                            logger.warning(f"🔍 ⚠️ Результат не содержит LoRA данных для аватара {avatar.id}, добавляем fallback")
-                                            # Создаём fallback данные
-                                            avatar_name = avatar.name.lower()
-                                            fallback_lora_url = f"https://startup-checker-fallback.com/lora/{avatar_name}.safetensors"
+                                        # 🚨 КРИТИЧЕСКИ ВАЖНО: НЕ ДОБАВЛЯЕМ FALLBACK если есть реальные данные!
+                                        if not has_valid_lora:
+                                            logger.error(f"🔍 ❌ РЕЗУЛЬТАТ НЕ СОДЕРЖИТ ВАЛИДНЫХ ДАННЫХ для аватара {avatar.id}")
+                                            logger.error(f"🔍 Тип: {training_type}, данные: {result}")
                                             
-                                            result["diffusers_lora_file"] = {
-                                                "url": fallback_lora_url,
-                                                "file_name": f"{avatar_name}.safetensors"
-                                            }
-                                            result["config_file"] = {
-                                                "url": f"https://startup-checker-fallback.com/config/{avatar_name}_config.json",
-                                                "file_name": f"{avatar_name}_config.json"
-                                            }
-                                            
-                                            logger.warning(f"🔍 Добавлен fallback LoRA URL: {fallback_lora_url}")
+                                            # Только в КРАЙНЕМ случае добавляем fallback
+                                            avatar_name = avatar.name.lower().replace(" ", "-")
+                                            if training_type == "portrait":
+                                                fallback_lora_url = f"https://emergency-fallback.com/lora/{avatar_name}.safetensors"
+                                                result["diffusers_lora_file"] = {
+                                                    "url": fallback_lora_url,
+                                                    "file_name": f"{avatar_name}.safetensors"
+                                                }
+                                                result["config_file"] = {
+                                                    "url": f"https://emergency-fallback.com/config/{avatar_name}_config.json",
+                                                    "file_name": f"{avatar_name}_config.json"
+                                                }
+                                                logger.error(f"🔍 ❌ Установлен EMERGENCY fallback LoRA: {fallback_lora_url}")
+                                            else:
+                                                fallback_id = f"emergency-fallback-{avatar_name}-{avatar.id.hex[:8]}"
+                                                result["finetune_id"] = fallback_id
+                                                logger.error(f"🔍 ❌ Установлен EMERGENCY fallback finetune_id: {fallback_id}")
+                                        else:
+                                            logger.info(f"🔍 ✅ Результат содержит валидные данные, используем как есть")
                                         
                                         # Формируем данные для webhook обработчика
                                         webhook_data = {

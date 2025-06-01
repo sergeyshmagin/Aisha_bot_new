@@ -126,22 +126,43 @@ class FALGenerationService:
         
         # Определяем триггер (для портретных используем trigger_phrase)
         trigger = avatar.trigger_phrase or avatar.trigger_word
-        logger.info(f"[FAL AI] 👤 Portrait аватар: lora_url={avatar.diffusers_lora_file_url[:50]}..., trigger='{trigger}'")
+        logger.info(f"[FAL AI] 👤 Portrait аватар: lora_url={avatar.diffusers_lora_file_url}, trigger='{trigger}'")
         
         # Формируем промпт с триггерной фразой
         full_prompt = self._build_prompt_with_trigger(prompt, trigger)
+        logger.info(f"[FAL AI] 👤 Итоговый промпт с триггером: '{full_prompt}'")
         
-        # Настройки генерации для LoRA (legacy API)
+        # Настройки генерации для LoRA - ИСПРАВЛЕНО согласно документации FAL AI
         generation_args = {
             "prompt": full_prompt,
-            "lora_url": avatar.diffusers_lora_file_url,
-            "lora_scale": config.get("lora_scale", 1.0) if config else 1.0,
+            # ✅ ИСПРАВЛЕНО: используем loras массив согласно документации FAL AI
+            "loras": [
+                {
+                    "path": avatar.diffusers_lora_file_url,
+                    "scale": config.get("lora_scale", 1.15) if config else 1.15  # 🎯 ОПТИМАЛЬНОЕ: 1.15 из тестирования
+                }
+            ],
             "num_images": config.get("num_images", 1) if config else 1,
-            "image_size": config.get("image_size", "square_hd") if config else "square_hd",
             "num_inference_steps": config.get("num_inference_steps", 28) if config else 28,
             "guidance_scale": config.get("guidance_scale", 3.5) if config else 3.5,
             "enable_safety_checker": config.get("enable_safety_checker", True) if config else True,
         }
+        
+        # Добавляем image_size или aspect_ratio в зависимости от конфигурации
+        if config and config.get("aspect_ratio"):
+            # Для FAL AI flux-lora используем image_size вместо aspect_ratio
+            aspect_ratio = config.get("aspect_ratio")
+            if aspect_ratio == "9:16":
+                generation_args["image_size"] = "portrait_4_3"  # Ближайший портретный формат
+            elif aspect_ratio == "16:9":
+                generation_args["image_size"] = "landscape_4_3"  # Ближайший альбомный формат
+            elif aspect_ratio == "1:1":
+                generation_args["image_size"] = "square_hd"
+            else:
+                generation_args["image_size"] = "square_hd"  # По умолчанию как в Playground
+            logger.info(f"[FAL AI] 🖼️ Преобразование aspect_ratio {aspect_ratio} в image_size: {generation_args['image_size']}")
+        else:
+            generation_args["image_size"] = config.get("image_size", "square_hd") if config else "square_hd"  # 🎯 Default как в Playground
         
         # Добавляем negative_prompt если есть в конфигурации для LoRA
         if config and config.get("negative_prompt"):
@@ -159,17 +180,33 @@ class FALGenerationService:
             generation_args["seed"] = config.get("seed")
         
         logger.info(f"[FAL AI] 🚀 FLUX LoRA для портретного аватара {avatar.id}")
+        logger.info(f"[FAL AI] 🎯 Параметры LoRA: scale={generation_args['loras'][0]['scale']}, steps={generation_args['num_inference_steps']}, guidance={generation_args['guidance_scale']}")
+        logger.info(f"[FAL AI] 🖼️ Размер изображения: {generation_args['image_size']}")
         logger.debug(f"[FAL AI] LoRA args: {generation_args}")
         
         try:
-            result = await fal_client.subscribe(
+            result = fal_client.subscribe(
                 "fal-ai/flux-lora",
-                input=generation_args,
+                arguments=generation_args,
                 with_logs=True
             )
             
             logger.info(f"[FAL AI] ✅ Генерация LoRA завершена успешно")
-            return result
+            logger.debug(f"[FAL AI] LoRA result: {result}")
+            
+            # Извлекаем URL изображения из результата
+            if isinstance(result, dict) and "images" in result:
+                images = result["images"]
+                if images and len(images) > 0:
+                    image_url = images[0]["url"] if isinstance(images[0], dict) else images[0]
+                    logger.info(f"[FAL AI] LoRA изображение готово: {image_url}")
+                    return image_url
+                else:
+                    logger.error(f"[FAL AI] LoRA результат не содержит изображений: {result}")
+                    return None
+            else:
+                logger.error(f"[FAL AI] LoRA неожиданный формат результата: {result}")
+                return None
             
         except Exception as e:
             logger.error(f"[FAL AI] ❌ Ошибка генерации LoRA: {e}")
@@ -235,14 +272,28 @@ class FALGenerationService:
         logger.debug(f"[FAL AI] Style args: {generation_args}")
         
         try:
-            result = await fal_client.subscribe(
+            result = fal_client.subscribe(
                 "fal-ai/flux-pro/v1.1-ultra-finetuned",
-                input=generation_args,
+                arguments=generation_args,
                 with_logs=True  
             )
             
             logger.info(f"[FAL AI] ✅ Генерация Style завершена успешно")
-            return result
+            logger.debug(f"[FAL AI] Style result: {result}")
+            
+            # Извлекаем URL изображения из результата
+            if isinstance(result, dict) and "images" in result:
+                images = result["images"]
+                if images and len(images) > 0:
+                    image_url = images[0]["url"] if isinstance(images[0], dict) else images[0]
+                    logger.info(f"[FAL AI] Style изображение готово: {image_url}")
+                    return image_url
+                else:
+                    logger.error(f"[FAL AI] Style результат не содержит изображений: {result}")
+                    return None
+            else:
+                logger.error(f"[FAL AI] Style неожиданный формат результата: {result}")
+                return None
             
         except Exception as e:
             logger.error(f"[FAL AI] ❌ Ошибка генерации Style: {e}")

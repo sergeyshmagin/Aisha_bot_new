@@ -254,42 +254,43 @@ class FalAIClient:
                 "message": str(e)
             }
 
-    async def generate_image(
-        self,
-        finetune_id: str,
-        prompt: str,
-        config: Optional[Dict[str, Any]] = None
-    ) -> Optional[str]:
-        """
-        DEPRECATED: Используйте FALGenerationService вместо этого метода
-        
-        Args:
-            finetune_id: ID обученной модели
-            prompt: Промпт для генерации
-            config: Дополнительные параметры генерации
-            
-        Returns:
-            Optional[str]: URL сгенерированного изображения
-        """
-        logger.warning(
-            "[FAL AI] Метод generate_image устарел. "
-            "Используйте FALGenerationService.generate_avatar_image()"
-        )
-        
-        try:
-            if self.test_mode:
-                logger.info(f"[FAL TEST MODE] Симуляция генерации с моделью {finetune_id}")
-                # Возвращаем тестовую ссылку
-                return "https://example.com/test_generated_image.jpg"
-            
-            # Простая реализация для обратной совместимости
-            # В продакшене используйте FALGenerationService
-            logger.warning(f"[FAL AI] Генерация изображений через старый API")
-            return None
-            
-        except Exception as e:
-            logger.exception(f"[FAL AI] Ошибка генерации изображения: {e}")
-            return None
+    # LEGACY: Устаревший метод, используйте FALGenerationService
+    # async def generate_image(
+    #     self,
+    #     finetune_id: str,
+    #     prompt: str,
+    #     config: Optional[Dict[str, Any]] = None
+    # ) -> Optional[str]:
+    #     """
+    #     DEPRECATED: Используйте FALGenerationService вместо этого метода
+    #     
+    #     Args:
+    #         finetune_id: ID обученной модели
+    #         prompt: Промпт для генерации
+    #         config: Дополнительные параметры генерации
+    #         
+    #     Returns:
+    #         Optional[str]: URL сгенерированного изображения
+    #     """
+    #     logger.warning(
+    #         "[FAL AI] Метод generate_image устарел. "
+    #         "Используйте FALGenerationService.generate_avatar_image()"
+    #     )
+    #     
+    #     try:
+    #         if self.test_mode:
+    #             logger.info(f"[FAL TEST MODE] Симуляция генерации с моделью {finetune_id}")
+    #             # Возвращаем тестовую ссылку
+    #             return "https://example.com/test_generated_image.jpg"
+    #         
+    #         # Простая реализация для обратной совместимости
+    #         # В продакшене используйте FALGenerationService
+    #         logger.warning(f"[FAL AI] Генерация изображений через старый API")
+    #         return None
+    #         
+    #     except Exception as e:
+    #         logger.exception(f"[FAL AI] Ошибка генерации изображения: {e}")
+    #         return None
 
     async def _download_and_create_archive(
         self, 

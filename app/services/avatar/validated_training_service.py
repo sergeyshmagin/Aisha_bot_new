@@ -98,6 +98,16 @@ class ValidatedTrainingService:
             # 8. Сохраняем request_id в БД
             await self._save_training_request(avatar_id, request_id, training_config)
 
+            # 🔍 КРИТИЧЕСКИ ВАЖНО: Запускаем мониторинг status_checker
+            try:
+                from app.services.avatar.fal_training_service.status_checker import status_checker
+                training_type = training_config.get("training_type", "portrait")
+                await status_checker.start_status_monitoring(avatar_id, request_id, training_type)
+                logger.info(f"🔍 Запущен мониторинг status_checker для аватара {avatar_id}, request_id: {request_id}")
+            except Exception as monitor_error:
+                logger.warning(f"🔍 Не удалось запустить мониторинг для аватара {avatar_id}: {monitor_error}")
+                # Продолжаем работу - это не критическая ошибка
+
             logger.info(f"✅ Обучение аватара {avatar_id} запущено успешно: request_id={request_id}")
             return True, f"Обучение запущено успешно", request_id
 
