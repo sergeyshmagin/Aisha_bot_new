@@ -142,7 +142,7 @@ async def generate_portrait_image(avatar_id: str, prompt: str):
         avatar=avatar,
         prompt=prompt,
         generation_config={
-            "lora_scale": 1.0,
+            "lora_scale": 1.15,  # 🎯 ОПТИМАЛЬНОЕ значение из тестирования
             "image_size": "square_hd",
             "num_inference_steps": 28,
             "guidance_scale": 3.5
@@ -152,16 +152,19 @@ async def generate_portrait_image(avatar_id: str, prompt: str):
     return image_url
 ```
 
-### Параметры LoRA генерации
+### Параметры LoRA генерации (ИСПРАВЛЕНО согласно документации FAL AI)
 
 | Параметр | Тип | Описание | По умолчанию |
 |----------|-----|----------|--------------|
-| `lora_url` | string | URL LoRA файла | Из `avatar.diffusers_lora_file_url` |
-| `lora_scale` | float | Сила применения LoRA (0.0-2.0) | 1.0 |
+| `loras` | array | Массив LoRA файлов (НОВЫЙ формат) | Из `avatar.diffusers_lora_file_url` |
+| `loras[].path` | string | URL LoRA файла | Из `avatar.diffusers_lora_file_url` |
+| `loras[].scale` | float | Сила применения LoRA (0.0-2.0) | 1.15 (оптимальное) |
 | `prompt` | string | Текстовое описание | + trigger_phrase |
 | `image_size` | enum | Размер изображения | "square_hd" |
 | `num_inference_steps` | integer | Количество шагов | 28 |
 | `guidance_scale` | float | CFG масштаб | 3.5 |
+
+**⚠️ ВАЖНО:** Старые параметры `lora_url` и `lora_scale` заменены на массив `loras` согласно документации FAL AI.
 
 ---
 
