@@ -104,6 +104,12 @@ class PromptProcessingService:
 - Параметры освещения
 - Описание фона и атмосферы
 
+КРИТИЧЕСКИ ВАЖНО - РУКИ И ПОЗЫ:
+- ИЗБЕГАЙ описания рук и пальцев в деталях
+- ПРЕДПОЧИТАЙ позы без видимых рук: "arms at sides", "hands not visible", "cropped before hands"
+- ЕСЛИ руки должны быть видны: используй только общие описания "natural hand positioning", "relaxed pose"
+- НЕ описывай конкретные жесты или позиции пальцев
+
 НЕ используй простые слова как "detailed", "high quality". Используй КОНКРЕТНЫЕ фотографические термины."""
 
         if avatar_type == "portrait":
@@ -135,6 +141,11 @@ class PromptProcessingService:
 - "soft and diffused lighting"
 - "minimal shadows"
 - "light post-processing for increased clarity"
+
+ИЗБЕГАНИЕ ПРОБЛЕМ С РУКАМИ:
+- Кадрирование ВЫШЕ рук: "cropped at mid-torso", "cropped at chest level", "shoulders and head visible"
+- Если руки видны: "hands naturally positioned", "relaxed arm positioning", "arms at sides"
+- НЕ описывать: жесты, позиции пальцев, детали рук
 
 ПРИМЕР СТРУКТУРЫ:
 "A high-quality portrait photograph of a [description], centrally positioned in the frame, cropped at [level], occupying [%] of vertical space. The subject has [skin tone] with [features], [expression], [gaze direction]. [Clothing details]. [Accessories]. The background is [description]. The lighting is [type], creating [effect]. The camera angle is [position] with [lens effect], ensuring [focus description], enhanced with [post-processing]."
