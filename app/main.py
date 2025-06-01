@@ -6,13 +6,11 @@ import logging
 import sys
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
-from aiogram.types import Message
-from aiogram.filters import Command
-from aiogram.fsm.context import FSMContext
 
 from app.core.config import settings
 from app.handlers import (
     main_router,
+    debug_router,
     transcript_main_handler,
     transcript_processing_handler,
 )
@@ -20,7 +18,6 @@ from app.handlers.gallery import router as gallery_router  # LEGACY: Стара�
 from app.handlers.avatar import router as avatar_router  # Заменяем Legacy register_avatar_handlers
 from app.handlers.generation.main_handler import router as generation_router  # Новый роутер генерации
 from app.handlers.fallback import fallback_router
-from app.keyboards.main import get_main_menu
 
 # Настройка логирования
 logging.basicConfig(
@@ -65,6 +62,7 @@ async def main():
 
     # Регистрация роутеров
     dp.include_router(main_router)
+    dp.include_router(debug_router)
     dp.include_router(gallery_router)  # LEGACY: Старая галерея (пустой роутер)
     
     # Регистрация роутера аватаров (новая архитектура заменяет Legacy register_avatar_handlers)
@@ -80,20 +78,8 @@ async def main():
     dp.include_router(transcript_main_handler.router)
     dp.include_router(transcript_processing_handler.router)
 
-    # Регистрируем fallback_router последним
+    # Регистрируем fallback_router последним для ловли необработанных сообщений
     dp.include_router(fallback_router)
-
-    @dp.message(Command("start"))
-    async def cmd_start(message: Message, state: FSMContext):
-        try:
-            # Отправить главное меню
-            await message.answer(
-                "👋 Добро пожаловать в Aisha Bot!\n\nВыберите действие:",
-                reply_markup=get_main_menu()
-            )
-        except Exception as e:
-            logger.error(f"Ошибка в команде /start: {e}")
-            await message.answer("❌ Произошла ошибка. Попробуйте позже.")
 
     # Выполняем задачи запуска
     await startup_tasks()

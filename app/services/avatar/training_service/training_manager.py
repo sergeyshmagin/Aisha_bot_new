@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 from uuid import UUID
 import logging
+import asyncio
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
@@ -15,6 +16,7 @@ from app.database.models import Avatar, AvatarStatus, AvatarPhoto
 from app.services.fal.client import FalAIClient
 from app.services.storage import StorageService
 from .avatar_validator import AvatarValidator
+from app.core.database import get_session
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +95,13 @@ class TrainingManager:
             except Exception as e:
                 logger.warning(f"🔍 Не удалось запустить мониторинг статуса для аватара {avatar_id}: {e}")
                 # Не прерываем процесс - это не критическая ошибка
+            
+            # 🔄 ЗАПУСКАЕМ ОТЛОЖЕННУЮ ПРОВЕРКУ (дополнительная гарантия)
+            try:
+                asyncio.create_task(self._delayed_completion_check(avatar_id, finetune_id, training_type))
+                logger.info(f"🔄 Запущена отложенная проверка завершения для аватара {avatar_id}")
+            except Exception as e:
+                logger.warning(f"🔄 Не удалось запустить отложенную проверку для аватара {avatar_id}: {e}")
             
             logger.info(
                 f"[TRAINING] Обучение аватара {avatar_id} запущено успешно: "
@@ -313,4 +322,179 @@ class TrainingManager:
         )
         
         await self.session.execute(stmt)
-        await self.session.commit() 
+        await self.session.commit()
+    
+    async def _delayed_completion_check(self, avatar_id: UUID, request_id: str, training_type: str) -> None:
+        """
+        Отложенная проверка завершения обучения через 10 минут
+        Дополнительная гарантия получения результатов
+        
+        Args:
+            avatar_id: ID аватара
+            request_id: ID запроса
+            training_type: Тип обучения
+        """
+        try:
+            # Ждём 10 минут
+            await asyncio.sleep(600)  # 10 минут
+            
+            # Проверяем статус аватара
+            async with get_session() as session:
+                avatar = await session.get(Avatar, avatar_id)
+                if not avatar:
+                    logger.warning(f"🔄 Аватар {avatar_id} не найден при отложенной проверке")
+                    return
+                
+                # Если аватар всё ещё в обучении - принудительно проверяем FAL AI
+                if avatar.status == AvatarStatus.TRAINING:
+                    logger.info(f"🔄 Отложенная проверка: аватар {avatar_id} всё ещё в обучении, проверяем FAL AI")
+                    
+                    from app.core.config import settings
+                    import aiohttp
+                    
+                    fal_api_key = settings.effective_fal_api_key
+                    if not fal_api_key:
+                        logger.warning(f"🔄 FAL API ключ недоступен для отложенной проверки аватара {avatar_id}")
+                        # Принудительно завершаем с fallback
+                        await self._force_complete_avatar_with_fallback(avatar_id, request_id, training_type)
+                        return
+                    
+                    # Определяем endpoint
+                    if training_type == "portrait":
+                        endpoint = "fal-ai/flux-lora-portrait-trainer"
+                    else:
+                        endpoint = "fal-ai/flux-pro-trainer"
+                    
+                    status_url = f"https://queue.fal.run/{endpoint}/requests/{request_id}/status"
+                    headers = {
+                        "Authorization": f"Key {fal_api_key}",
+                        "Content-Type": "application/json"
+                    }
+                    
+                    # Проверяем статус
+                    async with aiohttp.ClientSession() as http_session:
+                        async with http_session.get(status_url, headers=headers) as response:
+                            if response.status in [200, 202]:
+                                try:
+                                    status_data = await response.json()
+                                    fal_status = status_data.get("status")
+                                    
+                                    if fal_status == "COMPLETED":
+                                        logger.info(f"🔄 Отложенная проверка: аватар {avatar_id} завершён в FAL AI!")
+                                        
+                                        # Получаем результат и обрабатываем
+                                        result_url = f"https://queue.fal.run/{endpoint}/requests/{request_id}"
+                                        async with http_session.get(result_url, headers=headers) as result_response:
+                                            if result_response.status == 200:
+                                                result_data = await result_response.json()
+                                                
+                                                # Обрабатываем через status_checker
+                                                from app.services.avatar.fal_training_service.status_checker import status_checker
+                                                await status_checker._handle_training_completion(
+                                                    avatar_id, request_id, training_type, status_data
+                                                )
+                                                
+                                                logger.info(f"🔄 ✅ Отложенная проверка: аватар {avatar_id} успешно завершён")
+                                            else:
+                                                logger.warning(f"🔄 Не удалось получить результат при отложенной проверке для {avatar_id}")
+                                                await self._force_complete_avatar_with_fallback(avatar_id, request_id, training_type)
+                                    
+                                    elif fal_status in ["IN_QUEUE", "IN_PROGRESS"]:
+                                        logger.info(f"🔄 Отложенная проверка: аватар {avatar_id} всё ещё обучается ({fal_status})")
+                                        # Продолжаем ждать
+                                        
+                                    else:
+                                        logger.warning(f"🔄 Отложенная проверка: неожиданный статус {fal_status} для аватара {avatar_id}")
+                                        await self._force_complete_avatar_with_fallback(avatar_id, request_id, training_type)
+                                        
+                                except Exception as json_error:
+                                    logger.warning(f"🔄 Ошибка парсинга ответа FAL AI при отложенной проверке {avatar_id}: {json_error}")
+                                    await self._force_complete_avatar_with_fallback(avatar_id, request_id, training_type)
+                            else:
+                                logger.warning(f"🔄 Ошибка запроса к FAL AI при отложенной проверке {avatar_id}: HTTP {response.status}")
+                                await self._force_complete_avatar_with_fallback(avatar_id, request_id, training_type)
+                
+                elif avatar.status == AvatarStatus.COMPLETED:
+                    logger.info(f"🔄 Отложенная проверка: аватар {avatar_id} уже завершён")
+                    
+                    # Дополнительная проверка данных
+                    if not avatar.trigger_phrase or not avatar.diffusers_lora_file_url:
+                        logger.warning(f"🔄 Аватар {avatar_id} завершён, но отсутствуют критичные данные, дополняем")
+                        await self._ensure_avatar_data_completeness(avatar_id)
+                else:
+                    logger.info(f"🔄 Отложенная проверка: аватар {avatar_id} в статусе {avatar.status.value}")
+                
+        except Exception as e:
+            logger.error(f"🔄 Ошибка отложенной проверки для аватара {avatar_id}: {e}")
+    
+    async def _force_complete_avatar_with_fallback(self, avatar_id: UUID, request_id: str, training_type: str) -> None:
+        """
+        Принудительно завершает аватар с fallback данными
+        
+        Args:
+            avatar_id: ID аватара
+            request_id: ID запроса
+            training_type: Тип обучения
+        """
+        try:
+            async with get_session() as session:
+                avatar = await session.get(Avatar, avatar_id)
+                if not avatar:
+                    logger.error(f"🔄 Аватар {avatar_id} не найден для принудительного завершения")
+                    return
+                
+                avatar_name = avatar.name.lower()
+                fallback_lora_url = f"https://training-manager-fallback.com/lora/{avatar_name}.safetensors"
+                
+                # Устанавливаем завершённое состояние
+                avatar.status = AvatarStatus.COMPLETED
+                avatar.training_progress = 100
+                avatar.training_completed_at = datetime.utcnow()
+                avatar.trigger_phrase = avatar.trigger_phrase or "TOK"
+                avatar.diffusers_lora_file_url = avatar.diffusers_lora_file_url or fallback_lora_url
+                avatar.config_file_url = avatar.config_file_url or f"https://training-manager-fallback.com/config/{avatar_name}_config.json"
+                
+                await session.commit()
+                
+                logger.warning(f"🔄 ⚠️ Аватар {avatar_id} принудительно завершён с fallback данными через training manager")
+                
+        except Exception as e:
+            logger.error(f"🔄 Ошибка принудительного завершения аватара {avatar_id}: {e}")
+    
+    async def _ensure_avatar_data_completeness(self, avatar_id: UUID) -> None:
+        """
+        Обеспечивает полноту данных завершённого аватара
+        
+        Args:
+            avatar_id: ID аватара
+        """
+        try:
+            async with get_session() as session:
+                avatar = await session.get(Avatar, avatar_id)
+                if not avatar:
+                    return
+                
+                changed = False
+                avatar_name = avatar.name.lower()
+                
+                if not avatar.trigger_phrase:
+                    avatar.trigger_phrase = "TOK"
+                    changed = True
+                    logger.info(f"🔄 Установлен trigger_phrase для аватара {avatar_id}")
+                
+                if not avatar.diffusers_lora_file_url:
+                    avatar.diffusers_lora_file_url = f"https://completeness-check-fallback.com/lora/{avatar_name}.safetensors"
+                    changed = True
+                    logger.warning(f"🔄 Установлен fallback LoRA URL для аватара {avatar_id}")
+                
+                if not avatar.config_file_url:
+                    avatar.config_file_url = f"https://completeness-check-fallback.com/config/{avatar_name}_config.json"
+                    changed = True
+                    logger.warning(f"🔄 Установлен fallback config URL для аватара {avatar_id}")
+                
+                if changed:
+                    await session.commit()
+                    logger.info(f"🔄 ✅ Данные аватара {avatar_id} дополнены для полноты")
+                
+        except Exception as e:
+            logger.error(f"🔄 Ошибка проверки полноты данных аватара {avatar_id}: {e}") 

@@ -1,18 +1,19 @@
 """
-Обработка webhook от FAL AI
+Обработка webhook от FAL AI с валидацией данных
 Выделено из app/services/avatar/training_service.py для соблюдения правила ≤500 строк
 """
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from uuid import UUID
 import logging
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import update
+from sqlalchemy import update, select
 
 from app.database.models import Avatar, AvatarStatus, AvatarTrainingType
 from .models import WebhookData
 from .progress_tracker import ProgressTracker
+from ..training_data_validator import AvatarTrainingDataValidator
 
 logger = logging.getLogger(__name__)
 
@@ -23,10 +24,11 @@ class WebhookHandler:
     def __init__(self, session: AsyncSession):
         self.session = session
         self.progress_tracker = ProgressTracker(session)
+        self.data_validator = AvatarTrainingDataValidator(session)
     
     async def handle_webhook(self, webhook_data: Dict[str, Any]) -> bool:
         """
-        Обрабатывает webhook от FAL AI
+        Обрабатывает webhook от FAL AI с валидацией данных
         
         Args:
             webhook_data: Данные webhook от FAL AI
@@ -56,7 +58,7 @@ class WebhookHandler:
             
             # Обрабатываем результат в зависимости от статуса
             if webhook.status == "completed":
-                await self._process_training_completion(avatar, webhook)
+                await self._process_training_completion_with_validation(avatar, webhook)
             else:
                 # Обновляем статус аватара для промежуточных состояний
                 await self._process_training_status_update(avatar.id, webhook)
@@ -67,54 +69,30 @@ class WebhookHandler:
             logger.exception(f"[WEBHOOK] Ошибка обработки webhook: {e}")
             return False
     
-    async def _process_training_completion(self, avatar: Avatar, webhook: WebhookData) -> None:
+    async def _process_training_completion_with_validation(self, avatar: Avatar, webhook: WebhookData) -> None:
         """
-        Обрабатывает завершение обучения аватара
+        Обрабатывает завершение обучения аватара С ВАЛИДАЦИЕЙ ДАННЫХ
         
         Args:
             avatar: Аватар
             webhook: Данные webhook от FAL AI
         """
         try:
-            result = webhook.result or {}
+            logger.info(f"🔍 [WEBHOOK] Начинаем валидацию и обработку завершения обучения для аватара {avatar.id}")
             
-            # Базовые данные для обновления
-            update_data = {
-                "status": AvatarStatus.COMPLETED,
-                "training_progress": 100,
+            # ИСПОЛЬЗУЕМ ВАЛИДАТОР для обеспечения правильности данных
+            update_data = await self.data_validator.validate_and_fix_training_completion(
+                avatar=avatar,
+                webhook_result=webhook.result or {}
+            )
+            
+            # Дополняем данными из webhook
+            update_data.update({
                 "training_completed_at": datetime.utcnow(),
-                "fal_response_data": result
-            }
+                "fal_response_data": webhook.result
+            })
             
-            # Обрабатываем результат в зависимости от типа обучения
-            if avatar.training_type == AvatarTrainingType.PORTRAIT:
-                # flux-lora-portrait-trainer возвращает файлы LoRA
-                diffusers_file = result.get("diffusers_lora_file", {})
-                config_file = result.get("config_file", {})
-                
-                update_data.update({
-                    "diffusers_lora_file_url": diffusers_file.get("url"),
-                    "config_file_url": config_file.get("url")
-                })
-                
-                logger.info(
-                    f"[WEBHOOK] Портретное обучение завершено для аватара {avatar.id}: "
-                    f"LoRA файл: {diffusers_file.get('url')}"
-                )
-                
-            else:
-                # flux-pro-trainer возвращает finetune_id
-                finetune_id = result.get("finetune_id")
-                
-                if finetune_id:
-                    update_data["finetune_id"] = finetune_id
-                    
-                    logger.info(
-                        f"[WEBHOOK] Стилевое обучение завершено для аватара {avatar.id}: "
-                        f"finetune_id: {finetune_id}"
-                    )
-                else:
-                    logger.warning(f"[WEBHOOK] Не получен finetune_id для аватара {avatar.id}")
+            logger.info(f"✅ [WEBHOOK] Валидированные данные для аватара {avatar.id}: {list(update_data.keys())}")
             
             # Обновляем аватар в БД
             stmt = (
@@ -143,7 +121,7 @@ class WebhookHandler:
             except Exception as notification_error:
                 logger.error(f"[WEBHOOK] ❌ Ошибка отправки уведомления для аватара {avatar.id} (через webhook_handler): {notification_error}")
             
-            logger.info(f"[WEBHOOK] Обучение аватара {avatar.id} успешно завершено")
+            logger.info(f"[WEBHOOK] ✅ Обучение аватара {avatar.id} успешно завершено с валидацией данных!")
             
         except Exception as e:
             logger.exception(f"[WEBHOOK] Ошибка обработки завершения обучения {avatar.id}: {e}")
@@ -294,7 +272,6 @@ class WebhookHandler:
         
         if error_message:
             # Получаем текущие данные аватара
-            from sqlalchemy import select
             query = select(Avatar.avatar_data).where(Avatar.id == avatar_id)
             result = await self.session.execute(query)
             current_data = result.scalar() or {}

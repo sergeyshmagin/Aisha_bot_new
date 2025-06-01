@@ -12,7 +12,7 @@ from app.core.logger import get_logger
 logger = get_logger(__name__)
 router = Router()
 
-@router.message(F.text == "/start")
+@router.message(Command("start"))
 async def start_command(message: Message, state: FSMContext):
     """
     Обработчик команды /start.
@@ -43,11 +43,22 @@ async def show_main_menu(call: CallbackQuery, state: FSMContext):
     """
     await state.clear()
     
-    await call.message.edit_text(
-        "🏠 **Главное меню**\n\nВыберите действие:",
-        reply_markup=get_main_menu(),
-        parse_mode="Markdown"
-    )
+    try:
+        await call.message.edit_text(
+            "🏠 **Главное меню**\n\nВыберите действие:",
+            reply_markup=get_main_menu(),
+            parse_mode="Markdown"
+        )
+    except Exception as e:
+        # Если не можем редактировать сообщение, отправляем новое
+        logger.debug(f"Не удалось редактировать сообщение: {e}")
+        await call.message.answer(
+            "🏠 **Главное меню**\n\nВыберите действие:",
+            reply_markup=get_main_menu(),
+            parse_mode="Markdown"
+        )
+    
+    await call.answer()
 
 @router.callback_query(F.data == "avatar_menu")
 async def show_avatar_menu(call: CallbackQuery, state: FSMContext):
@@ -74,17 +85,40 @@ async def show_my_gallery(call: CallbackQuery):
     )
 
 @router.callback_query(F.data == "transcribe_menu")
-async def show_transcribe_menu(call: CallbackQuery):
+async def show_transcribe_menu(call: CallbackQuery, state: FSMContext):
     """
-    Показывает меню транскрибации.
+    Показывает меню транскрибации - перенаправляет на правильный обработчик.
     """
     await call.answer("🔄 Переход к транскрибации...", show_alert=False)
     
-    # TODO: Реализовать меню транскрибации
-    await call.message.edit_text(
-        "🎤 **Транскрибация**\n\n🚧 Раздел в разработке...\n\nЗдесь будет:\n• Транскрибация аудио\n• Транскрибация видео\n• История транскрибаций",
-        reply_markup=get_main_menu()
-    )
+    # Импортируем и используем настоящий обработчик транскрибации
+    from app.handlers import transcript_main_handler
+    
+    # Используем метод обработчика для показа меню через call.message
+    try:
+        await state.set_state(None)  # Очищаем состояние
+        
+        # Создаем клавиатуру транскрибации
+        from aiogram.utils.keyboard import InlineKeyboardBuilder
+        from aiogram.types import InlineKeyboardButton
+        
+        builder = InlineKeyboardBuilder()
+        builder.row(
+            InlineKeyboardButton(text="🎤 Аудио", callback_data="transcribe_audio"),
+            InlineKeyboardButton(text="📝 Текст", callback_data="transcribe_text")
+        )
+        builder.row(InlineKeyboardButton(text="📜 История", callback_data="transcribe_history"))
+        builder.row(InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_main"))
+        
+        await call.message.edit_text(
+            "🎙 <b>Транскрибация</b>\n\nВыберите действие:",
+            parse_mode="HTML",
+            reply_markup=builder.as_markup()
+        )
+        
+    except Exception as e:
+        logger.error(f"Ошибка при показе меню транскрибации: {e}")
+        await call.answer("❌ Ошибка при загрузке меню транскрибации", show_alert=True)
 
 @router.callback_query(F.data == "main_help")
 async def show_help(call: CallbackQuery):
@@ -177,7 +211,16 @@ async def back_to_main(call: CallbackQuery):
     Возвращает в главное меню.
     """
     await call.answer("🔄 Возврат в главное меню...", show_alert=False)
-    await call.message.edit_text(
-        "👋 Главное меню\n\nВыберите действие:",
-        reply_markup=get_main_menu()
-    ) 
+    
+    try:
+        await call.message.edit_text(
+            "👋 Главное меню\n\nВыберите действие:",
+            reply_markup=get_main_menu()
+        )
+    except Exception as e:
+        # Если не можем редактировать сообщение, отправляем новое
+        logger.debug(f"Не удалось редактировать сообщение в back_to_main: {e}")
+        await call.message.answer(
+            "👋 Главное меню\n\nВыберите действие:",
+            reply_markup=get_main_menu()
+        ) 

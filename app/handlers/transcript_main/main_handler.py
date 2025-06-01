@@ -268,23 +268,67 @@ class TranscriptMainHandler(TranscriptBaseHandler):
         """
         try:
             await state.clear()
-            try:
-                await call.message.edit_text(
-                    "🎙 <b>Транскрибация</b>\n\nВыберите действие:",
-                    parse_mode="HTML",
-                    reply_markup=get_transcript_menu_keyboard()
-                )
-            except Exception as edit_error:
-                # Если не удалось отредактировать (например, сообщение содержит документ)
-                logger.warning(f"Не удалось отредактировать сообщение при возврате в меню: {edit_error}")
+            
+            # Проверяем, можно ли отредактировать сообщение
+            can_edit = self._can_edit_message(call.message)
+            
+            menu_text = "🎙 <b>Транскрибация</b>\n\nВыберите действие:"
+            menu_markup = get_transcript_menu_keyboard()
+            
+            if can_edit:
+                try:
+                    await call.message.edit_text(
+                        menu_text,
+                        parse_mode="HTML",
+                        reply_markup=menu_markup
+                    )
+                except Exception as edit_error:
+                    # Если не удалось отредактировать, отправляем новое сообщение
+                    logger.debug(f"Не удалось отредактировать сообщение (ожидаемо): {edit_error}")
+                    await call.message.answer(
+                        menu_text,
+                        parse_mode="HTML",
+                        reply_markup=menu_markup
+                    )
+            else:
+                # Сразу отправляем новое сообщение
                 await call.message.answer(
-                    "🎙 <b>Транскрибация</b>\n\nВыберите действие:",
+                    menu_text,
                     parse_mode="HTML",
-                    reply_markup=get_transcript_menu_keyboard()
+                    reply_markup=menu_markup
                 )
         except Exception as e:
             logger.error(f"Ошибка при возврате в меню транскрибации: {e}")
             await call.answer("Ошибка при возврате в меню транскрибации")
+
+    def _can_edit_message(self, message) -> bool:
+        """
+        Проверяет, можно ли отредактировать сообщение
+        
+        Args:
+            message: Сообщение Telegram
+            
+        Returns:
+            bool: True если сообщение можно редактировать
+        """
+        # Нельзя редактировать сообщения с медиа, документами, аудио и т.д.
+        if hasattr(message, 'document') and message.document:
+            return False
+        if hasattr(message, 'photo') and message.photo:
+            return False
+        if hasattr(message, 'video') and message.video:
+            return False
+        if hasattr(message, 'audio') and message.audio:
+            return False
+        if hasattr(message, 'voice') and message.voice:
+            return False
+        if hasattr(message, 'video_note') and message.video_note:
+            return False
+        if hasattr(message, 'sticker') and message.sticker:
+            return False
+        
+        # Можно редактировать только текстовые сообщения с inline-кнопками
+        return hasattr(message, 'text') and message.text is not None
 
     # Метод для обратной совместимости
     def _format_friendly_filename(self, transcript_data: dict) -> str:

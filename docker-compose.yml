@@ -1,0 +1,76 @@
+version: '3.8'
+
+services:
+  # ======================== APPLICATION SERVICES ONLY ========================
+  
+  aisha-bot:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.bot
+      target: development
+    container_name: aisha-bot-dev
+    restart: unless-stopped
+    environment:
+      # Подключение к внешним сервисам с аутентификацией
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DATABASE_HOST}:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@${REDIS_HOST}:6379/0
+      - QUEUE_BROKER_URL=redis://:${REDIS_PASSWORD}@${REDIS_HOST}:6379/1
+      - QUEUE_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@${REDIS_HOST}:6379/2
+      - CACHE_URL=redis://:${REDIS_PASSWORD}@${REDIS_HOST}:6379/3
+      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
+      - DEBUG=true
+      - ENVIRONMENT=development
+    env_file:
+      - .env.docker.dev
+    volumes:
+      - .:/app
+      - ./logs:/app/logs
+      - /etc/localtime:/etc/localtime:ro
+    working_dir: /app
+    # НЕ публикуем порты - бот работает через webhook/polling
+    networks:
+      - aisha-dev-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  aisha-api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+      target: development
+    container_name: aisha-api-dev
+    restart: unless-stopped
+    environment:
+      # Подключение к внешним сервисам с аутентификацией
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${DATABASE_HOST}:5432/${POSTGRES_DB}
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@${REDIS_HOST}:6379/0
+      - DEBUG=true
+      - ENVIRONMENT=development
+    env_file:
+      - .env.docker.dev
+    volumes:
+      - .:/app
+      - ./logs:/app/logs
+      - /etc/localtime:/etc/localtime:ro
+    working_dir: /app
+    ports:
+      - "8000:8000"  # API для development
+    networks:
+      - aisha-dev-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  aisha-dev-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 

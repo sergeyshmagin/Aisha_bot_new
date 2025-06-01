@@ -15,6 +15,7 @@ from app.database.models.generation import (
 )
 from app.services.fal.generation_service import FALGenerationService
 from app.services.generation.style_service import StyleService
+from app.services.generation.prompt_processing_service import PromptProcessingService
 
 logger = get_logger(__name__)
 
@@ -28,6 +29,7 @@ class ImageGenerationService:
     def __init__(self):
         self.fal_service = FALGenerationService()
         self.style_service = StyleService()
+        self.prompt_processor = PromptProcessingService()
         # Не создаем UserService здесь, будем получать через DI или создавать с сессией
     
     def _get_user_service(self):
@@ -165,18 +167,39 @@ class ImageGenerationService:
         if not avatar:
             raise ValueError(f"Аватар {avatar_id} не найден")
         
+        # Обрабатываем промпт через GPT
+        avatar_type = avatar.training_type.value if avatar.training_type else "portrait"
+        prompt_result = await self.prompt_processor.process_prompt(custom_prompt, avatar_type)
+        
+        processed_prompt = prompt_result["processed"]
+        negative_prompt = prompt_result["negative_prompt"]
+        logger.info(f"Промпт обработан: '{custom_prompt[:50]}...' → '{processed_prompt[:50]}...'")
+        logger.info(f"Negative prompt создан: {len(negative_prompt)} символов")
+        
         # Создаем запись генерации
         generation = ImageGeneration(
             user_id=user_id,
             avatar_id=avatar_id,
             template_id=None,
             original_prompt=custom_prompt,
-            final_prompt=self._build_final_prompt(custom_prompt, avatar),
+            final_prompt=self._build_final_prompt(processed_prompt, avatar),
             quality_preset=quality_preset,
             aspect_ratio=aspect_ratio,
             num_images=num_images,
             status=GenerationStatus.PENDING
         )
+        
+        # Сохраняем результат обработки промпта в дополнительные данные
+        if hasattr(generation, 'prompt_metadata'):
+            generation.prompt_metadata = {
+                'prompt_processing': {
+                    'original_prompt': prompt_result["original"],
+                    'processed_prompt': prompt_result["processed"],
+                    'negative_prompt': prompt_result["negative_prompt"],
+                    'translation_needed': prompt_result["translation_needed"],
+                    'processor_available': self.prompt_processor.is_available()
+                }
+            }
         
         # Сохраняем в БД
         await self._save_generation(generation)
@@ -383,12 +406,27 @@ class ImageGenerationService:
             if not avatar:
                 raise ValueError(f"Аватар {generation.avatar_id} не найден")
             
+            # Проверяем готовность аватара к генерации
+            if not self._is_avatar_ready_for_generation(avatar):
+                error_msg = self._get_avatar_status_message(avatar)
+                raise ValueError(error_msg)
+            
             # Настройки генерации
             config = self._get_generation_config(
                 generation.quality_preset,
                 generation.aspect_ratio,
                 generation.num_images
             )
+            
+            # Извлекаем negative prompt из метаданных если есть
+            negative_prompt = None
+            if hasattr(generation, 'prompt_metadata') and generation.prompt_metadata:
+                negative_prompt = generation.prompt_metadata.get('prompt_processing', {}).get('negative_prompt')
+            
+            # Добавляем negative prompt в конфигурацию
+            if negative_prompt:
+                config['negative_prompt'] = negative_prompt
+                logger.info(f"Добавлен negative prompt: {len(negative_prompt)} символов")
             
             start_time = time.time()
             
@@ -532,4 +570,43 @@ class ImageGenerationService:
             generation: Объект генерации
         """
         # TODO: Реализовать отправку уведомления об ошибке
-        pass 
+        pass
+    
+    def _is_avatar_ready_for_generation(self, avatar: Avatar) -> bool:
+        """
+        Проверяет готовность аватара к генерации
+        
+        Args:
+            avatar: Аватар для проверки
+            
+        Returns:
+            bool: True если аватар готов
+        """
+        from app.database.models import AvatarStatus
+        return avatar.status == AvatarStatus.COMPLETED
+    
+    def _get_avatar_status_message(self, avatar: Avatar) -> str:
+        """
+        Возвращает понятное сообщение о статусе аватара
+        
+        Args:
+            avatar: Аватар
+            
+        Returns:
+            str: Сообщение об ошибке для пользователя
+        """
+        from app.database.models import AvatarStatus
+        
+        status_messages = {
+            AvatarStatus.DRAFT: f"Аватар '{avatar.name}' еще не готов - находится в статусе черновика",
+            AvatarStatus.PHOTOS_UPLOADING: f"Аватар '{avatar.name}' еще загружает фотографии",
+            AvatarStatus.READY_FOR_TRAINING: f"Аватар '{avatar.name}' готов к обучению, но обучение еще не запущено",
+            AvatarStatus.TRAINING: f"Аватар '{avatar.name}' в процессе обучения. Попробуйте позже",
+            AvatarStatus.ERROR: f"При обучении аватара '{avatar.name}' произошла ошибка",
+            AvatarStatus.CANCELLED: f"Обучение аватара '{avatar.name}' было отменено",
+        }
+        
+        return status_messages.get(
+            avatar.status, 
+            f"Аватар '{avatar.name}' не готов к генерации (статус: {avatar.status})"
+        ) 
