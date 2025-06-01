@@ -3,7 +3,8 @@
 Создает детальные, профессиональные промпты для максимального качества генерации
 """
 import aiohttp
-from typing import Optional
+from typing import Optional, Dict, Any
+import time
 
 from app.core.config import settings
 from app.core.logger import get_logger
@@ -36,6 +37,8 @@ class PromptProcessingService:
             }
         """
         
+        start_time = time.time()
+        
         try:
             if not self.openai_api_key or self.openai_api_key == "test_key":
                 logger.warning("OpenAI API ключ не настроен, возвращаем базовую обработку")
@@ -56,12 +59,46 @@ class PromptProcessingService:
                 # Определяем, нужен ли был перевод
                 translation_needed = self._detect_translation_needed(user_prompt, processed_prompt)
                 
-                return {
+                # Получаем негативный промпт
+                negative_prompt = self.get_negative_prompt(avatar_type)
+                
+                # Базовые результаты
+                result = {
                     "original": user_prompt,
                     "processed": processed_prompt,
-                    "negative_prompt": self.get_negative_prompt(avatar_type),
-                    "translation_needed": translation_needed
+                    "negative_prompt": negative_prompt,
+                    "translation_needed": translation_needed,
+                    "avatar_type": avatar_type,
+                    "processing_time": 0.0
                 }
+                
+                # Определяем нужен ли перевод
+                if self._needs_translation(processed_prompt):
+                    result["translation_needed"] = True
+                    translated = await self._translate_prompt(processed_prompt)
+                    result["processed"] = translated
+                    logger.info(f"[Translate] {user_prompt[:50]}... → {translated[:50]}...")
+                
+                # Для FLUX Pro моделей добавляем негатив в основной промпт
+                # Для LoRA моделей оставляем отдельно
+                if avatar_type == "style":  # Style используют FLUX Pro
+                    result["processed"] = self._add_negative_to_main_prompt(
+                        result["processed"], 
+                        negative_prompt
+                    )
+                    result["negative_prompt"] = None  # FLUX Pro не поддерживает отдельный negative_prompt
+                    logger.info(f"[FLUX Pro] Негативы встроены в основной промпт")
+                else:  # Portrait используют LoRA
+                    logger.info(f"[LoRA] Негативный промпт будет передан отдельно")
+                
+                # Логируем результат
+                processing_time = time.time() - start_time
+                result["processing_time"] = processing_time
+                
+                logger.info(f"[Prompt Processing] Завершено за {processing_time:.2f}с")
+                logger.debug(f"[Result] Type: {avatar_type}, Negative: {bool(result['negative_prompt'])}")
+                
+                return result
             else:
                 # Fallback к базовой детальной обработке
                 return {
@@ -73,11 +110,17 @@ class PromptProcessingService:
                 
         except Exception as e:
             logger.exception(f"Ошибка обработки промпта: {e}")
+            processing_time = time.time() - start_time
+            
+            # Возвращаем безопасный результат
             return {
                 "original": user_prompt,
                 "processed": self._create_basic_detailed_prompt(user_prompt, avatar_type),
-                "negative_prompt": self.get_negative_prompt(avatar_type),
-                "translation_needed": False
+                "negative_prompt": self.get_negative_prompt(avatar_type) if avatar_type == "portrait" else None,
+                "translation_needed": False,
+                "avatar_type": avatar_type,
+                "processing_time": processing_time,
+                "error": str(e)
             }
     
     def _get_advanced_system_prompt(self, avatar_type: str) -> str:
@@ -284,71 +327,86 @@ class PromptProcessingService:
 
     def get_negative_prompt(self, avatar_type: str) -> str:
         """
-        Создает отрицательный промпт для исправления проблем с руками, пальцами и анатомией
+        Создает негативный промпт для улучшения качества генерации.
         
-        Args:
-            avatar_type: Тип аватара (portrait, style)
-            
-        Returns:
-            str: Детальный отрицательный промпт
+        Особенно важно для исправления проблем с руками:
+        - Деформированные руки
+        - Лишние/недостающие пальцы  
+        - Неестественные позы
         """
-        
-        # Базовые проблемы для всех типов аватаров
+        # Базовые негативные термины для всех типов
         base_negative = [
             # Проблемы с руками и пальцами
-            "deformed hands", "extra fingers", "missing fingers", "fused fingers", 
-            "too many fingers", "poorly drawn hands", "mutated hands", "malformed hands",
-            "extra hands", "missing hands", "floating hands", "disconnected hands",
-            "long fingers", "thin fingers", "thick fingers", "bent fingers",
-            "twisted fingers", "curled fingers", "overlapping fingers",
+            "deformed hands", "extra fingers", "missing fingers", "fused fingers",
+            "too many fingers", "poorly drawn hands", "mutated hands", "long fingers",
+            "twisted fingers", "curled fingers", "broken fingers", "extra thumbs",
+            "missing thumbs", "malformed hands", "abnormal fingers", "floating fingers",
             
-            # Проблемы с лицом и головой
-            "deformed face", "disfigured face", "ugly face", "bad anatomy", 
-            "poorly drawn face", "mutated face", "extra eyes", "missing eyes",
-            "cropped head", "out of frame head", "tilted head", "floating head",
-            "extra heads", "double face", "multiple faces",
-            
-            # Общие анатомические проблемы
-            "bad proportions", "extra limbs", "missing limbs", "floating limbs",
-            "disconnected limbs", "mutated body", "deformed body", "twisted body",
-            "extra arms", "missing arms", "three arms", "four arms",
-            "extra legs", "missing legs", "three legs",
+            # Анатомические проблемы
+            "bad anatomy", "bad proportions", "extra limbs", "missing limbs",
+            "deformed face", "mutated body", "asymmetrical face", "disproportionate body",
+            "malformed limbs", "extra arms", "missing arms", "broken limbs",
             
             # Технические проблемы
-            "blurry", "low quality", "worst quality", "jpeg artifacts", 
-            "watermark", "signature", "text", "logo", "username",
-            "duplicate", "morbid", "mutilated", "extra nipples",
+            "blurry", "low quality", "jpeg artifacts", "watermark", "signature", 
+            "text", "username", "error", "logo", "words", "letters", "digits",
+            "autograph", "trademark", "name", "copyright", "web address",
             
-            # Неестественные позы и композиция
-            "awkward pose", "unnatural pose", "strange pose", "impossible pose",
-            "broken perspective", "wrong perspective", "distorted perspective"
+            # Визуальные артефакты
+            "noise", "grain", "pixelated", "distorted", "corrupted", "glitched",
+            "overexposed", "underexposed", "oversaturated", "desaturated",
+            "chromatic aberration", "lens flare", "vignette",
+            
+            # Проблемы с позами и композицией
+            "awkward pose", "unnatural pose", "impossible pose", "broken perspective",
+            "floating objects", "disconnected limbs", "overlapping bodies",
+            "cut off limbs", "partial face", "cropped inappropriately"
         ]
         
+        # Специфичные негативы для типов аватаров
         if avatar_type == "portrait":
-            # Дополнительные ограничения для портретов
-            portrait_negative = [
-                "full body", "whole body", "legs visible", "feet visible",
-                "hands in frame", "fingers visible", "holding objects",
-                "multiple people", "crowd", "group photo",
-                "side view", "back view", "profile view extreme",
-                "looking away from camera", "eyes closed", "sunglasses"
+            specific_negative = [
+                "full body", "hands in frame", "fingers visible", "holding objects",
+                "multiple people", "background focus", "landscape", "objects in hands",
+                "hand gestures", "pointing", "waving", "touching face", "jewelry on hands"
             ]
-            
-            all_negative = base_negative + portrait_negative
-            
         else:  # style avatars
-            # Дополнительные ограничения для стилевых аватаров  
-            style_negative = [
-                "realistic hands", "detailed hands", "visible hands",
-                "hand gestures", "pointing", "waving", "holding",
-                "cartoon style", "anime style", "chibi style",
-                "low detail", "simple drawing", "sketch style"
+            specific_negative = [
+                "realistic hands", "detailed hands", "hand gestures", "pointing", 
+                "waving", "cartoon style", "anime hands", "stylized fingers",
+                "exaggerated proportions", "caricature", "comic book style"
             ]
-            
-            all_negative = base_negative + style_negative
         
-        # Соединяем все элементы через запятую
-        negative_prompt = ", ".join(all_negative)
+        # Объединяем все негативы
+        all_negatives = base_negative + specific_negative
         
-        logger.info(f"Создан отрицательный промпт для {avatar_type}: {len(negative_prompt)} символов")
-        return negative_prompt 
+        return ", ".join(all_negatives)
+
+    def _add_negative_to_main_prompt(self, prompt: str, negative_terms: str) -> str:
+        """
+        Добавляет негативные термины в основной промпт для моделей FLUX Pro.
+        Использует специальную конструкцию для указания нежелательных элементов.
+        """
+        # Формируем инструкцию избегания в конце промпта
+        avoidance_instruction = f"[AVOID: {negative_terms}]"
+        
+        # Добавляем к основному промпту
+        enhanced_prompt = f"{prompt.rstrip('.')}. {avoidance_instruction}"
+        
+        logger.info(f"[FLUX Pro] Добавлены негативные термины в основной промпт: {len(negative_terms)} символов")
+        return enhanced_prompt
+
+    def _needs_translation(self, prompt: str) -> bool:
+        """Определяет, нужен ли перевод"""
+        # Реализация метода _needs_translation
+        return False  # Заглушка, реальная реализация должна быть реализована
+
+    async def _translate_prompt(self, prompt: str) -> str:
+        """Переводит промпт на английский"""
+        # Реализация метода _translate_prompt
+        return prompt  # Заглушка, реальная реализация должна быть реализована
+
+    def _translate_to_english(self, text: str) -> str:
+        """Переводит текст на английский"""
+        # Реализация метода _translate_to_english
+        return text  # Заглушка, реальная реализация должна быть реализована 

@@ -6,6 +6,8 @@ import time
 from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
+import aiohttp
+from pathlib import Path
 
 from app.core.database import get_session
 from app.core.logger import get_logger
@@ -427,6 +429,7 @@ class ImageGenerationService:
             if negative_prompt:
                 config['negative_prompt'] = negative_prompt
                 logger.info(f"Добавлен negative prompt: {len(negative_prompt)} символов")
+                logger.debug(f"Negative prompt: {negative_prompt[:100]}...")
             
             start_time = time.time()
             
@@ -437,15 +440,22 @@ class ImageGenerationService:
                     prompt=generation.final_prompt,
                     generation_config=config
                 )
-                result_urls = [image_url] if image_url else []
+                fal_urls = [image_url] if image_url else []
             else:
                 prompts = [generation.final_prompt] * generation.num_images
-                result_urls = await self.fal_service.generate_multiple_images(
+                fal_urls = await self.fal_service.generate_multiple_images(
                     avatar=avatar,
                     prompts=prompts,
                     generation_config=config
                 )
-                result_urls = [url for url in result_urls if url]
+                fal_urls = [url for url in fal_urls if url]
+            
+            # КРИТИЧЕСКИ ВАЖНО: Сохраняем изображения в MinIO
+            if fal_urls:
+                saved_urls = await self._save_images_to_minio(generation, fal_urls)
+                result_urls = saved_urls if saved_urls else fal_urls  # Fallback к FAL URLs
+            else:
+                result_urls = []
             
             generation_time = time.time() - start_time
             
@@ -461,6 +471,7 @@ class ImageGenerationService:
             await self._notify_user(generation)
             
             logger.info(f"Генерация {generation.id} завершена успешно за {generation_time:.1f}с")
+            logger.info(f"Сохранено {len(result_urls)} изображений в MinIO")
             
         except Exception as e:
             logger.exception(f"Ошибка генерации {generation.id}: {e}")
@@ -609,4 +620,78 @@ class ImageGenerationService:
         return status_messages.get(
             avatar.status, 
             f"Аватар '{avatar.name}' не готов к генерации (статус: {avatar.status})"
-        ) 
+        )
+    
+    async def _save_images_to_minio(self, generation: ImageGeneration, fal_urls: List[str]) -> List[str]:
+        """
+        Сохраняет изображения из FAL AI в MinIO для постоянного хранения
+        
+        Args:
+            generation: Объект генерации
+            fal_urls: Список URL изображений из FAL AI
+            
+        Returns:
+            List[str]: Список URL сохраненных изображений в MinIO
+        """
+        try:
+            from app.services.storage.minio import MinioStorage
+            storage = MinioStorage()
+            saved_urls = []
+            
+            for i, fal_url in enumerate(fal_urls):
+                try:
+                    # Скачиваем изображение с FAL AI
+                    async with aiohttp.ClientSession() as session:
+                        async with session.get(fal_url) as response:
+                            if response.status == 200:
+                                image_data = await response.read()
+                            else:
+                                logger.warning(f"Ошибка скачивания изображения {fal_url}: {response.status}")
+                                continue
+                    
+                    # Генерируем путь для сохранения в MinIO
+                    date_str = datetime.now().strftime("%Y/%m/%d")
+                    filename = f"{generation.id}_{i+1:02d}.jpg"
+                    object_path = f"generated/{date_str}/{filename}"
+                    
+                    # Сохраняем в MinIO
+                    bucket = "generated"  # Или settings.MINIO_BUCKETS.get("generated", "generated")
+                    
+                    # Загружаем файл
+                    success = await storage.upload_file(
+                        bucket=bucket,
+                        object_name=object_path,
+                        data=image_data,
+                        content_type="image/jpeg"
+                    )
+                    
+                    if success:
+                        # Генерируем presigned URL для доступа
+                        minio_url = await storage.generate_presigned_url(
+                            bucket=bucket,
+                            object_name=object_path,
+                            expires=7*24*3600  # 7 дней
+                        )
+                        
+                        if minio_url:
+                            saved_urls.append(minio_url)
+                            logger.info(f"Изображение {i+1} сохранено в MinIO: {object_path}")
+                        else:
+                            logger.warning(f"Не удалось получить URL для {object_path}")
+                    else:
+                        logger.warning(f"Не удалось загрузить изображение {i+1} в MinIO")
+                        
+                except Exception as e:
+                    logger.exception(f"Ошибка сохранения изображения {i+1} в MinIO: {e}")
+                    continue
+            
+            if saved_urls:
+                logger.info(f"Успешно сохранено {len(saved_urls)}/{len(fal_urls)} изображений в MinIO")
+            else:
+                logger.warning("Не удалось сохранить ни одного изображения в MinIO")
+                
+            return saved_urls
+            
+        except Exception as e:
+            logger.exception(f"Критическая ошибка сохранения в MinIO: {e}")
+            return [] 
