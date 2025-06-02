@@ -75,7 +75,7 @@ class FalAIClient:
                 return mock_request_id
             
             # Получаем тип обучения из конфигурации
-            training_type = training_config.get("training_type", "style") if training_config else "style"
+            training_type = training_config.get("training_type", "portrait") if training_config else "portrait"
             
             logger.info(
                 f"[FAL AI] Начало обучения аватара {avatar_id}: "
@@ -89,7 +89,7 @@ class FalAIClient:
             if not data_url:
                 raise RuntimeError("Не удалось скачать фотографии для создания архива")
             
-            # 2. Запускаем обучение в зависимости от типа
+            # 2. Запускаем только портретное обучение
             if training_type == "portrait":
                 # Портретное обучение через flux-lora-portrait-trainer
                 request_id = await self._train_portrait_avatar(
@@ -665,9 +665,7 @@ class FalAIClient:
             "test_mode": self.test_mode,
             "api_key_set": bool(self.api_key),
             "webhook_url": settings.FAL_WEBHOOK_URL,
-            "default_mode": settings.FAL_DEFAULT_MODE,
-            "default_iterations": settings.FAL_DEFAULT_ITERATIONS,
-            "default_priority": settings.FAL_DEFAULT_PRIORITY,
-            "trigger_word": settings.FAL_TRIGGER_WORD,
-            "lora_rank": settings.FAL_LORA_RANK,
+            "portrait_steps": settings.FAL_PORTRAIT_STEPS,
+            "portrait_learning_rate": settings.FAL_PORTRAIT_LEARNING_RATE,
+            "portrait_subject_crop": settings.FAL_PORTRAIT_SUBJECT_CROP,
         } 

@@ -155,8 +155,11 @@ class FALStatusChecker:
         # Определяем endpoint для проверки статуса
         if training_type == "portrait":
             endpoint = "fal-ai/flux-lora-portrait-trainer"
-        else:  # style
-            endpoint = "fal-ai/flux-pro-trainer"
+        else:  
+            # LEGACY: style больше не поддерживается
+            logger.error(f"Неподдерживаемый тип обучения: {training_type}")
+            return
+            # endpoint = "fal-ai/flux-pro-trainer"  # LEGACY: убрано
         
         status_url = f"https://queue.fal.run/{endpoint}/requests/{request_id}/status"
         

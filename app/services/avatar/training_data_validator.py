@@ -237,17 +237,22 @@ class AvatarTrainingDataValidator:
 
     def _validate_final_data(self, training_type: AvatarTrainingType, update_data: Dict[str, Any]) -> None:
         """Финальная валидация данных перед сохранением"""
-        if training_type == AvatarTrainingType.STYLE:
-            if not update_data.get("finetune_id"):
-                raise ValueError("Style аватар должен иметь finetune_id")
-            if update_data.get("diffusers_lora_file_url"):
-                raise ValueError("Style аватар НЕ должен иметь LoRA файлы")
+        # LEGACY: Style аватары больше не поддерживаются
+        # if training_type == AvatarTrainingType.STYLE:
+        #     if not update_data.get("finetune_id"):
+        #         raise ValueError("Style аватар должен иметь finetune_id")
+        #     if update_data.get("diffusers_lora_file_url"):
+        #         raise ValueError("Style аватар НЕ должен иметь LoRA файлы")
+        # 
+        # elif training_type == AvatarTrainingType.PORTRAIT:
         
-        elif training_type == AvatarTrainingType.PORTRAIT:
+        if training_type == AvatarTrainingType.PORTRAIT:
             if not update_data.get("diffusers_lora_file_url"):
                 raise ValueError("Portrait аватар должен иметь LoRA файл")
             if update_data.get("finetune_id"):
                 raise ValueError("Portrait аватар НЕ должен иметь finetune_id")
+        else:
+            raise ValueError(f"Неподдерживаемый тип обучения: {training_type}")
         
         logger.info(f"✅ Финальная валидация пройдена для {training_type.value} аватара")
 
@@ -298,7 +303,7 @@ class AvatarTrainingDataValidator:
         if not avatar.training_type:
             return False, "Не установлен тип обучения"
         
-        if avatar.training_type not in [AvatarTrainingType.STYLE, AvatarTrainingType.PORTRAIT]:
+        if avatar.training_type not in [AvatarTrainingType.PORTRAIT]:  # LEGACY: убран AvatarTrainingType.STYLE
             return False, f"Неподдерживаемый тип обучения: {avatar.training_type}"
         
         # Проверяем что НЕТ конфликтующих данных от предыдущих попыток
@@ -349,20 +354,25 @@ class AvatarTrainingDataValidator:
             "quality": user_preferences.get("quality", "balanced") if user_preferences else "balanced"
         }
         
-        if training_type == AvatarTrainingType.STYLE:
-            # Style аватары используют trigger_word
-            base_config.update({
-                "trigger_type": "word",
-                "api_endpoint": "flux-pro-trainer",
-                "expected_result": "finetune_id"
-            })
-        else:
+        # LEGACY: Style аватары больше не поддерживаются
+        # if training_type == AvatarTrainingType.STYLE:
+        #     # Style аватары используют trigger_word
+        #     base_config.update({
+        #         "trigger_type": "word",
+        #         "api_endpoint": "flux-pro-trainer",
+        #         "expected_result": "finetune_id"
+        #     })
+        # else:
+        
+        if training_type == AvatarTrainingType.PORTRAIT:
             # Portrait аватары используют trigger_phrase  
             base_config.update({
                 "trigger_type": "phrase", 
                 "api_endpoint": "flux-lora-portrait-trainer",
                 "expected_result": "diffusers_lora_file"
             })
+        else:
+            raise ValueError(f"Неподдерживаемый тип обучения: {training_type}")
         
         logger.info(f"📋 Конфигурация для {training_type}: {base_config}")
         return base_config 
