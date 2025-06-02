@@ -1,6 +1,8 @@
 """
 Обработчик галереи фотографий
 Выделен из app/handlers/avatar/photo_upload.py для соблюдения правила ≤500 строк
+
+Переименован в PhotoUploadGalleryHandler для избежания конфликтов с другими галереями
 """
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, InputMediaPhoto
 from aiogram.fsm.context import FSMContext
@@ -17,8 +19,8 @@ logger = logging.getLogger(__name__)
 # Кэш для галереи пользователей
 user_gallery_cache = {}
 
-class GalleryHandler:
-    """Обработчик галереи фотографий"""
+class PhotoUploadGalleryHandler:
+    """Обработчик галереи фотографий для загрузки (переименован из GalleryHandler)"""
     
     async def show_photo_gallery(self, callback: CallbackQuery, state: FSMContext):
         """Показывает галерею фотографий аватара"""

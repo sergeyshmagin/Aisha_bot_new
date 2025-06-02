@@ -89,32 +89,61 @@ class GalleryCache:
             logger.warning(f"Ошибка обновления индекса для пользователя {user_id}: {e}")
     
     async def set_photos(self, user_id: int, avatar_id: UUID, avatar, current_photo_idx: int = 0):
-        """Сохраняет данные фотогалереи в Redis"""
+        """Сохраняет данные фотогалереи в Redis с полным объектом аватара"""
         try:
             redis_client = await self.redis_service.get_redis()
             key = self._get_photos_key(user_id, avatar_id)
             
-            # Сериализуем только необходимые данные
-            cache_data = {
-                "avatar_id": str(avatar_id),
-                "avatar_name": avatar.name,
-                "photos_count": len(avatar.photos) if avatar.photos else 0,
-                "current_photo_idx": current_photo_idx
+            # 🚀 ОПТИМИЗАЦИЯ: Сериализуем полный объект аватара с фотографиями
+            avatar_data = {
+                "id": str(avatar.id),
+                "name": avatar.name,
+                "user_id": avatar.user_id,
+                "gender": avatar.gender,
+                "avatar_type": avatar.avatar_type,
+                "training_type": avatar.training_type,
+                "status": avatar.status,
+                "is_main": avatar.is_main,
+                "created_at": avatar.created_at.isoformat() if avatar.created_at else None,
+                "updated_at": avatar.updated_at.isoformat() if avatar.updated_at else None,
+                "photos": []
             }
             
+            # Сериализуем фотографии
+            if avatar.photos:
+                for photo in avatar.photos:
+                    photo_data = {
+                        "id": str(photo.id),
+                        "avatar_id": str(photo.avatar_id),
+                        "minio_key": photo.minio_key,
+                        "upload_order": photo.upload_order,
+                        "width": photo.width,
+                        "height": photo.height,
+                        "file_size": photo.file_size,
+                        "created_at": photo.created_at.isoformat() if photo.created_at else None
+                    }
+                    avatar_data["photos"].append(photo_data)
+            
+            cache_data = {
+                "avatar": avatar_data,
+                "current_photo_idx": current_photo_idx,
+                "photos_count": len(avatar.photos) if avatar.photos else 0
+            }
+            
+            # Увеличиваем TTL для полного объекта (10 минут)
             await redis_client.setex(
                 key, 
-                self._ttl, 
+                600,  # 10 минут для полного объекта 
                 json.dumps(cache_data)
             )
             
-            logger.debug(f"Кэш фотогалереи сохранен для пользователя {user_id}, аватар {avatar_id}")
+            logger.debug(f"Кэш фотогалереи с полным объектом сохранен для пользователя {user_id}, аватар {avatar_id}")
             
         except Exception as e:
             logger.warning(f"Ошибка сохранения кэша фотогалереи: {e}")
     
     async def get_photos(self, user_id: int, avatar_id: UUID) -> Optional[Dict[str, Any]]:
-        """Получает данные фотогалереи из Redis"""
+        """Получает данные фотогалереи из Redis с восстановлением объекта аватара"""
         try:
             redis_client = await self.redis_service.get_redis()
             key = self._get_photos_key(user_id, avatar_id)
@@ -122,7 +151,46 @@ class GalleryCache:
             data = await redis_client.get(key)
             if data:
                 cache_data = json.loads(data)
-                logger.debug(f"Кэш фотогалереи найден для пользователя {user_id}, аватар {avatar_id}")
+                
+                # 🚀 ОПТИМИЗАЦИЯ: Восстанавливаем объект аватара из кеша
+                if "avatar" in cache_data:
+                    from app.database.models import Avatar, AvatarPhoto
+                    from datetime import datetime
+                    from uuid import UUID
+                    
+                    avatar_data = cache_data["avatar"]
+                    
+                    # Создаем объект Avatar
+                    avatar = Avatar()
+                    avatar.id = UUID(avatar_data["id"])
+                    avatar.name = avatar_data["name"]
+                    avatar.user_id = avatar_data["user_id"]
+                    avatar.gender = avatar_data["gender"]
+                    avatar.avatar_type = avatar_data["avatar_type"]
+                    avatar.training_type = avatar_data["training_type"]
+                    avatar.status = avatar_data["status"]
+                    avatar.is_main = avatar_data["is_main"]
+                    avatar.created_at = datetime.fromisoformat(avatar_data["created_at"]) if avatar_data["created_at"] else None
+                    avatar.updated_at = datetime.fromisoformat(avatar_data["updated_at"]) if avatar_data["updated_at"] else None
+                    
+                    # Восстанавливаем фотографии
+                    avatar.photos = []
+                    for photo_data in avatar_data["photos"]:
+                        photo = AvatarPhoto()
+                        photo.id = UUID(photo_data["id"])
+                        photo.avatar_id = UUID(photo_data["avatar_id"])
+                        photo.minio_key = photo_data["minio_key"]
+                        photo.upload_order = photo_data["upload_order"]
+                        photo.width = photo_data["width"]
+                        photo.height = photo_data["height"]
+                        photo.file_size = photo_data["file_size"]
+                        photo.created_at = datetime.fromisoformat(photo_data["created_at"]) if photo_data["created_at"] else None
+                        avatar.photos.append(photo)
+                    
+                    # Обновляем кеш с восстановленным объектом
+                    cache_data["avatar"] = avatar
+                    
+                logger.debug(f"Кэш фотогалереи с полным объектом найден для пользователя {user_id}, аватар {avatar_id}")
                 return cache_data
             
             return None
@@ -165,7 +233,7 @@ class GalleryCache:
             logger.warning(f"Ошибка очистки кэша фотогалереи: {e}")
     
     async def clear_user(self, user_id: int):
-        """Очищает весь кэш пользователя из Redis"""
+        """Очищает весь кеш пользователя из Redis"""
         try:
             redis_client = await self.redis_service.get_redis()
             
@@ -183,6 +251,38 @@ class GalleryCache:
             
         except Exception as e:
             logger.warning(f"Ошибка очистки кэша пользователя {user_id}: {e}")
+    
+    async def invalidate_photo_cache(self, user_id: int, avatar_id: UUID):
+        """
+        Инвалидирует кеш фотогалереи при изменении фотографий
+        Используется при добавлении/удалении фото
+        """
+        try:
+            redis_client = await self.redis_service.get_redis()
+            key = self._get_photos_key(user_id, avatar_id)
+            await redis_client.delete(key)
+            
+            logger.debug(f"Кеш фотогалереи инвалидирован для аватара {avatar_id}")
+            
+        except Exception as e:
+            logger.warning(f"Ошибка инвалидации кеша фотогалереи: {e}")
+    
+    async def extend_cache_ttl(self, user_id: int, avatar_id: UUID, ttl: int = 600):
+        """
+        Продлевает TTL кеша при активном использовании
+        """
+        try:
+            redis_client = await self.redis_service.get_redis()
+            key = self._get_photos_key(user_id, avatar_id)
+            
+            # Продлеваем TTL если ключ существует
+            exists = await redis_client.exists(key)
+            if exists:
+                await redis_client.expire(key, ttl)
+                logger.debug(f"TTL кеша продлен до {ttl}s для аватара {avatar_id}")
+                
+        except Exception as e:
+            logger.warning(f"Ошибка продления TTL кеша: {e}")
 
 # Глобальный экземпляр кэша
 gallery_cache = GalleryCache() 

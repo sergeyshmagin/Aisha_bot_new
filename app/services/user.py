@@ -8,6 +8,7 @@ import re
 from app.database.models import User
 from app.database.repositories import BalanceRepository, StateRepository, UserRepository
 from app.services.base import BaseService
+from app.services.cache_service import cache_service
 
 
 class UserService(BaseService):
@@ -61,11 +62,44 @@ class UserService(BaseService):
             user_data["timezone"] = timezone
 
         if user:
-            return await self.user_repo.update(user.id, user_data)
+            updated_user = await self.user_repo.update(user.id, user_data)
+            # ✅ Обновляем кеш пользователя
+            if updated_user:
+                await cache_service.cache_user(telegram_id, {
+                    "id": str(updated_user.id),
+                    "telegram_id": updated_user.telegram_id,
+                    "first_name": updated_user.first_name,
+                    "last_name": updated_user.last_name,
+                    "username": updated_user.username,
+                    "language_code": updated_user.language_code,
+                    "is_premium": updated_user.is_premium,
+                    "timezone": updated_user.timezone,
+                    "created_at": updated_user.created_at,
+                    "updated_at": updated_user.updated_at
+                })
+            return updated_user
         
         try:
             user = await self.user_repo.create(user_data)
             await self.balance_repo.create({"user_id": user.id, "coins": 0.0})
+            
+            # ✅ Кешируем нового пользователя
+            if user:
+                await cache_service.cache_user(telegram_id, {
+                    "id": str(user.id),
+                    "telegram_id": user.telegram_id,
+                    "first_name": user.first_name,
+                    "last_name": user.last_name,
+                    "username": user.username,
+                    "language_code": user.language_code,
+                    "is_premium": user.is_premium,
+                    "timezone": user.timezone,
+                    "created_at": user.created_at,
+                    "updated_at": user.updated_at
+                })
+                # ✅ Кешируем начальный баланс
+                await cache_service.cache_user_balance(user.id, 0.0)
+            
             return user
         except Exception as e:
             logging.error(f"Ошибка при создании пользователя: {e}")
@@ -76,10 +110,47 @@ class UserService(BaseService):
         return await self.user_repo.get(user_id)
 
     async def get_user_by_telegram_id(self, telegram_id) -> Optional[User]:
-        """Получить пользователя по Telegram ID"""
+        """Получить пользователя по Telegram ID с кешированием"""
         # Преобразуем telegram_id в строку, так как в базе данных он хранится как VARCHAR
         telegram_id_str = str(telegram_id)
-        return await self.user_repo.get_by_telegram_id(telegram_id_str)
+        
+        # ✅ Проверяем кеш сначала
+        cached_user_data = await cache_service.get_cached_user(telegram_id_str)
+        if cached_user_data:
+            # Восстанавливаем объект User из кешированных данных
+            # Это не полный объект, но содержит основные поля
+            user = User()
+            user.id = cached_user_data["id"]
+            user.telegram_id = cached_user_data["telegram_id"]
+            user.first_name = cached_user_data["first_name"]
+            user.last_name = cached_user_data.get("last_name")
+            user.username = cached_user_data.get("username")
+            user.language_code = cached_user_data.get("language_code", "ru")
+            user.is_premium = cached_user_data.get("is_premium", False)
+            user.timezone = cached_user_data.get("timezone")
+            user.created_at = cached_user_data.get("created_at")
+            user.updated_at = cached_user_data.get("updated_at")
+            return user
+        
+        # ✅ Если не в кеше, запрашиваем из БД
+        user = await self.user_repo.get_by_telegram_id(telegram_id_str)
+        
+        # ✅ Кешируем результат
+        if user:
+            await cache_service.cache_user(telegram_id_str, {
+                "id": str(user.id),
+                "telegram_id": user.telegram_id,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "username": user.username,
+                "language_code": user.language_code,
+                "is_premium": user.is_premium,
+                "timezone": user.timezone,
+                "created_at": user.created_at,
+                "updated_at": user.updated_at
+            })
+        
+        return user
     
     async def get_user_by_id(self, user_id) -> Optional[User]:
         """Получить пользователя по внутреннему ID"""
@@ -102,7 +173,11 @@ class UserService(BaseService):
         """Обновить часовой пояс пользователя"""
         user = await self.get_user_by_telegram_id(user_id)
         if user:
-            return await self.user_repo.update(user.id, {"timezone": timezone})
+            updated_user = await self.user_repo.update(user.id, {"timezone": timezone})
+            # ✅ Сбрасываем кеш пользователя при обновлении
+            if updated_user:
+                await cache_service.delete(f"user:{user.telegram_id}")
+            return updated_user
         return None
     
     async def format_date_with_user_timezone(self, user_id: int, date: datetime, format_str: str = "%d.%m.%Y %H:%M") -> str:
@@ -169,20 +244,46 @@ class UserService(BaseService):
             await self.state_repo.clear_state(user.id)
 
     async def get_user_balance(self, user_id: int) -> float:
-        """Получить баланс пользователя"""
+        """Получить баланс пользователя с кешированием"""
+        # ✅ Проверяем кеш сначала
+        cached_balance = await cache_service.get_cached_balance(user_id)
+        if cached_balance is not None:
+            return cached_balance
+        
+        # ✅ Если не в кеше, запрашиваем из БД
         balance = await self.balance_repo.get_user_balance(user_id)
-        return balance.coins if balance else 0.0
+        balance_value = balance.coins if balance else 0.0
+        
+        # ✅ Кешируем результат
+        await cache_service.cache_user_balance(user_id, balance_value)
+        
+        return balance_value
 
     async def add_coins(self, user_id: int, amount: float) -> float:
         """Добавить монеты пользователю"""
         balance = await self.balance_repo.add_coins(user_id, amount)
-        return balance.coins
+        new_balance = balance.coins
+        
+        # ✅ Обновляем кеш баланса
+        await cache_service.cache_user_balance(user_id, new_balance)
+        
+        return new_balance
 
     async def remove_coins(self, user_id: int, amount: float) -> Optional[float]:
         """Снять монеты с баланса пользователя"""
         balance = await self.balance_repo.remove_coins(user_id, amount)
-        return balance.coins if balance else None
+        
+        if balance:
+            new_balance = balance.coins
+            # ✅ Обновляем кеш баланса
+            await cache_service.cache_user_balance(user_id, new_balance)
+            return new_balance
+        else:
+            # ✅ Сбрасываем кеш при ошибке
+            await cache_service.delete(f"balance:{user_id}")
+            return None
 
     async def has_enough_coins(self, user_id: int, amount: float) -> bool:
         """Проверить, достаточно ли монет у пользователя"""
-        return await self.balance_repo.has_enough_coins(user_id, amount)
+        current_balance = await self.get_user_balance(user_id)  # Используем кешированную версию
+        return current_balance >= amount

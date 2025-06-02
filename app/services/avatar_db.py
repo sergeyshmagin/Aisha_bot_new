@@ -8,6 +8,7 @@ from uuid import UUID
 from app.database.models import Avatar, AvatarPhoto, AvatarGender, AvatarType, AvatarTrainingType
 from app.database.repositories import AvatarPhotoRepository, AvatarRepository
 from app.services.base import BaseService
+from app.services.cache_service import cache_service
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -65,11 +66,17 @@ class AvatarService(BaseService):
             "finetune_type": "LORA",
         }
         
-        return await self.avatar_repo.create(data_for_repo)
+        avatar = await self.avatar_repo.create(data_for_repo)
+        
+        # ✅ Сбрасываем кеш списка аватаров пользователя
+        if avatar:
+            await cache_service.delete(f"user_avatars:{user_id}")
+        
+        return avatar
 
     async def get_avatar(self, avatar_id: UUID) -> Optional[Avatar]:
         """
-        Получает аватар по ID с фотографиями
+        Получает аватар по ID с фотографиями и кешированием
         
         Args:
             avatar_id: ID аватара
@@ -78,14 +85,56 @@ class AvatarService(BaseService):
             Optional[Avatar]: Аватар с фотографиями или None
         """
         try:
-            return await self.avatar_repo.get_with_photos(avatar_id)
+            # ✅ Проверяем кеш метаданных
+            cached_metadata = await cache_service.get_cached_avatar_metadata(avatar_id)
+            
+            avatar = await self.avatar_repo.get_with_photos(avatar_id)
+            
+            # ✅ Кешируем метаданные аватара
+            if avatar:
+                metadata = {
+                    "id": str(avatar.id),
+                    "user_id": avatar.user_id,
+                    "name": avatar.name,
+                    "gender": avatar.gender,
+                    "avatar_type": avatar.avatar_type,
+                    "training_type": avatar.training_type,
+                    "status": avatar.status,
+                    "photos_count": len(avatar.photos) if avatar.photos else 0,
+                    "generations_count": avatar.generations_count,
+                    "is_main": avatar.is_main,
+                    "created_at": avatar.created_at,
+                    "updated_at": avatar.updated_at
+                }
+                await cache_service.cache_avatar_metadata(avatar_id, metadata)
+            
+            return avatar
         except Exception as e:
             logger.exception(f"Ошибка при получении аватара {avatar_id}: {e}")
             raise
 
     async def get_user_avatars(self, user_id: int) -> List[Avatar]:
-        """Получить все аватары пользователя"""
-        return await self.avatar_repo.get_user_avatars(user_id)
+        """Получить все аватары пользователя с кешированием"""
+        # ✅ Проверяем кеш списка аватаров
+        cached_avatar_ids = await cache_service.get_cached_user_avatars_list(user_id)
+        if cached_avatar_ids:
+            # Восстанавливаем аватары по ID (можно оптимизировать bulk запросом)
+            avatars = []
+            for avatar_id in cached_avatar_ids:
+                avatar = await self.avatar_repo.get(UUID(avatar_id))
+                if avatar:
+                    avatars.append(avatar)
+            return avatars
+        
+        # ✅ Если не в кеше, запрашиваем из БД
+        avatars = await self.avatar_repo.get_user_avatars(user_id)
+        
+        # ✅ Кешируем список ID аватаров
+        if avatars:
+            avatar_ids = [str(avatar.id) for avatar in avatars]
+            await cache_service.cache_user_avatars_list(user_id, avatar_ids)
+        
+        return avatars
 
     async def get_user_draft_avatar(self, user_id: int) -> Optional[Avatar]:
         """Получить черновик аватара пользователя"""
@@ -93,7 +142,16 @@ class AvatarService(BaseService):
 
     async def update_avatar(self, avatar_id: UUID, data: Dict) -> Optional[Avatar]:
         """Обновить данные аватара"""
-        return await self.avatar_repo.update(avatar_id, data)
+        avatar = await self.avatar_repo.update(avatar_id, data)
+        
+        # ✅ Сбрасываем кеш метаданных при обновлении
+        if avatar:
+            await cache_service.delete(f"avatar_meta:{avatar_id}")
+            # Если изменился статус, сбрасываем список пользователя
+            if "status" in data or "is_main" in data:
+                await cache_service.delete(f"user_avatars:{avatar.user_id}")
+        
+        return avatar
 
     async def set_avatar_gender(self, avatar_id: UUID, gender: str) -> Optional[Avatar]:
         """Установить пол аватара"""
@@ -103,30 +161,56 @@ class AvatarService(BaseService):
         # Конвертируем в uppercase для БД
         gender_upper = gender.upper()
         
-        return await self.avatar_repo.update(avatar_id, {
+        avatar = await self.avatar_repo.update(avatar_id, {
             "gender": gender_upper,
             "avatar_data": {"gender": gender.lower()}  # В avatar_data храним lowercase для удобства
         })
+        
+        # ✅ Сбрасываем кеш метаданных
+        if avatar:
+            await cache_service.delete(f"avatar_meta:{avatar_id}")
+        
+        return avatar
 
     async def set_avatar_name(self, avatar_id: UUID, name: str) -> Optional[Avatar]:
         """Установить имя аватара"""
-        return await self.avatar_repo.update(avatar_id, {
+        avatar = await self.avatar_repo.update(avatar_id, {
             "name": name,
             "avatar_data": {"name": name}
         })
+        
+        # ✅ Сбрасываем кеш метаданных
+        if avatar:
+            await cache_service.delete(f"avatar_meta:{avatar_id}")
+        
+        return avatar
 
     async def add_photo(self, avatar_id: UUID, minio_key: str) -> AvatarPhoto:
         """Добавить фото к аватару"""
         order = await self.photo_repo.get_next_photo_order(avatar_id)
-        return await self.photo_repo.create({
+        photo = await self.photo_repo.create({
             "avatar_id": avatar_id,
             "minio_key": minio_key,
             "upload_order": order  # FIXED: заменяем order на upload_order
         })
+        
+        # ✅ Сбрасываем кеш метаданных аватара (изменилось количество фото)
+        if photo:
+            await cache_service.delete(f"avatar_meta:{avatar_id}")
+        
+        return photo
 
     async def remove_photo(self, photo_id: UUID) -> bool:
         """Удалить фото"""
-        return await self.photo_repo.delete(photo_id)
+        # Получаем фото для определения avatar_id
+        photo = await self.photo_repo.get(photo_id)
+        result = await self.photo_repo.delete(photo_id)
+        
+        # ✅ Сбрасываем кеш метаданных аватара
+        if result and photo:
+            await cache_service.delete(f"avatar_meta:{photo.avatar_id}")
+        
+        return result
 
     async def get_avatar_photos(self, avatar_id: UUID, page: int = 1, per_page: int = None) -> Tuple[List[AvatarPhoto], int]:
         """
@@ -146,10 +230,17 @@ class AvatarService(BaseService):
 
     async def finalize_avatar(self, avatar_id: UUID) -> Optional[Avatar]:
         """Завершить создание аватара"""
-        return await self.avatar_repo.update(avatar_id, {
+        avatar = await self.avatar_repo.update(avatar_id, {
             # FIXED: удаляем is_draft, оставляем только status
             "status": "READY_FOR_TRAINING"  # Передаём uppercase строковое значение
         })
+        
+        # ✅ Сбрасываем кеши
+        if avatar:
+            await cache_service.delete(f"avatar_meta:{avatar_id}")
+            await cache_service.delete(f"user_avatars:{avatar.user_id}")
+        
+        return avatar
 
     async def delete_avatar_completely(self, avatar_id: UUID) -> bool:
         """
@@ -183,6 +274,10 @@ class AvatarService(BaseService):
             await self.avatar_repo.delete(avatar_id)
             await self.session.commit()
             
+            # ✅ Очищаем все связанные кеши
+            await cache_service.delete(f"avatar_meta:{avatar_id}")
+            await cache_service.delete(f"user_avatars:{avatar.user_id}")
+            
             logger.info(f"Аватар {avatar_id} полностью удален")
             return True
             
@@ -199,73 +294,67 @@ class AvatarService(BaseService):
         
         Args:
             photo_id: ID фотографии
-            user_id: ID пользователя (для проверки прав)
+            user_id: ID пользователя
             
         Returns:
             bool: Результат удаления
         """
         try:
+            # Получаем фото для определения avatar_id
+            photo = await self.photo_repo.get(photo_id)
+            if not photo:
+                return False
+                
             from app.services.avatar.photo_service import PhotoUploadService
-            
             photo_service = PhotoUploadService(self.session)
             result = await photo_service.delete_photo(photo_id, user_id)
             
-            logger.info(f"Фото {photo_id} удалено из аватара")
+            # ✅ Сбрасываем кеш метаданных аватара
+            if result:
+                await cache_service.delete(f"avatar_meta:{photo.avatar_id}")
+            
             return result
             
         except Exception as e:
             logger.exception(f"Ошибка при удалении фото аватара {photo_id}: {e}")
-            raise
+            return False
 
     async def set_main_avatar(self, user_id: int, avatar_id: UUID) -> bool:
         """
         Устанавливает аватар как основной для пользователя
         
-        ⚠️ ВАЖНО: У пользователя может быть только ОДИН основной аватар в любой момент времени!
-        Этот метод автоматически снимает флаг is_main с ВСЕХ других аватаров пользователя.
-        
         Args:
             user_id: ID пользователя
-            avatar_id: ID аватара для установки как основной
+            avatar_id: ID аватара
             
         Returns:
             bool: Результат операции
-            
-        Raises:
-            Exception: При ошибках БД или если аватар не принадлежит пользователю
         """
         try:
-            # Проверяем, что аватар принадлежит пользователю
-            avatar = await self.avatar_repo.get(avatar_id)
-            if not avatar or avatar.user_id != user_id:
-                logger.error(f"Аватар {avatar_id} не принадлежит пользователю {user_id}")
-                return False
+            # Сначала убираем флаг is_main у всех аватаров пользователя
+            await self.avatar_repo.unset_all_main_avatars(user_id)
             
-            # Начинаем транзакцию
-            # 1. Сначала убираем флаг is_main у ВСЕХ аватаров пользователя
-            await self.avatar_repo.clear_main_avatar(user_id)
-            logger.debug(f"Сброшен флаг is_main для всех аватаров пользователя {user_id}")
+            # Устанавливаем флаг is_main для указанного аватара
+            avatar = await self.avatar_repo.update(avatar_id, {"is_main": True})
             
-            # 2. Затем устанавливаем флаг ТОЛЬКО для выбранного аватара
-            result = await self.avatar_repo.update(avatar_id, {"is_main": True})
-            
-            if result:
-                await self.session.commit()
-                logger.info(f"✅ Аватар {avatar_id} установлен как ЕДИНСТВЕННЫЙ основной для пользователя {user_id}")
+            if avatar:
+                # ✅ Сбрасываем кеши
+                await cache_service.delete(f"avatar_meta:{avatar_id}")
+                await cache_service.delete(f"user_avatars:{user_id}")
+                
+                logger.info(f"Аватар {avatar_id} установлен как основной для пользователя {user_id}")
                 return True
             else:
-                await self.session.rollback()
-                logger.error(f"Не удалось установить аватар {avatar_id} как основной")
+                logger.warning(f"Не удалось установить аватар {avatar_id} как основной")
                 return False
                 
         except Exception as e:
-            await self.session.rollback()
             logger.exception(f"Ошибка при установке основного аватара {avatar_id} для пользователя {user_id}: {e}")
-            raise
+            return False
 
     async def unset_main_avatar(self, user_id: int) -> bool:
         """
-        Снимает статус основного аватара у всех аватаров пользователя
+        Убирает флаг основного аватара у всех аватаров пользователя
         
         Args:
             user_id: ID пользователя
@@ -274,16 +363,17 @@ class AvatarService(BaseService):
             bool: Результат операции
         """
         try:
-            await self.avatar_repo.clear_main_avatar(user_id)
-            await self.session.commit()
+            result = await self.avatar_repo.unset_all_main_avatars(user_id)
             
-            logger.info(f"✅ Статус основного аватара снят у всех аватаров пользователя {user_id}")
-            return True
+            # ✅ Сбрасываем кеш списка аватаров
+            await cache_service.delete(f"user_avatars:{user_id}")
+            
+            logger.info(f"Убран флаг основного аватара для всех аватаров пользователя {user_id}")
+            return result
             
         except Exception as e:
-            await self.session.rollback()
-            logger.exception(f"Ошибка при снятии статуса основного аватара для пользователя {user_id}: {e}")
-            raise
+            logger.exception(f"Ошибка при сбросе основного аватара для пользователя {user_id}: {e}")
+            return False
 
     async def get_main_avatar(self, user_id: int) -> Optional[Avatar]:
         """
@@ -299,7 +389,7 @@ class AvatarService(BaseService):
             return await self.avatar_repo.get_main_avatar(user_id)
         except Exception as e:
             logger.exception(f"Ошибка при получении основного аватара пользователя {user_id}: {e}")
-            raise
+            return None
 
     async def get_user_avatars_with_photos(self, user_id: int) -> List[Avatar]:
         """
@@ -314,5 +404,5 @@ class AvatarService(BaseService):
         try:
             return await self.avatar_repo.get_user_avatars_with_photos(user_id)
         except Exception as e:
-            logger.exception(f"Ошибка при получении аватаров пользователя {user_id}: {e}")
-            raise 
+            logger.exception(f"Ошибка при получении аватаров с фотографиями для пользователя {user_id}: {e}")
+            return [] 

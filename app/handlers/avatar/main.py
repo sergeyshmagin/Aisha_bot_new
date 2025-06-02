@@ -11,6 +11,9 @@ from app.texts.avatar import AvatarTexts
 from app.handlers.state import AvatarStates
 from app.core.di import get_user_service, get_avatar_service
 from app.core.logger import get_logger
+from app.core.database import get_session
+from app.database.models import Avatar, AvatarStatus
+from sqlalchemy import select
 
 logger = get_logger(__name__)
 router = Router()
@@ -24,22 +27,24 @@ class AvatarMainHandler:
     async def show_avatar_menu(self, callback: CallbackQuery, state: FSMContext):
         """Показывает главное меню аватаров"""
         try:
-            # ИСПРАВЛЕНИЕ: Используем одну сессию для обоих сервисов
+            # Получаем пользователя
             async with get_user_service() as user_service:
                 user = await user_service.get_user_by_telegram_id(callback.from_user.id)
                 
                 if not user:
                     await callback.answer("❌ Пользователь не найден", show_alert=True)
                     return
+            
+            # 🚀 ИСПРАВЛЕНИЕ: Получаем аватары через прямой SQL запрос
+            async with get_session() as session:
+                stmt = select(Avatar).where(
+                    Avatar.user_id == user.id,
+                    Avatar.status == AvatarStatus.COMPLETED
+                ).order_by(Avatar.created_at.desc())
                 
-                # Сохраняем user_id перед закрытием сессии
-                user_id = user.id
-                
-                # Получаем avatar_service в той же сессии
-                async with get_avatar_service() as avatar_service:
-                    # Получаем завершенные аватары пользователя (как в галерее)
-                    user_avatars = await avatar_service.get_user_avatars_with_photos(user_id)
-                    avatars_count = len(user_avatars)
+                result = await session.execute(stmt)
+                user_avatars = list(result.scalars().all())
+                avatars_count = len(user_avatars)
             
             # Устанавливаем состояние
             await state.set_state(AvatarStates.menu)
@@ -63,8 +68,7 @@ class AvatarMainHandler:
             
             await callback.answer()
             
-            # ИСПРАВЛЕНИЕ: Используем сохраненный user_id вместо user.id
-            logger.info(f"Показано меню аватаров пользователю {user_id}, аватаров: {avatars_count}")
+            logger.info(f"Показано меню аватаров пользователю {user.id}, аватаров: {avatars_count}")
             
         except Exception as e:
             logger.exception(f"Ошибка при показе меню аватаров: {e}")

@@ -6,6 +6,7 @@ from typing import Optional
 import logging
 from contextlib import asynccontextmanager
 from aiogram.fsm.storage.redis import RedisStorage
+import redis.asyncio as redis
 from redis.asyncio import Redis
 from redis.backoff import ExponentialBackoff
 from redis.retry import Retry
@@ -15,14 +16,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 
 from app.core.config import settings
 from app.services.audio_processing.service import AudioService as AudioProcessingService
-from app.services.avatar_db import AvatarService
-# from app.services.backend import BackendService  # LEGACY - удален
 from app.services.text_processing import TextProcessingService
 from app.services.transcript import TranscriptService
 from app.services.user import UserService
 from app.services.audio_processing.factory import get_audio_service
+from app.core.database import AsyncSessionLocal
+from app.services.generation.generation_service import ImageGenerationService
+from app.core.logger import get_logger
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 # Глобальные экземпляры сервисов
 _redis_client: Optional[Redis] = None
@@ -72,6 +74,12 @@ def get_redis_client() -> Redis:
             retry=retry,
         )
     return _redis_client
+
+async def get_redis() -> Redis:
+    """
+    Асинхронный доступ к Redis клиенту
+    """
+    return get_redis_client()
 
 def get_state_storage() -> RedisStorage:
     """
@@ -128,6 +136,7 @@ async def get_avatar_service():
     """
     session = get_db_session()
     try:
+        from app.services.avatar_db import AvatarService
         avatar_service = AvatarService(session)
         yield avatar_service
         # Если дошли до этой точки без исключений, выполняем commit
@@ -139,18 +148,18 @@ async def get_avatar_service():
         await session.close()
 
 
-def get_avatar_service_with_session(session: AsyncSession) -> AvatarService:
-    """
-    Получение сервиса для работы с аватарами с переданной сессией
-    """
+@asynccontextmanager
+async def get_avatar_service_with_session(session: AsyncSession):
+    """Получить сервис аватаров с переданной сессией (старая версия)"""
+    from app.services.avatar_db import AvatarService
+    avatar_service = AvatarService(session)
+    yield avatar_service
+
+
+def get_avatar_service_sync(session: AsyncSession):
+    """Получить сервис аватаров с сессией (синхронная версия)"""
+    from app.services.avatar_db import AvatarService
     return AvatarService(session)
-
-
-# def get_backend_service(session: AsyncSession, http_session=None) -> BackendService:
-#     """
-#     Получение сервиса для работы с Backend API - LEGACY удален
-#     """
-#     return BackendService(http_session, session)
 
 
 def get_transcript_service(session: AsyncSession) -> TranscriptService:
@@ -172,3 +181,11 @@ def get_text_processing_service(session: AsyncSession) -> TextProcessingService:
     Получение сервиса для обработки текста
     """
     return TextProcessingService(session)
+
+
+async def get_gallery_service(session: AsyncSession = None):
+    """Получить оптимизированный сервис галереи"""
+    from app.services.gallery_service import gallery_service
+    if session:
+        await gallery_service.set_session(session)
+    return gallery_service

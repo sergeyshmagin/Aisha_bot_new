@@ -83,7 +83,7 @@ class PhotoGalleryHandler:
             await callback.answer("❌ Произошла ошибка при загрузке фото", show_alert=True)
 
     async def handle_photo_navigation(self, callback: CallbackQuery):
-        """Навигация по фотографиям аватара"""
+        """Навигация по фотографиям аватара (ОПТИМИЗИРОВАННАЯ - без SQL запросов при каждом клике)"""
         try:
             parts = callback.data.split(":")
             direction = parts[0].split("_")[-1]  # "prev" или "next"
@@ -97,23 +97,33 @@ class PhotoGalleryHandler:
                 await callback.answer("❌ Данные фотогалереи утеряны", show_alert=True)
                 return
             
-            # Получаем актуальный аватар из БД
-            async with get_avatar_service() as avatar_service:
-                avatar = await avatar_service.get_avatar(avatar_id)
-                
+            # 🚀 ОПТИМИЗАЦИЯ: Используем закешированный аватар вместо SQL запроса!
+            avatar = cache_data.get("avatar")
             if not avatar or not avatar.photos:
-                await callback.answer("❌ Фотографии не найдены", show_alert=True)
-                return
+                # Только если кеш поврежден, делаем запрос к БД
+                logger.warning(f"Кеш аватара поврежден для {avatar_id}, запрашиваем из БД")
+                async with get_avatar_service() as avatar_service:
+                    avatar = await avatar_service.get_avatar(avatar_id)
+                    
+                if not avatar or not avatar.photos:
+                    await callback.answer("❌ Фотографии не найдены", show_alert=True)
+                    return
+                    
+                # Обновляем кеш
+                await gallery_cache.set_photos(user_telegram_id, avatar_id, avatar, current_idx)
             
             if direction == "prev":
                 new_idx = (current_idx - 1) % len(avatar.photos)
             else:  # "next"
                 new_idx = (current_idx + 1) % len(avatar.photos)
             
-            # Обновляем кэш
+            # Обновляем кеш с новым индексом
             await gallery_cache.update_photo_idx(user_telegram_id, avatar_id, new_idx)
             
-            # Показываем новое фото
+            # 🚀 ДОПОЛНИТЕЛЬНАЯ ОПТИМИЗАЦИЯ: Продлеваем TTL при активной навигации
+            await gallery_cache.extend_cache_ttl(user_telegram_id, avatar_id, ttl=600)
+            
+            # Показываем новое фото (БЕЗ дополнительных SQL запросов!)
             await self.show_avatar_photo(callback, avatar, new_idx)
             
             await callback.answer()

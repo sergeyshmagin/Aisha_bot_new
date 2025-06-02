@@ -9,6 +9,7 @@ from uuid import UUID
 from app.core.config import settings
 from app.core.logger import get_logger
 from app.core.di import get_user_service, get_avatar_service
+from app.services.cache_service import cache_service
 from app.utils.avatar_utils import (
     format_finetune_comment,
     generate_trigger_word
@@ -49,193 +50,273 @@ class FALClient:
         """Проверяет доступность FAL клиента"""
         return self.fal_client is not None
     
-    async def train_portrait_model(
-        self,
-        images_data_url: str,
-        trigger_phrase: str,
-        steps: int,
-        learning_rate: float,
-        webhook_url: Optional[str] = None
-    ) -> str:
+    async def get_training_status(self, request_id: str, training_type: str = "portrait") -> Optional[Dict[str, Any]]:
         """
-        Обучение портретной модели через Flux LoRA Portrait Trainer
-        Исправлено согласно официальной документации FAL AI
+        Получает статус обучения модели с кешированием
+        
+        Args:
+            request_id: ID обучения FAL AI
+            training_type: Тип обучения (portrait/style)
+            
+        Returns:
+            Optional[Dict[str, Any]]: Статус обучения или None при ошибке
         """
-        if not self.fal_client:
-            raise RuntimeError("FAL client не инициализирован")
-        
-        # Конфигурация для портретного тренера согласно документации
-        config = {
-            "images_data_url": images_data_url,
-            "trigger_phrase": trigger_phrase,
-            "steps": steps,
-            "learning_rate": learning_rate,
-            "multiresolution_training": settings.FAL_PORTRAIT_MULTIRESOLUTION,
-            "subject_crop": settings.FAL_PORTRAIT_SUBJECT_CROP,
-            "create_masks": settings.FAL_PORTRAIT_CREATE_MASKS,
-        }
-        
-        logger.info(f"🎭 Запуск flux-lora-portrait-trainer: trigger={trigger_phrase}")
-        logger.info(f"🎭 Параметры: steps={steps}, lr={learning_rate}")
-        logger.info(f"🎭 Webhook URL: {webhook_url}")
-        logger.info(f"🎭 Полная конфигурация: {json.dumps(config, indent=2)}")
-        
-        # Используем submit_async согласно документации FAL AI
         try:
-            # Детальное логирование для отладки webhook
-            logger.info(f"🔗 ОТЛАДКА WEBHOOK (ПОРТРЕТ):")
-            logger.info(f"   Webhook URL перед отправкой: {webhook_url}")
-            logger.info(f"   Тип webhook_url: {type(webhook_url)}")
-            logger.info(f"   Webhook пустой?: {not webhook_url}")
+            # ✅ Проверяем кеш сначала (TTL 5 минут для статусов)
+            cached_status = await cache_service.get_cached_fal_status(request_id)
+            if cached_status:
+                logger.debug(f"🎯 Получен статус из кеша для {request_id}: {cached_status.get('status')}")
+                return cached_status
             
-            if webhook_url:
-                logger.info(f"   ✅ Webhook будет передан в FAL AI")
-            else:
-                logger.warning(f"   ⚠️ Webhook НЕ будет передан (пустой)")
+            if not self.is_available():
+                logger.warning("FAL клиент недоступен")
+                return None
             
-            logger.info(f"🚀 Отправка запроса в FAL AI...")
-            logger.info(f"   Endpoint: fal-ai/flux-lora-portrait-trainer")
-            logger.info(f"   Arguments: {json.dumps(config, indent=2)}")
-            logger.info(f"   Webhook URL: {webhook_url}")
+            # Если тестовый режим
+            if settings.AVATAR_TEST_MODE:
+                # В тестовом режиме возвращаем мок статус
+                mock_status = {
+                    "status": "completed",
+                    "progress": 100,
+                    "created_at": "2025-05-23T16:00:00Z",
+                    "updated_at": "2025-05-23T16:30:00Z",
+                    "completed_at": "2025-05-23T16:30:00Z",
+                    "message": "Training completed successfully (test mode)",
+                    "request_id": request_id
+                }
+                
+                # ✅ Кешируем мок статус
+                await cache_service.cache_fal_status(request_id, mock_status, ttl=300)
+                
+                return mock_status
             
+            # Определяем endpoint по типу обучения
+            if training_type == "portrait":
+                endpoint = "fal-ai/flux-lora-portrait-trainer"
+            else:  # style
+                endpoint = "fal-ai/flux-pro-trainer"
+            
+            logger.info(f"🔍 Проверка статуса FAL AI: {request_id} (endpoint: {endpoint})")
+            
+            # Получаем статус через FAL API
+            try:
+                result = await self.fal_client.status_async(endpoint, request_id)
+                
+                if result:
+                    status_data = {
+                        "status": result.get("status", "unknown"),
+                        "progress": result.get("progress", 0),
+                        "created_at": result.get("created_at"),
+                        "updated_at": result.get("updated_at"),
+                        "completed_at": result.get("completed_at"),
+                        "message": result.get("message", ""),
+                        "request_id": request_id,
+                        "endpoint": endpoint
+                    }
+                    
+                    # ✅ Кешируем статус (TTL зависит от статуса)
+                    if status_data["status"] in ["completed", "failed", "cancelled"]:
+                        # Финальные статусы кешируем на час
+                        await cache_service.cache_fal_status(request_id, status_data, ttl=3600)
+                    else:
+                        # Промежуточные статусы кешируем на 2 минуты
+                        await cache_service.cache_fal_status(request_id, status_data, ttl=120)
+                    
+                    logger.info(f"📋 Статус FAL AI {request_id}: {status_data['status']} ({status_data.get('progress', 0)}%)")
+                    return status_data
+                else:
+                    logger.warning(f"🔍 Пустой ответ от FAL API для {request_id}")
+                    return None
+                    
+            except Exception as api_error:
+                logger.error(f"🔍 Ошибка API FAL при получении статуса {request_id}: {api_error}")
+                
+                # Возвращаем error статус
+                error_status = {
+                    "status": "error",
+                    "message": str(api_error),
+                    "request_id": request_id,
+                    "endpoint": endpoint
+                }
+                
+                # ✅ Кешируем ошибку на короткое время (1 минута)
+                await cache_service.cache_fal_status(request_id, error_status, ttl=60)
+                
+                return error_status
+            
+        except Exception as e:
+            logger.exception(f"🔍 Общая ошибка получения статуса FAL AI {request_id}: {e}")
+            return None
+    
+    async def submit_training(
+        self,
+        user_id: UUID,
+        avatar_id: UUID,
+        data_url: str,
+        training_config: Dict[str, Any]
+    ) -> Optional[str]:
+        """
+        Отправляет задачу на обучение в FAL AI
+        
+        Args:
+            user_id: ID пользователя
+            avatar_id: ID аватара
+            data_url: URL архива с фотографиями
+            training_config: Конфигурация обучения
+            
+        Returns:
+            Optional[str]: request_id или None при ошибке
+        """
+        try:
+            if not self.is_available():
+                logger.warning("FAL клиент недоступен")
+                return None
+            
+            # Тестовый режим
+            if settings.AVATAR_TEST_MODE:
+                mock_request_id = f"test_request_{avatar_id}_{user_id}"
+                logger.info(f"🧪 [FAL TEST MODE] Симуляция отправки обучения: {mock_request_id}")
+                
+                # ✅ Кешируем начальный статус
+                initial_status = {
+                    "status": "queued",
+                    "progress": 0,
+                    "message": "Training queued (test mode)",
+                    "request_id": mock_request_id,
+                    "created_at": "2025-05-23T16:00:00Z"
+                }
+                await cache_service.cache_fal_status(mock_request_id, initial_status, ttl=300)
+                
+                return mock_request_id
+            
+            # Получаем тип обучения из конфигурации
+            training_type = training_config.get("training_type", "portrait")
+            
+            logger.info(
+                f"🚀 [FAL AI] Отправка обучения аватара {avatar_id}: "
+                f"user_id={user_id}, training_type={training_type}"
+            )
+            
+            # Формируем аргументы в зависимости от типа обучения
+            if training_type == "portrait":
+                # Портретное обучение через flux-lora-portrait-trainer
+                arguments = {
+                    "images_data_url": data_url,
+                    "learning_rate": training_config.get("learning_rate", settings.FAL_PORTRAIT_LEARNING_RATE),
+                    "steps": training_config.get("steps", settings.FAL_PORTRAIT_STEPS),
+                    "multiresolution_training": training_config.get("multiresolution_training", settings.FAL_PORTRAIT_MULTIRESOLUTION),
+                    "subject_crop": training_config.get("subject_crop", settings.FAL_PORTRAIT_SUBJECT_CROP),
+                    "create_masks": training_config.get("create_masks", settings.FAL_PORTRAIT_CREATE_MASKS)
+                }
+                
+                # Добавляем trigger_phrase если указан
+                if training_config.get("trigger_phrase"):
+                    arguments["trigger_phrase"] = training_config["trigger_phrase"]
+                
+                endpoint = "fal-ai/flux-lora-portrait-trainer"
+                
+            else:  # style
+                # Стилевое обучение через flux-pro-trainer
+                arguments = {
+                    "data_url": data_url,
+                    "mode": training_config.get("mode", "style"),
+                    "finetune_comment": format_finetune_comment(user_id, avatar_id),
+                    "iterations": training_config.get("iterations", 1000),
+                    "priority": training_config.get("priority", "quality"),
+                    "captioning": training_config.get("captioning", "fast"),
+                    "trigger_word": training_config.get("trigger_word") or generate_trigger_word(),
+                    "lora_rank": training_config.get("lora_rank", 16),
+                    "finetune_type": training_config.get("finetune_type", "lora"),
+                }
+                
+                endpoint = "fal-ai/flux-pro-trainer"
+            
+            # Добавляем webhook URL если настроен
+            webhook_url = training_config.get("webhook_url") or settings.FAL_WEBHOOK_URL
+            
+            logger.info(f"🚀 [FAL AI] Отправка на {endpoint}: {arguments}")
+            
+            # Отправляем задачу на обучение (НЕ ЖДЕМ РЕЗУЛЬТАТ!)
             handler = await self.fal_client.submit_async(
-                "fal-ai/flux-lora-portrait-trainer",
-                arguments=config,
+                endpoint,
+                arguments=arguments,
                 webhook_url=webhook_url
             )
             
             request_id = handler.request_id
-            logger.info(f"🎭 Успешно отправлен запрос в FAL AI: {request_id}")
-            logger.info(f"🔗 Webhook должен быть настроен для: {webhook_url}")
+            
+            logger.info(f"✅ [FAL AI] Задача отправлена, request_id: {request_id}")
+            
+            # ✅ Кешируем начальный статус
+            initial_status = {
+                "status": "queued",
+                "progress": 0,
+                "message": "Training submitted successfully",
+                "request_id": request_id,
+                "endpoint": endpoint,
+                "training_type": training_type,
+                "submitted_at": "2025-05-23T16:00:00Z"
+            }
+            await cache_service.cache_fal_status(request_id, initial_status, ttl=300)
             
             return request_id
             
         except Exception as e:
-            logger.exception(f"Ошибка отправки запроса в FAL AI: {e}")
-            logger.error(f"🔗 Webhook URL при ошибке: {webhook_url}")
-            raise
+            logger.exception(f"🚀 [FAL AI] Ошибка отправки задачи на обучение: {e}")
+            return None
     
-    async def train_general_model(
-        self,
-        images_data_url: str,
-        trigger_word: str,
-        iterations: int,
-        learning_rate: float,
-        priority: str = "quality",
-        webhook_url: Optional[str] = None,
-        avatar_id: Optional[UUID] = None
-    ) -> Dict[str, Any]:
+    async def get_training_result(self, request_id: str, training_type: str = "portrait") -> Optional[Dict[str, Any]]:
         """
-        Обучение универсальной модели через Flux Pro Trainer
-        Исправлено согласно официальной документации FAL AI
+        Получает результат обучения от FAL AI с кешированием
+        
+        Args:
+            request_id: ID запроса
+            training_type: Тип обучения
+            
+        Returns:
+            Optional[Dict[str, Any]]: Результат обучения или None при ошибке
         """
-        if not self.fal_client:
-            raise RuntimeError("FAL client не инициализирован")
-        
-        # Получаем данные аватара и пользователя для комментария
-        finetune_comment = "Художественный аватар"
-        if avatar_id:
-            try:
-                async with get_avatar_service() as avatar_service:
-                    avatar = await avatar_service.get_avatar(avatar_id)
-                    if avatar:
-                        async with get_user_service() as user_service:
-                            user = await user_service.get_user_by_id(avatar.user_id)
-                            if user:
-                                finetune_comment = format_finetune_comment(
-                                    avatar_name=avatar.name,
-                                    telegram_username=user.username or f"user_{user.id}"
-                                )
-            except Exception as e:
-                logger.warning(f"Не удалось получить данные для комментария: {e}")
-        
-        # Конфигурация для flux-pro-trainer согласно официальной документации
-        config = {
-            "data_url": images_data_url,  # Правильное имя параметра согласно документации
-            "mode": settings.FAL_PRO_MODE,
-            "finetune_comment": finetune_comment,  # Обязательный параметр согласно документации
-            "iterations": iterations,
-            "learning_rate": learning_rate,
-            "priority": priority,
-            "captioning": settings.FAL_PRO_CAPTIONING,
-            "trigger_word": trigger_word,
-            "lora_rank": settings.FAL_PRO_LORA_RANK,
-            "finetune_type": settings.FAL_PRO_FINETUNE_TYPE,
-        }
-        
-        logger.info(f"🎨 Запуск flux-pro-trainer: {finetune_comment}, trigger: {trigger_word}")
-        logger.info(f"🎨 Параметры: iterations={iterations}, lr={learning_rate}, priority={priority}")
-        logger.info(f"🎨 Webhook URL: {webhook_url}")
-        logger.info(f"🎨 Полная конфигурация: {json.dumps(config, indent=2)}")
-        
-        # Используем submit_async согласно документации FAL AI
         try:
-            # Детальное логирование для отладки webhook
-            logger.info(f"🔗 ОТЛАДКА WEBHOOK:")
-            logger.info(f"   Webhook URL перед отправкой: {webhook_url}")
-            logger.info(f"   Тип webhook_url: {type(webhook_url)}")
-            logger.info(f"   Webhook пустой?: {not webhook_url}")
+            if not self.is_available():
+                logger.warning("FAL клиент недоступен")
+                return None
             
-            if webhook_url:
-                logger.info(f"   ✅ Webhook будет передан в FAL AI")
+            # Тестовый режим
+            if settings.AVATAR_TEST_MODE:
+                mock_result = {
+                    "status": "completed",
+                    "diffusers_lora_file": "https://example.com/test_lora.safetensors",
+                    "config_file": "https://example.com/test_config.json",
+                    "message": "Training completed successfully (test mode)",
+                    "request_id": request_id
+                }
+                
+                # ✅ Кешируем мок результат
+                await cache_service.cache_fal_status(request_id, mock_result, ttl=3600)
+                
+                return mock_result
+            
+            # Определяем endpoint
+            if training_type == "portrait":
+                endpoint = "fal-ai/flux-lora-portrait-trainer"
+            else:  # style
+                endpoint = "fal-ai/flux-pro-trainer"
+            
+            logger.info(f"📥 [FAL AI] Получение результата {request_id} с {endpoint}")
+            
+            # Получаем результат через FAL API
+            result = await self.fal_client.result_async(endpoint, request_id)
+            
+            if result:
+                # ✅ Кешируем результат (финальные результаты на час)
+                await cache_service.cache_fal_status(request_id, result, ttl=3600)
+                
+                logger.info(f"📥 [FAL AI] Результат получен для {request_id}")
+                return result 
             else:
-                logger.warning(f"   ⚠️ Webhook НЕ будет передан (пустой)")
-            
-            logger.info(f"🚀 Отправка запроса в FAL AI...")
-            logger.info(f"   Endpoint: fal-ai/flux-pro-trainer")
-            logger.info(f"   Arguments: {json.dumps(config, indent=2)}")
-            logger.info(f"   Webhook URL: {webhook_url}")
-            
-            handler = await self.fal_client.submit_async(
-                "fal-ai/flux-pro-trainer",
-                arguments=config,
-                webhook_url=webhook_url
-            )
-            
-            request_id = handler.request_id
-            logger.info(f"🎨 Успешно отправлен запрос в FAL AI: {request_id}")
-            logger.info(f"🔗 Webhook должен быть настроен для: {webhook_url}")
-            
-            return {
-                "finetune_id": request_id,
-                "request_id": request_id
-            }
+                logger.warning(f"📥 [FAL AI] Пустой результат для {request_id}")
+                return None
             
         except Exception as e:
-            logger.exception(f"Ошибка отправки запроса в FAL AI: {e}")
-            logger.error(f"🔗 Webhook URL при ошибке: {webhook_url}")
-            raise
-    
-    async def check_training_status(self, request_id: str, training_type: str) -> Dict[str, Any]:
-        """Проверяет статус обучения согласно документации FAL AI"""
-        if not self.fal_client:
-            raise RuntimeError("FAL client не инициализирован")
-        
-        # Проверяем статус через FAL API согласно документации
-        if training_type == "portrait":
-            endpoint = "fal-ai/flux-lora-portrait-trainer"
-        else:
-            endpoint = "fal-ai/flux-pro-trainer"
-        
-        # Используем status_async согласно документации
-        status = await self.fal_client.status_async(endpoint, request_id, with_logs=True)
-        
-        logger.info(f"🔍 Статус обучения {request_id}: {status}")
-        return status
-    
-    async def get_training_result(self, request_id: str, training_type: str) -> Dict[str, Any]:
-        """Получает результат обучения согласно документации FAL AI"""
-        if not self.fal_client:
-            raise RuntimeError("FAL client не инициализирован")
-        
-        # Получаем результат через FAL API согласно документации
-        if training_type == "portrait":
-            endpoint = "fal-ai/flux-lora-portrait-trainer"
-        else:
-            endpoint = "fal-ai/flux-pro-trainer"
-        
-        # Используем result_async согласно документации
-        result = await self.fal_client.result_async(endpoint, request_id)
-        
-        logger.info(f"🎯 Результат обучения {request_id}: {result}")
-        return result 
+            logger.exception(f"📥 [FAL AI] Ошибка получения результата {request_id}: {e}")
+            return None 

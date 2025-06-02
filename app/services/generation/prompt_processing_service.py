@@ -12,6 +12,7 @@ import json
 from app.core.config import settings
 from app.core.logger import get_logger
 from app.shared.utils.openai import get_openai_headers
+from .cinematic_prompt_service import CinematicPromptService
 
 logger = get_logger(__name__)
 
@@ -22,84 +23,64 @@ class PromptProcessingService:
     def __init__(self):
         self.openai_api_key = settings.OPENAI_API_KEY
         self.model = "gpt-4o"
+        self.cinematic_service = CinematicPromptService()
     
     async def process_prompt(self, user_prompt: str, avatar_type: str) -> Dict[str, Any]:
         """
-        Обрабатывает пользовательский промпт для FLUX Pro v1.1 Ultra
-        Создает фотореалистичный промпт по шпаргалке и оптимизированный negative prompt
+        Обрабатывает пользовательский промпт создавая кинематографический детальный промпт
         
         Args:
             user_prompt: Промпт от пользователя
-            avatar_type: Тип аватара (portrait, style, etc.)
+            avatar_type: Тип аватара (portrait)
             
         Returns:
-            dict: Результат обработки с processed prompt и negative prompt
+            dict: Результат обработки с кинематографическим промптом и negative prompt
         """
         start_time = time.time()
         
         try:
-            logger.info(f"[Prompt Processing] Начата обработка: '{user_prompt[:50]}...'")
+            logger.info(f"[Prompt Processing] Начата кинематографическая обработка: '{user_prompt[:50]}...'")
             
-            # 🎯 1. ПЕРЕВОДИМ ЧЕРЕЗ GPT API если нужно
-            if self._needs_translation(user_prompt):
-                translated_prompt = await self._translate_with_gpt(user_prompt)
-                logger.info(f"[GPT Translation] '{user_prompt}' → '{translated_prompt}'")
-            else:
-                translated_prompt = user_prompt
+            # Используем новый кинематографический сервис
+            cinematic_result = await self.cinematic_service.create_cinematic_prompt(
+                user_prompt=user_prompt,
+                avatar_type=avatar_type,
+                style_preset="photorealistic"
+            )
             
-            # 🎯 2. СОЗДАЕМ ДЕТАЛЬНЫЙ ФОТОРЕАЛИСТИЧНЫЙ ПРОМПТ 
-            processed_prompt = await self.create_enhanced_detailed_prompt(translated_prompt, avatar_type)
-            
-            # 🎯 3. СОЗДАЕМ ОПТИМИЗИРОВАННЫЙ NEGATIVE PROMPT
+            # Создаем negative prompt
             negative_prompt = self.get_negative_prompt(avatar_type)
-            
-            # 🎯 4. ДЛЯ FLUX PRO - ВСТРАИВАЕМ НЕГАТИВЫ В ОСНОВНОЙ ПРОМПТ
-            # LEGACY: Style аватары больше не поддерживаются
-            # if avatar_type == "style":
-            #     # Style аватары используют FLUX Pro - встраиваем негативы
-            #     key_negatives = [
-            #         "plastic skin", "airbrushed", "over-processed", 
-            #         "extra fingers", "deformed hands", "multiple faces",
-            #         "cartoon", "cgi", "ultra-detailed", "8k"
-            #     ]
-            #     negative_terms = ", ".join(key_negatives)
-            #     final_prompt = f"{processed_prompt}. [AVOID: {negative_terms}]"
-            #     result_negative = None
-            #     
-            #     logger.info(f"[FLUX Pro] Добавлены негативные термины в основной промпт")
-            #     
-            # else:
-            
-            # Теперь все аватары используют LoRA (портретные) - negative prompt отдельно
-            final_prompt = processed_prompt
-            result_negative = negative_prompt
-            
-            logger.info(f"[LoRA] Negative prompt создан: {len(negative_prompt)} символов")
             
             processing_time = time.time() - start_time
             
-            # ✅ РЕЗУЛЬТАТ
+            # Формируем результат
             result = {
                 "original": user_prompt,
-                "processed": final_prompt,
-                "negative_prompt": result_negative,
-                "translation_needed": self._needs_translation(user_prompt),
-                "processing_time": processing_time
+                "processed": cinematic_result["processed"],
+                "negative_prompt": negative_prompt,
+                "translation_needed": cinematic_result.get("translation_applied", False),
+                "cinematic_enhancement": cinematic_result.get("enhancement_applied", False),
+                "style": cinematic_result.get("style", "cinematic"),
+                "processing_time": processing_time,
+                "word_count": cinematic_result.get("word_count", 0),
+                "technical_level": cinematic_result.get("technical_level", "professional")
             }
             
-            logger.info(f"[Prompt Processing] Завершено за {processing_time:.2f}с")
-            logger.info(f"Итоговый промпт: {len(final_prompt)} символов")
+            logger.info(f"[Prompt Processing] Кинематографическая обработка завершена за {processing_time:.2f}с")
+            logger.info(f"[Cinematic] Создан промпт: {len(result['processed'])} символов, стиль: {result['style']}")
             
             return result
             
         except Exception as e:
-            logger.exception(f"Ошибка обработки промпта: {e}")
-            # Fallback к простой обработке
+            logger.exception(f"[Prompt Processing] Ошибка кинематографической обработки: {e}")
+            # Fallback к базовой обработке
             return {
                 "original": user_prompt,
-                "processed": user_prompt,
+                "processed": f"TOK, {user_prompt}" if avatar_type == "portrait" else user_prompt,
                 "negative_prompt": self.get_negative_prompt(avatar_type),
                 "translation_needed": False,
+                "cinematic_enhancement": False,
+                "style": "fallback",
                 "processing_time": time.time() - start_time
             }
 
@@ -161,169 +142,253 @@ class PromptProcessingService:
 
     async def create_enhanced_detailed_prompt(self, base_prompt: str, avatar_type: str) -> str:
         """
-        УЛУЧШАЕТ существующий промпт пользователя, НЕ заменяет его!
-        Добавляет технические детали к оригинальному промпту
+        Создает кинематографические детальные промпты в стиле профессиональных фотографий
+        Полностью переписан для максимального фотореализма и детализации
         """
         
         prompt_lower = base_prompt.lower()
         
-        # 🚀 РЕЖИМ УЛУЧШЕНИЯ: Если промпт уже детальный - НЕ ТРОГАЕМ!
-        if len(base_prompt) > 200 and any(tech in prompt_lower for tech in [
-            'shot on', 'canon', 'nikon', 'sony', 'lighting', 'professional', 
-            'portrait photo', 'sharp focus', 'realistic'
-        ]):
-            logger.info(f"[Smart Mode] Промпт уже детальный ({len(base_prompt)} символов) - возвращаем как есть")
+        # 🚀 ПРОВЕРЯЕМ: Если промпт уже очень детальный - возвращаем как есть
+        if len(base_prompt) > 400 and self._is_already_detailed(base_prompt):
+            logger.info(f"[Detailed Mode] Промпт уже детальный ({len(base_prompt)} символов) - возвращаем как есть")
+            # Добавляем только TOK если его нет
+            if not base_prompt.startswith("TOK"):
+                return f"TOK, {base_prompt}"
             return base_prompt
         
-        # 🎯 АНАЛИЗИРУЕМ что УЖЕ ЕСТЬ в промпте
-        has_shot_type = any(word in prompt_lower for word in ['full-body', 'half-body', 'portrait photo', 'portrait of'])
-        has_technical = any(word in prompt_lower for word in ['shot on', 'canon', 'nikon', 'sony', 'lens', 'mm'])
-        has_lighting = any(word in prompt_lower for word in ['lighting', 'golden hour', 'studio', 'natural light'])
-        has_quality = any(word in prompt_lower for word in ['sharp focus', 'high detail', 'realistic', 'professional'])
+        # 🎯 АНАЛИЗИРУЕМ КОНТЕКСТ И СОЗДАЕМ КИНЕМАТОГРАФИЧЕСКИЙ ПРОМПТ
         
-        # 🔧 НАЧИНАЕМ С ОРИГИНАЛЬНОГО ПРОМПТА
-        enhanced_parts = [base_prompt]
-        
-        # ✅ ДОБАВЛЯЕМ ТОЛЬКО ТО, ЧЕГО НЕТ
-        
-        # 1. Добавляем тип кадра только если его нет
-        if not has_shot_type:
-            if any(word in prompt_lower for word in ['standing', 'full body']):
-                enhanced_parts.append("full-body portrait photo style")
-            elif any(word in prompt_lower for word in ['portrait', 'headshot']):
-                enhanced_parts.append("portrait photo style")
-            else:
-                enhanced_parts.append("professional portrait style")
-        
-        # 2. Добавляем технические детали кожи только если их нет
-        if not any(word in prompt_lower for word in ['skin texture', 'natural', 'realistic']):
-            enhanced_parts.append("natural skin texture with authentic detail")
-        
-        # 3. Добавляем глаза только если их нет
-        if not any(word in prompt_lower for word in ['eyes', 'eye', 'gaze']):
-            enhanced_parts.append("well-defined eyes with natural catchlight")
-        
-        # 4. Добавляем освещение только если его нет
-        if not has_lighting:
-            lighting_options = [
-                "professional lighting",
-                "natural lighting", 
-                "studio lighting",
-                "soft lighting"
-            ]
-            enhanced_parts.append(random.choice(lighting_options))
-        
-        # 5. Добавляем камеру только если её нет
-        if not has_technical:
-            camera_options = [
-                "shot on professional camera",
-                "photographed with portrait lens",
-                "captured with high-end camera"
-            ]
-            enhanced_parts.append(random.choice(camera_options))
-        
-        # 6. Добавляем качество только если его нет
-        if not has_quality:
-            enhanced_parts.append("sharp focus, high detail")
-        
-        # 🎯 СПЕЦИАЛЬНАЯ ОБРАБОТКА ЛИЦА для full-body (НОВОЕ!)
-        if "face" not in prompt_lower and "portrait" not in prompt_lower:
-            enhanced_parts.append("extremely sharp and realistic face, defined eyebrows, high-fidelity facial features")
-        
-        # 🎯 ДОПОЛНИТЕЛЬНАЯ ДЕТАЛИЗАЦИЯ ЛИЦА И ГЛАЗ для LoRA
-        if "eyes" not in prompt_lower or "face" not in prompt_lower:
-            enhanced_parts.append("realistic face with visible pores, authentic shadows, well-defined eyes with natural catchlight")
-        
-        # 🎯 LORA-СПЕЦИФИЧНАЯ ПОДДЕРЖКА для portrait аватаров
+        # 1. Начинаем с TOK для портретных аватаров
         if avatar_type == "portrait":
-            enhanced_parts.append("LoRA trained full-body structure, no facial deformation, no duplicate features")
+            enhanced_parts = ["TOK"]
+        else:
+            enhanced_parts = []
         
-        # 🎯 УСИЛЕННЫЕ FULL-BODY ИНСТРУКЦИИ (НОВОЕ!)
-        # Добавляем только если явно запрашивается full-body или если тип кадра не определен
-        is_explicit_fullbody = any(word in prompt_lower for word in ['full body', 'standing', 'полный рост', 'full-body'])
-        is_explicit_portrait = any(word in prompt_lower for word in ['portrait', 'headshot', 'портрет', 'крупный план'])
+        # 2. Добавляем технические характеристики фото
+        tech_specs = [
+            "A high-quality, cinematic, ultra-realistic",
+            self._determine_shot_type(prompt_lower),
+            "photograph, captured by a professional medium-format digital camera",
+            "in style of super-detailed 8K resolution imagery"
+        ]
         
-        if is_explicit_fullbody or (not has_shot_type and not is_explicit_portrait):
-            # Добавляем мощные full-body инструкции только когда нужно
-            enhanced_parts.append("show entire body from head to feet")
-            enhanced_parts.append("complete figure visible in frame") 
-            enhanced_parts.append("full body composition with proper proportions")
-            enhanced_parts.append("wide shot to capture full silhouette")
-            
-            # 🌍 НОВЫЕ ENVIRONMENTAL И COMPOSITION ДЕТАЛИ (против селфи!)
-            enhanced_parts.append("environmental perspective showing subject in context")
-            enhanced_parts.append("step back camera angle for full scene composition")
-            enhanced_parts.append("medium distance shot with background details visible")
-            enhanced_parts.append("establish relationship between subject and environment")
-            
-            # 🏖️ СПЕЦИФИЧНЫЕ ENVIRONMENTAL ДЕТАЛИ по локации
-            environmental_details = self._enhance_environmental_context(prompt_lower)
-            if environmental_details:
-                # Добавляем 2-3 самых релевантных environmental детали
-                enhanced_parts.extend(environmental_details[:3])
+        # 3. Определяем и добавляем описание освещения
+        lighting_desc = self._analyze_and_enhance_lighting(prompt_lower)
+        tech_specs.append(lighting_desc)
         
-        # 🔗 ОБЪЕДИНЯЕМ через запятые
-        enhanced_prompt = ", ".join(enhanced_parts)
+        enhanced_parts.extend(tech_specs)
         
-        # 🧹 ЧИСТКА
-        enhanced_prompt = enhanced_prompt.replace(", ,", ",").replace("  ", " ").strip()
+        # 4. Добавляем композицию и центрирование
+        composition = self._create_composition_description(prompt_lower)
+        enhanced_parts.append(composition)
         
-        logger.info(f"[Smart Enhancement] Оригинал: {len(base_prompt)} символов → Улучшенный: {len(enhanced_prompt)} символов")
-        logger.info(f"[Smart Enhancement] Добавлено деталей: {len(enhanced_parts)-1}")
+        # 5. Детальное описание персонажа
+        character_desc = self._enhance_character_description(base_prompt, prompt_lower)
+        enhanced_parts.append(character_desc)
+        
+        # 6. Описание позы и ракурса
+        pose_desc = self._create_detailed_pose_description(prompt_lower)
+        enhanced_parts.append(pose_desc)
+        
+        # 7. Детальное описание окружения и фона
+        environment_desc = self._create_detailed_environment(prompt_lower)
+        if environment_desc:
+            enhanced_parts.append(environment_desc)
+        
+        # 8. Технические параметры камеры и фокуса
+        camera_details = [
+            "The depth of field is exceptional, ensuring sharp focus on the subject",
+            "shot on vintage medium-format camera with 85mm lens",
+            "shallow depth of field with professional bokeh",
+            "high-end editorial photography style"
+        ]
+        enhanced_parts.extend(camera_details)
+        
+        # 9. Цветовая палитра и атмосфера
+        color_palette = self._determine_color_palette(prompt_lower)
+        enhanced_parts.append(color_palette)
+        
+        # 10. Финальные детали качества
+        quality_details = [
+            "razor-sharp focus with optimal detail retention",
+            "well-defined eyes with natural catchlight",
+            "realistic face with visible pores and authentic shadows",
+            "natural skin texture with fine detail",
+            "no facial deformation, no duplicate features"
+        ]
+        enhanced_parts.extend(quality_details)
+        
+        # 🔗 ОБЪЕДИНЯЕМ в кинематографический промпт
+        enhanced_prompt = ". ".join(enhanced_parts) + "."
+        
+        # 🧹 ЧИСТКА И ОПТИМИЗАЦИЯ
+        enhanced_prompt = self._clean_and_optimize_prompt(enhanced_prompt)
+        
+        logger.info(f"[Cinematic Enhancement] {len(base_prompt)} → {len(enhanced_prompt)} символов")
+        logger.info(f"[Style] Кинематографический детальный промпт создан")
         
         return enhanced_prompt
 
-    # def _analyze_clothing(self, prompt_lower: str) -> str:
-    #     """LEGACY: Анализирует и детализирует одежду - НЕИСПОЛЬЗУЕТСЯ"""
-    #     if any(word in prompt_lower for word in ['suit', 'business', 'formal']):
-    #         return "wearing a tailored modern business suit with crisp details"
-    #     elif any(word in prompt_lower for word in ['casual', 'relaxed']):
-    #         return "wearing stylish casual attire with contemporary design"
-    #     elif any(word in prompt_lower for word in ['elegant', 'luxury']):
-    #         return "wearing elegant luxury clothing with sophisticated styling"
-    #     else:
-    #         return "wearing modern stylish clothes with clean lines"
+    def _is_already_detailed(self, prompt: str) -> bool:
+        """Проверяет, является ли промпт уже детальным"""
+        detailed_indicators = [
+            'cinematic', 'ultra-realistic', '8K resolution', 'professional camera',
+            'golden hour', 'directional lighting', 'depth of field', 'razor-sharp focus',
+            'color palette', 'editorial photography', 'medium-format', 'bokeh',
+            'captured by', 'shot on', 'exceptional quality'
+        ]
+        return sum(1 for indicator in detailed_indicators if indicator.lower() in prompt.lower()) >= 3
 
-    # def _analyze_location(self, prompt_lower: str) -> str:
-    #     """LEGACY: Анализирует и детализирует локацию - НЕИСПОЛЬЗУЕТСЯ"""
-    #     if "burj khalifa" in prompt_lower:
-    #         return "standing confidently in front of the iconic Burj Khalifa in Dubai"
-    #     elif "dubai" in prompt_lower:
-    #         return "positioned against Dubai's modern skyline backdrop"
-    #     elif any(word in prompt_lower for word in ['office', 'business']):
-    #         return "in a contemporary office environment with professional atmosphere"
-    #     elif any(word in prompt_lower for word in ['city', 'urban', 'street']):
-    #         return "against an urban cityscape with architectural elements"
-    #     elif any(word in prompt_lower for word in ['studio', 'indoor']):
-    #         return "in a professional studio setting with controlled environment"
-    #     else:
-    #         return ""
+    def _determine_shot_type(self, prompt_lower: str) -> str:
+        """Определяет тип кадра на основе контекста"""
+        if any(word in prompt_lower for word in ['full body', 'standing', 'walking', 'полный рост', 'стоя']):
+            return "full-body portrait"
+        elif any(word in prompt_lower for word in ['half body', 'waist up', 'по пояс', 'торс']):
+            return "half-body portrait"
+        elif any(word in prompt_lower for word in ['close-up', 'headshot', 'крупный план', 'голова']):
+            return "close-up portrait"
+        else:
+            return "medium portrait"
 
-    # def _get_pose_details(self, shot_type: str, prompt_lower: str) -> str:
-    #     """LEGACY: Получает детали позы в зависимости от типа кадра - НЕИСПОЛЬЗУЕТСЯ"""
-    #     if "full-body" in shot_type:
-    #         poses = [
-    #             "standing naturally with weight on one leg, both hands relaxed",
-    #             "hands in pockets, slight tilt of head, natural smile",
-    #             "relaxed standing pose with arms by sides and slight hip shift",
-    #             "professional standing pose with one hand casually positioned",
-    #             "natural full-body posture with authentic confidence",
-    #             "dynamic standing position with engaging body language"
-    #         ]
-    #     elif "half-body" in shot_type:
-    #         poses = [
-    #             "confident upper body positioning with relaxed shoulders",
-    #             "professional torso pose with natural arm placement",
-    #             "engaging half-body stance with authentic presence"
-    #         ]
-    #     else:  # portrait
-    #         poses = [
-    #             "direct confident gaze with natural facial expression",
-    #             "authentic head positioning with engaging eye contact",
-    #             "professional portrait pose with genuine emotion"
-    #         ]
-    #     
-    #     return random.choice(poses)
+    def _analyze_and_enhance_lighting(self, prompt_lower: str) -> str:
+        """Анализирует контекст и создает описание профессионального освещения"""
+        if any(word in prompt_lower for word in ['sunset', 'evening', 'закат', 'вечер']):
+            return "featuring warm, directional side lighting during the golden hour"
+        elif any(word in prompt_lower for word in ['studio', 'office', 'indoor', 'студия', 'офис']):
+            return "featuring professional studio lighting with controlled shadows and highlights"
+        elif any(word in prompt_lower for word in ['natural', 'outdoor', 'street', 'natural light', 'улица']):
+            return "featuring natural diffused lighting with soft shadows"
+        elif any(word in prompt_lower for word in ['dramatic', 'contrast', 'shadow', 'драматический']):
+            return "featuring dramatic directional lighting with deep contrasts"
+        else:
+            return "featuring warm, professional lighting with optimal exposure"
+
+    def _create_composition_description(self, prompt_lower: str) -> str:
+        """Создает описание композиции"""
+        base_composition = "The composition is expertly framed"
+        
+        if any(word in prompt_lower for word in ['center', 'middle', 'центр']):
+            return f"{base_composition}, with the subject positioned centrally in the frame"
+        elif any(word in prompt_lower for word in ['left', 'right', 'side', 'сбоку']):
+            return f"{base_composition}, with the subject positioned slightly off-center for dynamic balance"
+        else:
+            return f"{base_composition}, following the rule of thirds for visual impact"
+
+    def _enhance_character_description(self, original_prompt: str, prompt_lower: str) -> str:
+        """Создает детальное описание персонажа на основе оригинального промпта"""
+        # Берем базовое описание из оригинального промпта
+        character_base = original_prompt.strip()
+        
+        # Анализируем пол для корректного описания
+        gender_context = ""
+        if any(word in prompt_lower for word in ['man', 'male', 'мужчина', 'парень']):
+            gender_context = "featuring a confident man"
+        elif any(word in prompt_lower for word in ['woman', 'female', 'женщина', 'девушка']):
+            gender_context = "featuring an elegant woman"
+        else:
+            gender_context = "featuring a charismatic person"
+        
+        # Добавляем детали внешности
+        details = [
+            "with natural facial features and authentic expression",
+            "showcasing contemporary styling with precise attention to detail"
+        ]
+        
+        if any(word in prompt_lower for word in ['hair', 'волосы']):
+            details.append("with expertly styled hair showing natural texture")
+        
+        if any(word in prompt_lower for word in ['suit', 'dress', 'costume', 'костюм', 'платье']):
+            details.append("wearing impeccably tailored attire with refined fabric details")
+        
+        return f"{gender_context}, {character_base}, {', '.join(details)}"
+
+    def _create_detailed_pose_description(self, prompt_lower: str) -> str:
+        """Создает детальное описание позы и ракурса"""
+        if any(word in prompt_lower for word in ['confident', 'strong', 'уверенный']):
+            return "posed with confident body language and natural stance, gazing directly at the camera with engaging intensity"
+        elif any(word in prompt_lower for word in ['relaxed', 'casual', 'natural', 'расслабленный']):
+            return "in a relaxed, natural pose with authentic body positioning and genuine expression"
+        elif any(word in prompt_lower for word in ['dramatic', 'intense', 'драматический']):
+            return "striking a dramatic pose with intentional positioning and captivating presence"
+        else:
+            return "positioned with natural elegance and authentic body language, creating compelling visual narrative"
+
+    def _create_detailed_environment(self, prompt_lower: str) -> str:
+        """Создает детальное описание окружения и фона"""
+        if any(word in prompt_lower for word in ['office', 'business', 'офис', 'деловой']):
+            return ("Set in a sophisticated modern office environment, with clean architectural lines "
+                   "and professional interior design elements visible in the softly blurred background, "
+                   "featuring warm ambient lighting and contemporary furnishings")
+        
+        elif any(word in prompt_lower for word in ['studio', 'студия']):
+            return ("In a professional photography studio setting with controlled environment, "
+                   "featuring seamless backdrop and expertly positioned lighting equipment, "
+                   "creating optimal conditions for maximum image quality")
+        
+        elif any(word in prompt_lower for word in ['outdoor', 'street', 'city', 'улица', 'город']):
+            return ("Against an urban landscape backdrop with architectural elements softly blurred, "
+                   "featuring city atmosphere with natural depth and environmental context, "
+                   "showcasing the relationship between subject and metropolitan setting")
+        
+        elif any(word in prompt_lower for word in ['nature', 'forest', 'park', 'природа', 'лес']):
+            return ("Surrounded by natural landscape with organic textures and soft environmental elements, "
+                   "featuring verdant background with natural depth of field, "
+                   "creating harmonious connection with the natural world")
+        
+        elif any(word in prompt_lower for word in ['dubai', 'burj khalifa', 'дубай']):
+            return ("Set against the iconic Dubai skyline with the majestic Burj Khalifa towering in the background, "
+                   "featuring the modern architectural marvel softly blurred with atmospheric perspective, "
+                   "showcasing the grandeur of contemporary urban achievement")
+        
+        else:
+            return ("Set against a carefully curated background with optimal depth of field, "
+                   "featuring environmental elements that complement the subject without distraction, "
+                   "creating sophisticated visual context")
+
+    def _determine_color_palette(self, prompt_lower: str) -> str:
+        """Определяет цветовую палитру на основе контекста"""
+        if any(word in prompt_lower for word in ['warm', 'golden', 'sunset', 'теплый', 'золотой']):
+            return ("The color palette emphasizes warm golden tones, rich ambers, and deep honey hues, "
+                   "creating an inviting and luxurious atmospheric mood")
+        
+        elif any(word in prompt_lower for word in ['cool', 'blue', 'modern', 'холодный', 'синий']):
+            return ("The color palette features sophisticated cool tones, deep blues, and crisp whites, "
+                   "conveying contemporary elegance and professional refinement")
+        
+        elif any(word in prompt_lower for word in ['dramatic', 'contrast', 'black', 'драматический']):
+            return ("The color palette utilizes dramatic contrasts between deep shadows and bright highlights, "
+                   "featuring rich blacks, pristine whites, and selective color accents")
+        
+        elif any(word in prompt_lower for word in ['natural', 'earth', 'green', 'natural', 'природный']):
+            return ("The color palette draws from natural earth tones, featuring organic greens, warm browns, "
+                   "and soft beiges that create harmony with the natural environment")
+        
+        else:
+            return ("The color palette is carefully balanced with rich, saturated colors and subtle tonal variations, "
+                   "creating visual depth and emotional resonance throughout the composition")
+
+    def _clean_and_optimize_prompt(self, prompt: str) -> str:
+        """Очищает и оптимизирует финальный промпт"""
+        # Удаляем дублирующиеся фразы
+        sentences = prompt.split('. ')
+        unique_sentences = []
+        seen_keywords = set()
+        
+        for sentence in sentences:
+            # Проверяем ключевые слова для избежания дублирования
+            words = set(sentence.lower().split())
+            if not any(word in seen_keywords for word in words):
+                unique_sentences.append(sentence)
+                seen_keywords.update(words)
+        
+        cleaned_prompt = '. '.join(unique_sentences)
+        
+        # Исправляем грамматику и пунктуацию
+        cleaned_prompt = re.sub(r'\s+', ' ', cleaned_prompt)  # Убираем лишние пробелы
+        cleaned_prompt = re.sub(r'\.\s*\.', '.', cleaned_prompt)  # Убираем двойные точки
+        cleaned_prompt = cleaned_prompt.strip()
+        
+        return cleaned_prompt
 
     def _enhance_environmental_context(self, prompt_lower: str) -> list:
         """Анализирует локацию и добавляет environmental детали против селфи"""
@@ -379,11 +444,6 @@ class PromptProcessingService:
         """Определяет нужен ли перевод текста с русского на английский"""
         # Простая проверка на наличие кириллицы
         return bool(re.search(r'[а-яё]', text.lower()))
-
-    # async def _translate_prompt(self, prompt: str) -> str:
-    #     """LEGACY: Переводит промпт с русского на английский (заглушка) - НЕИСПОЛЬЗУЕТСЯ"""
-    #     # TODO: Реализовать перевод через API или библиотеку
-    #     return prompt
     
     def _translate_to_english(self, text: str) -> str:
         """Переводит промпт с русского на английский с акцентом на фоны и локации"""
@@ -572,174 +632,61 @@ class PromptProcessingService:
         logger.info(f"[Translation] Переведено: '{text}' → '{result}'")
         return result
 
-    def get_negative_prompt(self, avatar_type: str) -> str:
-        """
-        Создает революционный negative prompt для FLUX Pro v1.1 Ultra
-        СПЕЦИАЛЬНО для борьбы с мыльностью и неестественными глазами
-        """
-        
-        # 🎯 КРИТИЧЕСКИЕ НЕГАТИВЫ ПРОТИВ МЫЛЬНОСТИ
-        clarity_negatives = [
-            # Против мыльности и размытости
-            "blurry", "soft focus", "out of focus", "unfocused", "hazy",
-            "soft image", "lack of detail", "overly smooth", "soap-like texture",
-            "over-smoothed", "heavily processed", "gaussian blur", "motion blur",
-            
-            # Против пластиковости кожи  
-            "plastic skin", "airbrushed", "smooth skin", "artificial skin",
-            "porcelain skin", "doll-like skin", "synthetic appearance",
-            "overly polished", "wax-like texture", "fake skin texture"
-        ]
-        
-        # 🎯 СПЕЦИАЛЬНЫЕ НЕГАТИВЫ ДЛЯ ПРОБЛЕМ ГЛАЗ
-        eye_negatives = [
-            # Против неестественных глаз
-            "artificial eyes", "fake eyes", "painted eyes", "doll eyes",
-            "glassy eyes", "lifeless eyes", "empty stare", "dead eyes",
-            "oversized pupils", "unnatural iris", "mismatched eyes",
-            "cartoon eyes", "anime eyes", "exaggerated eyes",
-            
-            # Против анатомических проблем глаз
-            "duplicate eyes", "double pupils", "extra irises", "split pupils",
-            "misaligned eyes", "asymmetrical eyes", "deformed eyes",
-            "floating eyes", "disconnected eyes", "merged eyes"
-        ]
-        
-        # 🎯 ПРОТИВ ПЕРЕОБРАБОТАННОСТИ
-        processing_negatives = [
-            "over-processed", "heavily filtered", "instagram filter",
-            "beauty filter", "face app", "heavily retouched",
-            "digital makeup", "artificial enhancement", "fake smoothness",
-            "digital perfection", "computer generated look"
-        ]
-        
-        # 🎯 ТЕХНИЧЕСКИЕ ПРОБЛЕМЫ
-        technical_negatives = [
-            "low quality", "poor resolution", "pixelated", "compression artifacts",
-            "jpeg artifacts", "noise", "grain", "distorted", "corrupted",
-            "oversaturated", "undersaturated", "poor lighting"
-        ]
-        
-        # 🎯 НЕРЕАЛИСТИЧНЫЕ СТИЛИ
-        style_negatives = [
-            "cartoon", "anime", "painting", "illustration", "drawing",
-            "3d render", "cgi", "digital art", "fantasy art", "concept art",
-            "stylized", "non-photographic", "artistic rendering"
-        ]
-        
-        # 🎯 СПЕЦИФИЧНЫЕ ДЛЯ ТИПА АВАТАРА
-        # LEGACY: Style аватары больше не поддерживаются
-        # if avatar_type == "style":
-        #     # Для стилевых - борьба с артефактами композиции
-        #     specific_negatives = [
-        #         "inconsistent lighting", "mixed styles", "poor composition",
-        #         "floating elements", "unrealistic proportions", "style mixing"
-        #     ]
-        # else:
-        
-        if avatar_type == "portrait":
-            # Для портретов - максимальный фокус на естественности лица
-            specific_negatives = [
-                "unnatural facial features", "distorted face", "fake expression",
-                "artificial smile", "forced expression", "mask-like face",
-                "symmetrical face", "perfect symmetry", "uncanny valley"
-            ]
-        else:
-            # Универсальные для всех типов
-            specific_negatives = [
-                "unnatural appearance", "artificial look", "fake rendering",
-                "poor anatomy", "unrealistic features"
-            ]
-        
-        # 🎯 НОВЫЕ НЕГАТИВЫ ПРОТИВ НЕЖЕЛАТЕЛЬНОЙ РАСТИТЕЛЬНОСТИ
-        facial_hair_negatives = [
-            # Против бороды и щетины
-            "stubble", "beard", "mustache", "facial hair", "five o'clock shadow",
-            "unshaven", "scruff", "whiskers", "goatee", "sideburns",
-            "patchy beard", "scruffy", "unkempt facial hair", "rough stubble",
-            
-            # Против клочковатой растительности
-            "patchy hair", "uneven hair growth", "sparse facial hair",
-            "random hair patches", "irregular stubble", "messy facial hair"
-        ]
-        
-        # 🎯 НОВЫЕ НЕГАТИВЫ ДЛЯ ЛИЦА И КОМПОЗИЦИИ (НОВОЕ!)
-        face_composition_negatives = [
-            # Против деформаций лица
-            "symmetrical eyes", "flat face", "melted face", "textureless face", 
-            "generic male face", "3d anime style eyes", "perfect symmetrical face",
-            "artificial facial structure", "clone face", "mannequin face",
-            
-            # Против композиционных проблем
-            "floating head", "disconnected body parts", "incorrect proportions",
-            "oversized head", "tiny head", "body-head mismatch", "anatomical errors"
-        ]
-        
-        # 🎯 ОБЪЕДИНЯЕМ ВСЕ НЕГАТИВЫ
-        all_negatives = (clarity_negatives + eye_negatives + processing_negatives + 
-                        technical_negatives + style_negatives + specific_negatives +
-                        facial_hair_negatives + face_composition_negatives)
-        
-        # Создаем строку негативов
-        negative_prompt = ", ".join(all_negatives)
-        
-        # ✅ ЛОГИРОВАНИЕ
-        logger.info(f"[ENHANCED Negative] Революционный negative prompt: {len(all_negatives)} терминов против мыльности и неестественных глаз")
-        logger.debug(f"[ENHANCED Negative] Ключевые негативы: мыльность={len(clarity_negatives)}, глаза={len(eye_negatives)}")
-        
-        return negative_prompt
-
     def is_available(self) -> bool:
         """Проверяет доступность сервиса обработки промптов"""
         # Новая система всегда доступна (не зависит от OpenAI)
         return True
-    
-    def get_prompt_examples(self, avatar_type: str) -> list:
-        """Возвращает примеры качественных промптов для пользователей"""
-        
-        if avatar_type == "portrait":
-            return [
-                "деловой портрет в костюме, студийное освещение",
-                "casual фото в кофейне, теплый свет",
-                "professional headshot, neutral background",
-                "художественный портрет в стиле ренессанс"
-            ]
-        else:
-            return [
-                "супергерой в динамичной позе, город на фоне",
-                "fantasy warrior, magical forest background",
-                "cyberpunk character, neon city lights",
-                "космонавт в скафандре, звезды на фоне"
-            ] 
 
-    # def _enhance_simple_prompt(self, english_prompt: str, avatar_type: str) -> str:
-    #     """
-    #     LEGACY: Умное улучшение простых промптов согласно примеру пользователя
-    #     НЕИСПОЛЬЗУЕТСЯ - имеет ошибки (неопределенная переменная enhanced_parts)
-    #     Заменено на create_enhanced_detailed_prompt
-    #     """
-    #     
-    #     # 📋 АНАЛИЗ ПРОМПТА (учитываем оригинальные русские слова)
-    #     prompt_lower = english_prompt.lower()
-    #     
-    #     # 🎯 ОПРЕДЕЛЯЕМ ТИП КАДРА из переведенного промпта
-    #     if any(word in prompt_lower for word in ['full body', 'standing', 'полный рост', 'full-body']):
-    #         shot_type = "full-body portrait photo"
-    #         # 🚨 УСИЛЕННЫЕ ИНСТРУКЦИИ для FULL BODY (НОВОЕ!)
-    #         enhanced_parts.append("show entire body from head to feet")
-    #         enhanced_parts.append("complete figure visible in frame")
-    #         enhanced_parts.append("full body composition with proper proportions")
-    #     elif any(word in prompt_lower for word in ['half body', 'по пояс', 'half-body']):
-    #         shot_type = "half-body portrait photo" 
-    #     elif any(word in prompt_lower for word in ['portrait', 'портрет', 'headshot', 'business portrait']):
-    #         shot_type = "portrait photo"
-    #     else:
-    #         # По умолчанию full body как в примере
-    #         shot_type = "full-body portrait photo"
-    #         # 🚨 ДОБАВЛЯЕМ FULL BODY по умолчанию
-    #         enhanced_parts.append("show entire body from head to feet")
-    #         enhanced_parts.append("full body composition")
-    #     
-    #     # ... остальной код был с ошибками
-    #     logger.info(f"[Enhanced] '{english_prompt}' → 'LEGACY FUNCTION'")
-    #     return english_prompt  # Fallback 
+    def get_negative_prompt(self, avatar_type: str) -> str:
+        """
+        Создает оптимизированный negative prompt для улучшения качества генерации
+        
+        Args:
+            avatar_type: Тип аватара ("portrait")
+            
+        Returns:
+            str: Negative prompt для FLUX Pro
+        """
+        # Базовые негативы для борьбы с артефактами
+        base_negatives = [
+            "blurry",
+            "low quality",
+            "worst quality", 
+            "bad anatomy",
+            "bad hands",
+            "mutated fingers",
+            "extra fingers",
+            "missing fingers",
+            "deformed",
+            "disfigured",
+            "watermark",
+            "signature",
+            "text",
+            "logo"
+        ]
+        
+        # Специфичные негативы для портретов
+        if avatar_type == "portrait":
+            portrait_negatives = [
+                "plastic skin",
+                "waxy skin", 
+                "artificial skin texture",
+                "over-smoothed skin",
+                "fake eyes",
+                "lifeless eyes",
+                "artificial lighting",
+                "cartoon",
+                "anime",
+                "drawing",
+                "painting",
+                "illustration",
+                "3d render",
+                "cgi"
+            ]
+            base_negatives.extend(portrait_negatives)
+        
+        # Объединяем все негативы
+        negative_prompt = ", ".join(base_negatives)
+        
+        logger.debug(f"[Negative Prompt] Создан для {avatar_type}: {len(negative_prompt)} символов")
+        return negative_prompt

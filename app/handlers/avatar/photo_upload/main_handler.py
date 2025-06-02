@@ -6,13 +6,14 @@
 from aiogram import Router, F, Bot
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
+from aiogram.filters import StateFilter
 from uuid import UUID
 import logging
 
 from app.handlers.state import AvatarStates
 from app.core.di import get_avatar_service
 from .upload_handler import UploadHandler
-from .gallery_handler import GalleryHandler
+from .gallery_handler import PhotoUploadGalleryHandler
 from .progress_handler import ProgressHandler
 from .models import PhotoUploadConfig
 
@@ -31,7 +32,7 @@ class PhotoUploadHandler:
         
         # Инициализируем модули
         self.upload_handler = UploadHandler()
-        self.gallery_handler = GalleryHandler()
+        self.gallery_handler = PhotoUploadGalleryHandler()
         self.progress_handler = ProgressHandler()
         
         logger.info("Инициализирован PhotoUploadHandler с модулями")

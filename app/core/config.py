@@ -159,7 +159,7 @@ class Settings(BaseSettings):
     # MinIO
     MINIO_ENDPOINT: Optional[str] = Field(default="192.168.0.4:9000")
     MINIO_ACCESS_KEY: Optional[str] = Field(default="minioadmin")
-    MINIO_SECRET_KEY: Optional[str] = Field(default="")
+    MINIO_SECRET_KEY: Optional[str] = Field(default="74rSbw9asQ1uMzcFeM5G")
     MINIO_BUCKET_NAME: Optional[str] = Field(default="aisha")
     MINIO_SECURE: bool = Field(default=False)  # 🎯 ВАЖНО: отключаем SSL для локального сервера
     MINIO_BUCKET_AVATARS: Optional[str] = Field(default="avatars")

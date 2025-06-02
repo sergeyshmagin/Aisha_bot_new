@@ -6,9 +6,11 @@
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
+from aiogram.exceptions import TelegramBadRequest
 import logging
 
 from app.core.di import get_user_service, get_avatar_service
+from app.core.logger import get_logger
 from .avatar_cards import AvatarCardsHandler
 from .photo_gallery import PhotoGalleryHandler
 from .avatar_actions import AvatarActionsHandler
@@ -17,14 +19,16 @@ from .models import gallery_cache
 
 logger = logging.getLogger(__name__)
 
-class GalleryHandler:
+class AvatarGalleryHandler:
     """
     Основной обработчик галереи аватаров.
     Объединяет модули: AvatarCardsHandler, PhotoGalleryHandler, AvatarActionsHandler
+    
+    Переименован из GalleryHandler для избежания конфликтов с галереей изображений
     """
     
     def __init__(self):
-        """Инициализация обработчика галереи"""
+        """Инициализация обработчика галереи аватаров"""
         self.router = Router()
         
         # Инициализируем модули
@@ -33,7 +37,7 @@ class GalleryHandler:
         self.actions_handler = AvatarActionsHandler()
         self.keyboards = GalleryKeyboards()
         
-        logger.info("Инициализирован GalleryHandler с модулями")
+        logger.info("Инициализирован AvatarGalleryHandler с модулями")
 
     def _register_handlers_sync(self):
         """Синхронная регистрация обработчиков галереи"""
@@ -248,11 +252,34 @@ class GalleryHandler:
                 )]
             ])
             
-            await callback.message.edit_text(
-                text,
-                reply_markup=keyboard,
-                parse_mode="Markdown"
-            )
+            try:
+                # Уровень 1: Попытка с Markdown
+                await callback.message.edit_text(
+                    text,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+            except TelegramBadRequest as markdown_error:
+                if "parse entities" in str(markdown_error):
+                    # Уровень 2: Проблема с Markdown - отправляем без форматирования
+                    logger.warning(f"Проблема с Markdown в генерации с аватаром: {markdown_error}")
+                    text_plain = text.replace('**', '')
+                    
+                    try:
+                        await callback.message.edit_text(
+                            text_plain,
+                            reply_markup=keyboard,
+                            parse_mode=None
+                        )
+                    except Exception as fallback_error:
+                        logger.exception(f"Критическая ошибка при fallback генерации с аватаром: {fallback_error}")
+                        await callback.answer("❌ Ошибка отображения", show_alert=True)
+                        return
+                else:
+                    # Другая ошибка Telegram
+                    logger.exception(f"Другая ошибка Telegram при генерации с аватаром: {markdown_error}")
+                    await callback.answer("❌ Ошибка отображения", show_alert=True)
+                    return
             
             # Устанавливаем состояние ожидания промпта
             from app.handlers.image_generation.states import ImageGenerationStates
@@ -280,15 +307,41 @@ class GalleryHandler:
         
         keyboard = self.keyboards.get_empty_gallery_keyboard()
         
-        # Проверяем тип сообщения и выбираем правильный метод
-        if callback.message.photo:
-            # Если сообщение содержит фото, удаляем его и отправляем текстовое
-            try:
-                await callback.message.delete()
-            except Exception:
-                pass  # Игнорируем ошибки удаления
-            
-            await callback.message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
-        else:
-            # Если сообщение текстовое, просто редактируем
-            await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown") 
+        try:
+            # Проверяем тип сообщения и выбираем правильный метод
+            if callback.message.photo:
+                # Если сообщение содержит фото, удаляем его и отправляем текстовое
+                try:
+                    await callback.message.delete()
+                except Exception:
+                    pass  # Игнорируем ошибки удаления
+                
+                # Уровень 1: Попытка с Markdown
+                try:
+                    await callback.message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
+                except TelegramBadRequest as markdown_error:
+                    if "parse entities" in str(markdown_error):
+                        # Уровень 2: Проблема с Markdown - отправляем без форматирования
+                        logger.warning(f"Проблема с Markdown в пустой галерее аватаров главный handler (новое сообщение): {markdown_error}")
+                        text_plain = text.replace('**', '')
+                        await callback.message.answer(text_plain, reply_markup=keyboard, parse_mode=None)
+                    else:
+                        logger.exception(f"Другая ошибка при отправке пустой галереи главный handler: {markdown_error}")
+                        raise
+            else:
+                # Если сообщение текстовое, просто редактируем
+                # Уровень 1: Попытка с Markdown
+                try:
+                    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
+                except TelegramBadRequest as markdown_error:
+                    if "parse entities" in str(markdown_error):
+                        # Уровень 2: Проблема с Markdown - отправляем без форматирования
+                        logger.warning(f"Проблема с Markdown в пустой галерее аватаров главный handler (редактирование): {markdown_error}")
+                        text_plain = text.replace('**', '')
+                        await callback.message.edit_text(text_plain, reply_markup=keyboard, parse_mode=None)
+                    else:
+                        logger.exception(f"Другая ошибка при редактировании пустой галереи главный handler: {markdown_error}")
+                        raise
+        except Exception as general_error:
+            logger.exception(f"Критическая ошибка в пустой галерее аватаров главный handler: {general_error}")
+            await callback.answer("❌ Ошибка отображения галереи", show_alert=True) 

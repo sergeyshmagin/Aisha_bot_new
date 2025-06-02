@@ -5,6 +5,7 @@
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
+from aiogram.exceptions import TelegramBadRequest
 
 from app.keyboards.avatar_clean import get_avatar_gender_keyboard, get_avatar_main_menu
 from app.handlers.state import AvatarStates
@@ -257,16 +258,37 @@ async def explain_gender_choice(callback: CallbackQuery, state: FSMContext):
         
         keyboard = get_avatar_gender_keyboard()
         
-        await callback.message.edit_text(
-            text=text,
-            reply_markup=keyboard,
-            parse_mode="Markdown"
-        )
+        try:
+            await callback.message.edit_text(
+                text=text,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+        except TelegramBadRequest as edit_error:
+            # Если не удалось отредактировать (например, контент уже такой же)
+            if "message is not modified" in str(edit_error):
+                # Просто отвечаем callback без изменений
+                await callback.answer("ℹ️ Объяснение уже отображено", show_alert=False)
+            else:
+                # Если другая ошибка - пробуем отправить новое сообщение
+                await callback.message.answer(
+                    text=text,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+        except Exception as other_error:
+            # Для других ошибок
+            logger.error(f"Неожиданная ошибка при редактировании объяснения: {other_error}")
+            await callback.message.answer(
+                text=text,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
         
         logger.info(f"Пользователь {callback.from_user.id} запросил объяснение выбора пола")
         
     except Exception as e:
-        logger.exception(f"Ошибка при объяснении выбора пола: {e}")
+        logger.exception(f"Ошибка при объяснении выбора пола (общая): {e}")
         await callback.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True)
 
 @router.callback_query(F.data == "cancel_avatar_creation")
@@ -292,6 +314,23 @@ async def cancel_avatar_creation(callback: CallbackQuery, state: FSMContext):
         
     except Exception as e:
         logger.exception(f"Ошибка при отмене создания аватара: {e}")
+        await callback.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True)
+
+@router.callback_query(F.data == "back_to_avatar_menu")
+async def back_to_avatar_menu(callback: CallbackQuery, state: FSMContext):
+    """Возврат в меню аватаров"""
+    try:
+        # Очищаем состояние если оно есть
+        await state.clear()
+        
+        # Возвращаемся к главному меню аватаров
+        from .main import avatar_main_handler
+        await avatar_main_handler.show_avatar_menu(callback, state)
+        
+        logger.info(f"Пользователь {callback.from_user.id} вернулся в меню аватаров")
+        
+    except Exception as e:
+        logger.exception(f"Ошибка при возврате в меню аватаров: {e}")
         await callback.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True)
 
 @router.callback_query(F.data == "avatar_help")
@@ -342,11 +381,32 @@ async def show_avatar_help(callback: CallbackQuery, state: FSMContext):
         
         keyboard = get_avatar_main_menu(0)  # Показываем меню создания
         
-        await callback.message.edit_text(
-            text=text,
-            reply_markup=keyboard,
-            parse_mode="Markdown"
-        )
+        try:
+            await callback.message.edit_text(
+                text=text,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+        except TelegramBadRequest as edit_error:
+            # Если не удалось отредактировать (например, контент уже такой же)
+            if "message is not modified" in str(edit_error):
+                # Просто отвечаем callback без изменений
+                await callback.answer("ℹ️ Справка уже отображена", show_alert=False)
+            else:
+                # Если другая ошибка - пробуем отправить новое сообщение
+                await callback.message.answer(
+                    text=text,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+        except Exception as other_error:
+            # Для других ошибок
+            logger.error(f"Неожиданная ошибка при редактировании справки: {other_error}")
+            await callback.message.answer(
+                text=text,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
         
         logger.info(f"Пользователь {callback.from_user.id} запросил помощь по аватарам")
         

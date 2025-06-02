@@ -262,37 +262,144 @@ class ImageGenerationService:
             return []
     
     async def get_generation_by_id(self, generation_id: UUID) -> Optional[ImageGeneration]:
+        """Получает генерацию по ID"""
+        
+        try:
+            async with get_session() as session:
+                generation = await session.get(ImageGeneration, generation_id)
+                if generation:
+                    # Eager loading связанных объектов
+                    await session.refresh(generation, ['avatar'])
+                return generation
+        except Exception as e:
+            logger.exception(f"Ошибка получения генерации {generation_id}: {e}")
+            return None
+    
+    async def get_generations_by_ids(self, generation_ids: List[UUID]) -> List[ImageGeneration]:
         """
-        Получает генерацию по ID
+        Получает генерации по списку ID (BULK запрос для оптимизации N+1 проблемы)
         
         Args:
-            generation_id: ID генерации
+            generation_ids: Список ID генераций
             
         Returns:
-            Optional[ImageGeneration]: Генерация или None
+            List[ImageGeneration]: Список найденных генераций
         """
         try:
+            if not generation_ids:
+                return []
+            
             async with get_session() as session:
                 from sqlalchemy import select
                 from sqlalchemy.orm import selectinload
                 
                 stmt = (
                     select(ImageGeneration)
-                    .options(
-                        selectinload(ImageGeneration.template),
-                        selectinload(ImageGeneration.avatar)
-                    )
-                    .where(ImageGeneration.id == generation_id)
+                    .options(selectinload(ImageGeneration.avatar))
+                    .where(ImageGeneration.id.in_(generation_ids))
                 )
                 
                 result = await session.execute(stmt)
-                generation = result.scalar_one_or_none()
+                generations = list(result.scalars().all())
                 
-                return generation
+                logger.debug(f"Bulk запрос: получено {len(generations)} генераций из {len(generation_ids)} ID")
+                return generations
                 
         except Exception as e:
-            logger.exception(f"Ошибка получения генерации {generation_id}: {e}")
-            return None
+            logger.exception(f"Ошибка bulk получения генераций: {e}")
+            return []
+    
+    async def delete_generation(self, generation_id: UUID) -> bool:
+        """
+        Удаляет генерацию изображения
+        
+        Args:
+            generation_id: ID генерации для удаления
+            
+        Returns:
+            bool: True если удаление успешно, False если генерация не найдена
+            
+        Raises:
+            Exception: При ошибке удаления
+        """
+        
+        try:
+            async with get_session() as session:
+                # Получаем генерацию
+                generation = await session.get(ImageGeneration, generation_id)
+                if not generation:
+                    logger.warning(f"Генерация {generation_id} не найдена для удаления")
+                    return False
+                
+                # Логируем удаление
+                logger.info(f"Удаление генерации {generation_id} пользователя {generation.user_id}")
+                
+                # Удаляем изображения из MinIO если есть
+                if generation.result_urls:
+                    await self._delete_images_from_minio(generation.result_urls, generation_id)
+                
+                # Удаляем запись из БД
+                await session.delete(generation)
+                await session.commit()
+                
+                logger.info(f"Генерация {generation_id} успешно удалена")
+                return True
+                
+        except Exception as e:
+            logger.exception(f"Ошибка удаления генерации {generation_id}: {e}")
+            raise
+    
+    async def _delete_images_from_minio(self, result_urls: List[str], generation_id: UUID):
+        """
+        Удаляет изображения из MinIO по URLs
+        
+        Args:
+            result_urls: Список URL изображений для удаления
+            generation_id: ID генерации для логирования
+        """
+        try:
+            from app.services.storage.minio import MinioStorage
+            storage = MinioStorage()
+            
+            logger.info(f"[MinIO Delete] Начинаем удаление {len(result_urls)} изображений для генерации {generation_id}")
+            
+            deleted_count = 0
+            for i, url in enumerate(result_urls):
+                try:
+                    # Извлекаем bucket и object_name из MinIO URL
+                    # URL формат: http://localhost:9000/bucket/path/to/file.jpg?signature...
+                    if "/generated/" in url:
+                        # Это MinIO URL
+                        parts = url.split("/generated/")
+                        if len(parts) > 1:
+                            object_path = "generated/" + parts[1].split("?")[0]  # Убираем query параметры
+                            bucket = "generated"
+                            
+                            logger.info(f"[MinIO Delete] Удаляем изображение {i+1}: bucket={bucket}, path={object_path}")
+                            
+                            success = await storage.delete_file(bucket, object_path)
+                            if success:
+                                deleted_count += 1
+                                logger.info(f"[MinIO Delete] ✅ Изображение {i+1} удалено: {object_path}")
+                            else:
+                                logger.warning(f"[MinIO Delete] ❌ Не удалось удалить изображение {i+1}: {object_path}")
+                        else:
+                            logger.warning(f"[MinIO Delete] ❌ Не удалось разобрать URL {i+1}: {url[:100]}...")
+                    else:
+                        # Это внешний URL (FAL AI) - не удаляем
+                        logger.info(f"[MinIO Delete] ⏭️ Пропускаем внешний URL {i+1}: {url[:50]}...")
+                        
+                except Exception as delete_error:
+                    logger.exception(f"[MinIO Delete] Ошибка удаления изображения {i+1}: {delete_error}")
+                    continue
+            
+            if deleted_count > 0:
+                logger.info(f"[MinIO Delete] ✅ Успешно удалено {deleted_count}/{len(result_urls)} изображений из MinIO")
+            else:
+                logger.warning(f"[MinIO Delete] ⚠️ Не удалось удалить ни одного изображения из MinIO")
+                
+        except Exception as e:
+            logger.exception(f"[MinIO Delete] Критическая ошибка удаления из MinIO: {e}")
     
     async def toggle_favorite(self, generation_id: UUID, user_id: UUID) -> bool:
         """
