@@ -197,10 +197,13 @@ async def handle_cancel_creation_request(callback: CallbackQuery, state: FSMCont
         current_state = await state.get_state()
         data = await state.get_data()
         
-        if current_state == AvatarStates.selecting_training_type:
-            step = "training_type"
-            context = None
-        elif current_state == AvatarStates.selecting_gender:
+        # LEGACY: selecting_training_type больше не используется
+        # if current_state == AvatarStates.selecting_training_type:
+        #     step = "training_type"
+        #     context = None
+        # elif current_state == AvatarStates.selecting_gender:
+        
+        if current_state == AvatarStates.selecting_gender:
             step = "gender"
             context = data
         elif current_state == AvatarStates.uploading_photos:
@@ -346,10 +349,7 @@ async def handle_cancel_cancel(callback: CallbackQuery, state: FSMContext):
     try:
         current_state = await state.get_state()
         
-        if current_state == AvatarStates.selecting_training_type:
-            from app.handlers.avatar.training_type_selection import show_training_type_selection
-            await show_training_type_selection(callback, state)
-        elif current_state == AvatarStates.selecting_gender:
+        if current_state == AvatarStates.selecting_gender:
             from app.handlers.avatar.create import show_gender_selection
             await show_gender_selection(callback, state)
         elif current_state == AvatarStates.uploading_photos:

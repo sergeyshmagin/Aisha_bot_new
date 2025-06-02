@@ -1,7 +1,8 @@
 """
 Модуль обработчиков аватаров
 """
-from .training_type_selection import router as training_type_router
+# LEGACY: training_type_selection удален, упрощен визард
+# from .training_type_selection import router as training_type_router
 from .create import router as create_router
 from .main import router as main_router, avatar_main_handler
 from .photo_upload import router as photo_upload_router
@@ -15,7 +16,7 @@ from aiogram import Router
 router = Router()
 # Порядок важен: специфичные обработчики должны быть раньше общих
 router.include_router(create_router)  # Специфичные обработчики создания
-router.include_router(training_type_router)
+# router.include_router(training_type_router)  # LEGACY: удален
 router.include_router(photo_upload_router)
 router.include_router(training_router)
 router.include_router(gallery_router)
@@ -25,7 +26,7 @@ router.include_router(main_router)  # Общие обработчики в ко�
 
 
 __all__ = [
-    "training_type_router", 
+    # "training_type_router",  # LEGACY: удален
     "create_router",
     "main_router",
     "photo_upload_router",

@@ -18,15 +18,15 @@ class AvatarStates(StatesGroup):
     """Состояния для создания и управления аватарами"""
     
     # Выбор типа обучения (новые состояния)
-    selecting_training_type = State()     # Выбор типа обучения (portrait/style)
+    # selecting_training_type = State()     # LEGACY: Выбор типа обучения больше не используется
     viewing_training_info = State()       # Просмотр информации о типе
     viewing_training_comparison = State() # Сравнение типов обучения
     
     # Основные состояния
     menu = State()                    # Главное меню аватаров
     selecting_type = State()          # Выбор типа аватара (character/style/custom)
-    entering_name = State()           # Ввод имени аватара
     selecting_gender = State()        # Выбор пола аватара
+    entering_name = State()           # Ввод имени аватара
     
     # Загрузка фотографий
     uploading_photos = State()        # Загрузка фотографий
@@ -50,4 +50,7 @@ class AvatarStates(StatesGroup):
     
     # Управление
     editing_avatar = State()          # Редактирование аватара
-    deleting_avatar = State()         # Удаление аватара 
+    deleting_avatar = State()         # Удаление аватара
+    
+    # New state for training
+    training = State()                # Обучение в процессе 
