@@ -54,25 +54,27 @@ class PromptProcessingService:
             negative_prompt = self.get_negative_prompt(avatar_type)
             
             # 🎯 4. ДЛЯ FLUX PRO - ВСТРАИВАЕМ НЕГАТИВЫ В ОСНОВНОЙ ПРОМПТ
-            if avatar_type == "style":
-                # Style аватары используют FLUX Pro - встраиваем негативы
-                key_negatives = [
-                    "plastic skin", "airbrushed", "over-processed", 
-                    "extra fingers", "deformed hands", "multiple faces",
-                    "cartoon", "cgi", "ultra-detailed", "8k"
-                ]
-                negative_terms = ", ".join(key_negatives)
-                final_prompt = f"{processed_prompt}. [AVOID: {negative_terms}]"
-                result_negative = None
-                
-                logger.info(f"[FLUX Pro] Добавлены негативные термины в основной промпт")
-                
-            else:
-                # Portrait аватары используют LoRA - negative prompt отдельно
-                final_prompt = processed_prompt
-                result_negative = negative_prompt
-                
-                logger.info(f"[LoRA] Negative prompt создан: {len(negative_prompt)} символов")
+            # LEGACY: Style аватары больше не поддерживаются
+            # if avatar_type == "style":
+            #     # Style аватары используют FLUX Pro - встраиваем негативы
+            #     key_negatives = [
+            #         "plastic skin", "airbrushed", "over-processed", 
+            #         "extra fingers", "deformed hands", "multiple faces",
+            #         "cartoon", "cgi", "ultra-detailed", "8k"
+            #     ]
+            #     negative_terms = ", ".join(key_negatives)
+            #     final_prompt = f"{processed_prompt}. [AVOID: {negative_terms}]"
+            #     result_negative = None
+            #     
+            #     logger.info(f"[FLUX Pro] Добавлены негативные термины в основной промпт")
+            #     
+            # else:
+            
+            # Теперь все аватары используют LoRA (портретные) - negative prompt отдельно
+            final_prompt = processed_prompt
+            result_negative = negative_prompt
+            
+            logger.info(f"[LoRA] Negative prompt создан: {len(negative_prompt)} символов")
             
             processing_time = time.time() - start_time
             
@@ -626,6 +628,15 @@ class PromptProcessingService:
         ]
         
         # 🎯 СПЕЦИФИЧНЫЕ ДЛЯ ТИПА АВАТАРА
+        # LEGACY: Style аватары больше не поддерживаются
+        # if avatar_type == "style":
+        #     # Для стилевых - борьба с артефактами композиции
+        #     specific_negatives = [
+        #         "inconsistent lighting", "mixed styles", "poor composition",
+        #         "floating elements", "unrealistic proportions", "style mixing"
+        #     ]
+        # else:
+        
         if avatar_type == "portrait":
             # Для портретов - максимальный фокус на естественности лица
             specific_negatives = [
@@ -633,14 +644,8 @@ class PromptProcessingService:
                 "artificial smile", "forced expression", "mask-like face",
                 "symmetrical face", "perfect symmetry", "uncanny valley"
             ]
-        elif avatar_type == "style":
-            # Для стилевых - борьба с артефактами композиции
-            specific_negatives = [
-                "inconsistent lighting", "mixed styles", "poor composition",
-                "floating elements", "unrealistic proportions", "style mixing"
-            ]
         else:
-            # Универсальные
+            # Универсальные для всех типов
             specific_negatives = [
                 "unnatural appearance", "artificial look", "fake rendering",
                 "poor anatomy", "unrealistic features"

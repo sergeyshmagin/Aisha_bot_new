@@ -99,13 +99,8 @@ class FalAIClient:
                     config=training_config or {}
                 )
             else:
-                # Художественное обучение через flux-pro-trainer
-                request_id = await self._train_style_avatar(
-                    data_url=data_url,
-                    user_id=user_id,
-                    avatar_id=avatar_id,
-                    config=training_config or {}
-                )
+                logger.error(f"[FAL AI] Неподдерживаемый тип обучения: {training_type}")
+                raise ValueError(f"Неподдерживаемый тип обучения: {training_type}")
             
             logger.info(f"[FAL AI] Обучение запущено успешно: request_id={request_id}")
             return request_id
@@ -167,53 +162,54 @@ class FalAIClient:
             logger.exception(f"[FAL AI] Ошибка портретного обучения аватара {avatar_id}: {e}")
             return None
 
-    async def _train_style_avatar(
-        self,
-        data_url: str,
-        user_id: UUID,
-        avatar_id: UUID,
-        config: Dict[str, Any]
-    ) -> Optional[str]:
-        """
-        Запускает художественное обучение через flux-pro-trainer
-        
-        Args:
-            data_url: URL архива с фотографиями
-            user_id: ID пользователя
-            avatar_id: ID аватара
-            config: Конфигурация обучения
-            
-        Returns:
-            Optional[str]: request_id
-        """
-        try:
-            # Настройки по умолчанию для художественного обучения
-            style_config = {
-                "mode": config.get("mode", settings.FAL_DEFAULT_MODE),
-                "iterations": config.get("iterations", settings.FAL_DEFAULT_ITERATIONS),
-                "priority": config.get("priority", settings.FAL_DEFAULT_PRIORITY),
-                "captioning": config.get("captioning", True),
-                "trigger_word": config.get("trigger_word", f"TOK_{avatar_id.hex[:8]}"),
-                "lora_rank": config.get("lora_rank", settings.FAL_LORA_RANK),
-                "finetune_type": config.get("finetune_type", settings.FAL_FINETUNE_TYPE),
-                "webhook_url": config.get("webhook_url", settings.FAL_WEBHOOK_URL),
-            }
-            
-            logger.info(f"[FAL AI] Художественное обучение аватара {avatar_id}: trigger='{style_config['trigger_word']}'")
-            
-            # Запускаем художественное обучение через существующий метод
-            request_id = await self._submit_training(
-                data_url=data_url,
-                user_id=user_id,
-                avatar_id=avatar_id,
-                config=style_config
-            )
-            
-            return request_id
-            
-        except Exception as e:
-            logger.exception(f"[FAL AI] Ошибка художественного обучения аватара {avatar_id}: {e}")
-            return None
+    # LEGACY: Художественное обучение больше не поддерживается
+    # async def _train_style_avatar(
+    #     self,
+    #     data_url: str,
+    #     user_id: UUID,
+    #     avatar_id: UUID,
+    #     config: Dict[str, Any]
+    # ) -> Optional[str]:
+    #     """
+    #     LEGACY: Запускает художественное обучение через flux-pro-trainer
+    #     
+    #     Args:
+    #         data_url: URL архива с фотографиями
+    #         user_id: ID пользователя
+    #         avatar_id: ID аватара
+    #         config: Конфигурация обучения
+    #         
+    #     Returns:
+    #         Optional[str]: request_id
+    #     """
+    #     try:
+    #         # Настройки по умолчанию для художественного обучения
+    #         style_config = {
+    #             "mode": config.get("mode", settings.FAL_DEFAULT_MODE),
+    #             "iterations": config.get("iterations", settings.FAL_DEFAULT_ITERATIONS),
+    #             "priority": config.get("priority", settings.FAL_DEFAULT_PRIORITY),
+    #             "captioning": config.get("captioning", True),
+    #             "trigger_word": config.get("trigger_word", f"TOK_{avatar_id.hex[:8]}"),
+    #             "lora_rank": config.get("lora_rank", settings.FAL_LORA_RANK),
+    #             "finetune_type": config.get("finetune_type", settings.FAL_FINETUNE_TYPE),
+    #             "webhook_url": config.get("webhook_url", settings.FAL_WEBHOOK_URL),
+    #         }
+    #         
+    #         logger.info(f"[FAL AI] Художественное обучение аватара {avatar_id}: trigger='{style_config['trigger_word']}'")
+    #         
+    #         # Запускаем художественное обучение через существующий метод
+    #         request_id = await self._submit_training(
+    #             data_url=data_url,
+    #             user_id=user_id,
+    #             avatar_id=avatar_id,
+    #             config=style_config
+    #         )
+    #         
+    #         return request_id
+    #         
+    #     except Exception as e:
+    #         logger.exception(f"[FAL AI] Ошибка художественного обучения аватара {avatar_id}: {e}")
+    #         return None
 
     async def get_training_status(self, finetune_id: str) -> Dict[str, Any]:
         """
