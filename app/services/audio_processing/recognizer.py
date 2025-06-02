@@ -13,7 +13,7 @@ import aiohttp
 from app.core.temp_files import NamedTemporaryFile
 from app.core.config import settings
 from app.services.audio_processing.types import AudioRecognizer, TranscribeResult, AudioMetadata
-from app.core.exceptions import AudioProcessingError
+from app.core.exceptions.audio_exceptions import AudioProcessingError
 
 logger = logging.getLogger(__name__)
 

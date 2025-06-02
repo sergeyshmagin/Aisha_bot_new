@@ -80,12 +80,6 @@ class FALGenerationService:
                 raise ValueError(f"Аватар {avatar.id} не обучен или имеет неправильные данные")
             
             # ✅ СТРОГОЕ РАЗДЕЛЕНИЕ ПО ТИПАМ АВАТАРОВ - теперь только Portrait
-            # LEGACY: Style аватары больше не поддерживаются, убрана логика finetune_id
-            # Old logic:
-            # if avatar.training_type == AvatarTrainingType.STYLE:
-            #     logger.info(f"🎨 Style аватар: используем FLUX1.1 [pro] ultra Fine-tuned для {avatar.id}")
-            #     return await self._generate_with_ultra_finetuned(avatar, prompt, generation_config)
-            # elif avatar.training_type == AvatarTrainingType.PORTRAIT:
             
             if avatar.training_type == AvatarTrainingType.PORTRAIT:
                 # Портретные аватары используют LoRA файлы + flux-lora API
@@ -215,94 +209,6 @@ class FALGenerationService:
             logger.error(f"[FAL AI] ❌ Ошибка генерации LoRA: {e}")
             raise
 
-    # LEGACY: Метод для Style аватаров больше не используется
-    # async def _generate_with_ultra_finetuned(
-    #     self,
-    #     avatar: Avatar,
-    #     prompt: str,
-    #     config: Optional[Dict[str, Any]] = None
-    # ) -> Optional[str]:
-    #     """
-    #     LEGACY: Генерация с FLUX1.1 [pro] v1.1-ultra-finetuned моделью
-    #     ТОЛЬКО для стилевых аватаров с finetune_id
-    #     
-    #     Args:
-    #         avatar: Стилевой аватар с finetune_id
-    #         prompt: Промпт для генерации
-    #         config: Дополнительные параметры
-    #         
-    #     Returns:
-    #         Optional[str]: URL сгенерированного изображения
-    #     """
-    #     # СТРОГАЯ ПРОВЕРКА: только для стилевых аватаров
-    #     if avatar.training_type != AvatarTrainingType.STYLE:
-    #         raise ValueError(f"Ultra Fine-tuned API предназначен только для стилевых аватаров. Аватар {avatar.id} имеет тип {avatar.training_type}")
-    #     
-    #     if not avatar.finetune_id:
-    #         raise ValueError(f"Стилевой аватар {avatar.id} должен иметь finetune_id")
-    #     
-    #     if avatar.diffusers_lora_file_url:
-    #         logger.warning(f"⚠️ Стилевой аватар {avatar.id} содержит LoRA файл, но должен использовать только finetune_id")
-    #     
-    #     # Определяем триггер (для стилевых используем trigger_word)
-    #     trigger = avatar.trigger_word
-    #     logger.info(f"[FAL AI] 🎨 Style аватар: finetune_id={avatar.finetune_id}, trigger='{trigger}'")
-    #     
-    #     # Формируем промпт с триггерным словом
-    #     full_prompt = self._build_prompt_with_trigger(prompt, trigger)
-    #     
-    #     # Настройки для FLUX1.1 [pro] ultra Fine-tuned
-    #     generation_args = {
-    #         "prompt": full_prompt,
-    #         "finetune_id": avatar.finetune_id,
-    #         "finetune_strength": config.get("finetune_strength", 1.0) if config else 1.0,
-    #         "aspect_ratio": config.get("aspect_ratio", "1:1") if config else "1:1",
-    #         "num_images": config.get("num_images", 1) if config else 1,
-    #         "output_format": config.get("output_format", "jpeg") if config else "jpeg",
-    #         "enable_safety_checker": config.get("enable_safety_checker", True) if config else True,
-    #         "safety_tolerance": config.get("safety_tolerance", 2) if config else 2,
-    #         "raw": config.get("raw", False) if config else False,
-    #     }
-    #     
-    #     # Добавляем negative_prompt если есть в конфигурации для FLUX Pro
-    #     if config and config.get("negative_prompt"):
-    #         logger.info(f"[FAL AI] ℹ️ Negative prompt игнорируется для FLUX Pro (встроен в основной промпт)")
-    #     
-    #     # Добавляем seed если указан
-    #     if config and config.get("seed"):
-    #         generation_args["seed"] = config.get("seed")
-    #     
-    #     logger.info(f"[FAL AI] 🚀 FLUX1.1 [pro] ultra Fine-tuned для стилевого аватара {avatar.id}")
-    #     logger.debug(f"[FAL AI] Style args: {generation_args}")
-    #     
-    #     try:
-    #         result = fal_client.subscribe(
-    #             "fal-ai/flux-pro/v1.1-ultra-finetuned",
-    #             arguments=generation_args,
-    #             with_logs=True  
-    #         )
-    #         
-    #         logger.info(f"[FAL AI] ✅ Генерация Style завершена успешно")
-    #         logger.debug(f"[FAL AI] Style result: {result}")
-    #         
-    #         # Извлекаем URL изображения из результата
-    #         if isinstance(result, dict) and "images" in result:
-    #             images = result["images"]
-    #             if images and len(images) > 0:
-    #                 image_url = images[0]["url"] if isinstance(images[0], dict) else images[0]
-    #                 logger.info(f"[FAL AI] Style изображение готово: {image_url}")
-    #                 return image_url
-    #             else:
-    #                 logger.error(f"[FAL AI] Style результат не содержит изображений: {result}")
-    #                 return None
-    #         else:
-    #             logger.error(f"[FAL AI] Style неожиданный формат результата: {result}")
-    #             return None
-    #         
-    #     except Exception as e:
-    #         logger.error(f"[FAL AI] ❌ Ошибка генерации Style: {e}")
-    #         raise
-
     async def _simulate_generation(
         self,
         avatar: Avatar,
@@ -359,23 +265,6 @@ class FALGenerationService:
                    f"has_lora={has_lora}, has_finetune={has_finetune}")
         
         # СТРОГАЯ ПРОВЕРКА: каждый тип должен иметь правильные данные
-        # LEGACY: Style аватары больше не поддерживаются
-        # if avatar.training_type == AvatarTrainingType.STYLE:
-        #     if has_finetune and not has_lora:
-        #         logger.info(f"✅ Стилевой аватар {avatar.id} готов к генерации (имеет finetune_id)")
-        #         return True
-        #     else:
-        #         if has_lora and not has_finetune:
-        #             logger.error(
-        #                 f"❌ ОШИБКА ДАННЫХ: Стилевой аватар {avatar.id} имеет LoRA файл вместо finetune_id! "
-        #                 f"Стилевые аватары должны использовать finetune_id."
-        #             )
-        #         elif not has_finetune:
-        #             logger.error(f"❌ Стилевой аватар {avatar.id} не имеет finetune_id")
-        #         else:
-        #             logger.error(f"❌ Стилевой аватар {avatar.id} имеет и LoRA и finetune - конфликт данных")
-        #         return False
-        # elif avatar.training_type == AvatarTrainingType.PORTRAIT:
         
         if avatar.training_type == AvatarTrainingType.PORTRAIT:
             if has_lora and not has_finetune:
@@ -591,7 +480,7 @@ class FALGenerationService:
             "test_mode": self.test_mode,
             "api_key_set": bool(self.api_key),
             "available": self.is_available(),
-            "supported_types": ["portrait"],  # LEGACY: убраны "style", "artistic"
+            "supported_types": ["portrait"],
             "primary_model": "fal-ai/flux-pro/v1.1-ultra-finetuned",
             "supported_models": [
                 "fal-ai/flux-pro/v1.1-ultra-finetuned",  # Основная модель для всех типов

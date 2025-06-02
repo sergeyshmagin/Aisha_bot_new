@@ -15,7 +15,7 @@ from app.services.audio_processing.types import (
     AudioStorage,
     TranscribeResult
 )
-from app.core.exceptions import AudioProcessingError
+from app.core.exceptions.audio_exceptions import AudioProcessingError
 
 logger = logging.getLogger(__name__)
 

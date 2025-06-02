@@ -44,23 +44,6 @@ def get_avatar_main_menu(avatars_count: int = 0) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-# ==================== LEGACY: КЛАВИАТУРЫ ВЫБОРА ТИПА ОБУЧЕНИЯ ====================
-# УСТАРЕЛО: Теперь используется только портретный тип
-# Заменено на упрощенный workflow без выбора типа обучения
-
-# def get_training_type_keyboard() -> InlineKeyboardMarkup:
-#     """LEGACY: Клавиатура выбора типа обучения"""
-#     return InlineKeyboardMarkup(inline_keyboard=[])
-
-# def get_training_type_confirmation_keyboard(training_type: str) -> InlineKeyboardMarkup:
-#     """LEGACY: Клавиатура подтверждения выбора типа обучения"""
-#     return InlineKeyboardMarkup(inline_keyboard=[])
-
-# def get_comparison_keyboard() -> InlineKeyboardMarkup:
-#     """LEGACY: Клавиатура для сравнения типов обучения"""
-#     return InlineKeyboardMarkup(inline_keyboard=[])
-
-
 def get_avatar_gender_keyboard() -> InlineKeyboardMarkup:
     """Клавиатура выбора пола аватара (упрощенная без выбора модели)"""
     

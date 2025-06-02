@@ -9,7 +9,7 @@ from aiogram import Bot
 from app.core.config import settings
 from app.core.logger import get_logger
 from app.database.connection import get_session_dependency
-from app.services.avatar.training_service import AvatarTrainingService
+from app.services.avatar.training_service.main_service import AvatarTrainingService
 from app.services.user import get_user_service_with_session
 
 logger = get_logger(__name__)

@@ -18,7 +18,6 @@ class AvatarStates(StatesGroup):
     """Состояния для создания и управления аватарами"""
     
     # Выбор типа обучения (новые состояния)
-    # selecting_training_type = State()     # LEGACY: Выбор типа обучения больше не используется
     viewing_training_info = State()       # Просмотр информации о типе
     viewing_training_comparison = State() # Сравнение типов обучения
     

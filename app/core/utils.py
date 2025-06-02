@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Optional
 
 from app.core.config import settings
-from app.core.exceptions import AudioProcessingError
+from app.core.exceptions.audio_exceptions import AudioProcessingError
 
 logger = logging.getLogger(__name__)
 

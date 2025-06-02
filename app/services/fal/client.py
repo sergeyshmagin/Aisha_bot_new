@@ -162,61 +162,14 @@ class FalAIClient:
             logger.exception(f"[FAL AI] Ошибка портретного обучения аватара {avatar_id}: {e}")
             return None
 
-    # LEGACY: Художественное обучение больше не поддерживается
-    # async def _train_style_avatar(
-    #     self,
-    #     data_url: str,
-    #     user_id: UUID,
-    #     avatar_id: UUID,
-    #     config: Dict[str, Any]
-    # ) -> Optional[str]:
-    #     """
-    #     LEGACY: Запускает художественное обучение через flux-pro-trainer
-    #     
-    #     Args:
-    #         data_url: URL архива с фотографиями
-    #         user_id: ID пользователя
-    #         avatar_id: ID аватара
-    #         config: Конфигурация обучения
-    #         
-    #     Returns:
-    #         Optional[str]: request_id
-    #     """
-    #     try:
-    #         # Настройки по умолчанию для художественного обучения
-    #         style_config = {
-    #             "mode": config.get("mode", settings.FAL_DEFAULT_MODE),
-    #             "iterations": config.get("iterations", settings.FAL_DEFAULT_ITERATIONS),
-    #             "priority": config.get("priority", settings.FAL_DEFAULT_PRIORITY),
-    #             "captioning": config.get("captioning", True),
-    #             "trigger_word": config.get("trigger_word", f"TOK_{avatar_id.hex[:8]}"),
-    #             "lora_rank": config.get("lora_rank", settings.FAL_LORA_RANK),
-    #             "finetune_type": config.get("finetune_type", settings.FAL_FINETUNE_TYPE),
-    #             "webhook_url": config.get("webhook_url", settings.FAL_WEBHOOK_URL),
-    #         }
-    #         
-    #         logger.info(f"[FAL AI] Художественное обучение аватара {avatar_id}: trigger='{style_config['trigger_word']}'")
-    #         
-    #         # Запускаем художественное обучение через существующий метод
-    #         request_id = await self._submit_training(
-    #             data_url=data_url,
-    #             user_id=user_id,
-    #             avatar_id=avatar_id,
-    #             config=style_config
-    #         )
-    #         
-    #         return request_id
-    #         
-    #     except Exception as e:
-    #         logger.exception(f"[FAL AI] Ошибка художественного обучения аватара {avatar_id}: {e}")
-    #         return None
 
-    async def get_training_status(self, finetune_id: str) -> Dict[str, Any]:
+    async def get_training_status(self, request_id: str, training_type: str) -> Dict[str, Any]:
         """
         Получает статус обучения модели
         
         Args:
-            finetune_id: ID обучения FAL AI
+            request_id: ID обучения FAL AI
+            training_type: Тип обучения
             
         Returns:
             Dict[str, Any]: Статус обучения
@@ -237,52 +190,19 @@ class FalAIClient:
             # В FAL AI пока нет прямого API для получения статуса
             # Статус приходит через webhook
             
-            logger.warning(f"[FAL AI] Получение статуса {finetune_id} пока не реализовано")
+            logger.warning(f"[FAL AI] Получение статуса {request_id} для типа {training_type} пока не реализовано")
             return {
                 "status": "unknown",
                 "message": "Status checking not implemented yet"
             }
             
         except Exception as e:
-            logger.exception(f"[FAL AI] Ошибка получения статуса {finetune_id}: {e}")
+            logger.exception(f"[FAL AI] Ошибка получения статуса {request_id} для типа {training_type}: {e}")
             return {
                 "status": "error",
                 "message": str(e)
             }
 
-    # LEGACY: Устаревший метод, используйте FALGenerationService
-    # async def generate_image(
-    #     self,
-    #     finetune_id: str,
-    #     prompt: str,
-    #     config: Optional[Dict[str, Any]] = None
-    # ) -> Optional[str]:
-    #     """
-    #     DEPRECATED: Используйте FALGenerationService вместо этого метода
-    #     
-    #     Args:
-    #         finetune_id: ID обученной модели
-    #         prompt: Промпт для генерации
-    #         config: Дополнительные параметры генерации
-    #         
-    #     Returns:
-    #         Optional[str]: URL сгенерированного изображения
-    #     """
-    #     logger.warning(
-    #         "[FAL AI] Метод generate_image устарел. "
-    #         "Используйте FALGenerationService.generate_avatar_image()"
-    #     )
-    #     
-    #     try:
-    #         if self.test_mode:
-    #             logger.info(f"[FAL TEST MODE] Симуляция генерации с моделью {finetune_id}")
-    #             # Возвращаем тестовую ссылку
-    #             return "https://example.com/test_generated_image.jpg"
-    #         
-    #         # Простая реализация для обратной совместимости
-    #         # В продакшене используйте FALGenerationService
-    #         logger.warning(f"[FAL AI] Генерация изображений через старый API")
-    #         return None
     #         
     #     except Exception as e:
     #         logger.exception(f"[FAL AI] Ошибка генерации изображения: {e}")

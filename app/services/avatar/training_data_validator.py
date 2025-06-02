@@ -237,14 +237,6 @@ class AvatarTrainingDataValidator:
 
     def _validate_final_data(self, training_type: AvatarTrainingType, update_data: Dict[str, Any]) -> None:
         """Финальная валидация данных перед сохранением"""
-        # LEGACY: Style аватары больше не поддерживаются
-        # if training_type == AvatarTrainingType.STYLE:
-        #     if not update_data.get("finetune_id"):
-        #         raise ValueError("Style аватар должен иметь finetune_id")
-        #     if update_data.get("diffusers_lora_file_url"):
-        #         raise ValueError("Style аватар НЕ должен иметь LoRA файлы")
-        # 
-        # elif training_type == AvatarTrainingType.PORTRAIT:
         
         if training_type == AvatarTrainingType.PORTRAIT:
             if not update_data.get("diffusers_lora_file_url"):
@@ -303,8 +295,12 @@ class AvatarTrainingDataValidator:
         if not avatar.training_type:
             return False, "Не установлен тип обучения"
         
-        if avatar.training_type not in [AvatarTrainingType.PORTRAIT]:  # LEGACY: убран AvatarTrainingType.STYLE
+        if avatar.training_type not in [AvatarTrainingType.PORTRAIT]:
             return False, f"Неподдерживаемый тип обучения: {avatar.training_type}"
+        
+        # Обязательные поля
+        if not all([avatar.name, avatar.gender, avatar.user_id]):
+            return False, "Неполные данные аватара"
         
         # Проверяем что НЕТ конфликтующих данных от предыдущих попыток
         has_lora = bool(avatar.diffusers_lora_file_url)
@@ -353,16 +349,6 @@ class AvatarTrainingDataValidator:
             "training_type": training_type.value,
             "quality": user_preferences.get("quality", "balanced") if user_preferences else "balanced"
         }
-        
-        # LEGACY: Style аватары больше не поддерживаются
-        # if training_type == AvatarTrainingType.STYLE:
-        #     # Style аватары используют trigger_word
-        #     base_config.update({
-        #         "trigger_type": "word",
-        #         "api_endpoint": "flux-pro-trainer",
-        #         "expected_result": "finetune_id"
-        #     })
-        # else:
         
         if training_type == AvatarTrainingType.PORTRAIT:
             # Portrait аватары используют trigger_phrase  

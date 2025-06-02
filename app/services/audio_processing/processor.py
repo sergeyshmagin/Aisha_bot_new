@@ -12,7 +12,7 @@ from pydub import AudioSegment
 from pydub.silence import split_on_silence
 from app.core.config import settings
 from app.services.audio_processing.types import AudioProcessor
-from app.core.exceptions import AudioProcessingError
+from app.core.exceptions.audio_exceptions import AudioProcessingError
 from app.core.temp_files import NamedTemporaryFile, mkdtemp
 
 logger = logging.getLogger(__name__)

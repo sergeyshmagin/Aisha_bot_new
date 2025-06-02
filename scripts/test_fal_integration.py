@@ -16,7 +16,7 @@ from app.core.config import settings
 from app.core.logger import get_logger
 from app.core.database import get_session
 from app.services.fal.client import FalAIClient
-from app.services.avatar.training_service import AvatarTrainingService
+from app.services.avatar.training_service.main_service import AvatarTrainingService
 from app.database.models import Avatar, AvatarStatus, AvatarType, AvatarGender
 
 logger = get_logger(__name__)

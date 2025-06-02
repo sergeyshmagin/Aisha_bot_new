@@ -12,7 +12,7 @@ import asyncio
 from app.handlers.state import AvatarStates
 from app.core.di import get_user_service, get_avatar_service
 from app.core.database import get_session
-from app.services.avatar.training_service import AvatarTrainingService
+from app.services.avatar.training_service.main_service import AvatarTrainingService
 from app.services.avatar.fal_training_service import FALTrainingService
 from app.database.models import AvatarStatus
 from app.core.logger import get_logger
