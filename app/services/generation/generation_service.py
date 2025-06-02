@@ -22,10 +22,7 @@ from app.services.generation.prompt_processing_service import PromptProcessingSe
 logger = get_logger(__name__)
 
 # Константы
-GENERATION_COST = 50.0  # Стоимость одной генерации в единицах баланса
-
-
-class ImageGenerationService:
+GENERATION_COST = 50.0  # Стоимость одной генерации в единицах балансаclass ImageGenerationService:
     """Сервис генерации изображений с контролем баланса"""
     
     def __init__(self):
@@ -731,4 +728,4 @@ class ImageGenerationService:
             
         except Exception as e:
             logger.exception(f"[MinIO] Критическая ошибка сохранения в MinIO: {e}")
-            return [] 
+            return []

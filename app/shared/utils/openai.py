@@ -3,4 +3,4 @@ def get_openai_headers(api_key: str) -> dict:
     return {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json"
-    } 
+    }

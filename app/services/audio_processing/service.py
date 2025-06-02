@@ -184,4 +184,4 @@ class AudioService:
     async def generate_protocol(self, text: str) -> str:
         """Генерирует протокол встречи/разговора."""
         # TODO: Интеграция с ML/AI-сервисом для протокола
-        return "[Протокол будет доступен позже]" 
+        return "[Протокол будет доступен позже]"

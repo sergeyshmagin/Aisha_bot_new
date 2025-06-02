@@ -16,10 +16,7 @@ from ...database.models import Avatar, AvatarStatus, AvatarTrainingType
 from .training_data_validator import AvatarTrainingDataValidator
 from .fal_training_service.main_service import FALTrainingService
 
-logger = get_logger(__name__)
-
-
-class ValidatedTrainingService:
+logger = get_logger(__name__)class ValidatedTrainingService:
     """
     Сервис обучения аватаров с интегрированной валидацией данных
     
@@ -315,4 +312,4 @@ class ValidatedTrainingService:
                 "Статус COMPLETED для готовых аватаров",
                 "Валидация перед каждым обучением"
             ]
-        } 
+        }

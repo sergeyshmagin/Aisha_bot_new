@@ -12,10 +12,7 @@ from sqlalchemy import select
 from app.core.config import settings
 from app.database.models import Avatar, AvatarPhoto, AvatarStatus
 
-logger = logging.getLogger(__name__)
-
-
-class AvatarValidator:
+logger = logging.getLogger(__name__)class AvatarValidator:
     """Валидация аватаров и фотографий для обучения"""
     
     def __init__(self, session: AsyncSession):
@@ -121,4 +118,4 @@ class AvatarValidator:
             return False
         except Exception as e:
             logger.exception(f"[VALIDATION] Ошибка валидации аватара {avatar_id}: {e}")
-            return False 
+            return False

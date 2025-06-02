@@ -10,10 +10,7 @@ from app.core.di import get_user_service_with_session
 from app.database.models import User
 from .models import UserRegistrationData
 
-logger = logging.getLogger(__name__)
-
-
-class TranscriptUserManager:
+logger = logging.getLogger(__name__)class TranscriptUserManager:
     """
     Менеджер пользователей для обработчика транскриптов
     
@@ -110,4 +107,4 @@ class TranscriptUserManager:
             
         except Exception as e:
             logger.error(f"Ошибка при проверке доступа пользователя {telegram_user.id} к ресурсу {resource_id}: {e}")
-            return False 
+            return False

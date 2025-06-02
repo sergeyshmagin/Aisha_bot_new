@@ -9,4 +9,4 @@ from .main_handler import TranscriptMainHandler
 # Экспорт для обратной совместимости
 __all__ = [
     "TranscriptMainHandler"
-] 
+]

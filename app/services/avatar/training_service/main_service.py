@@ -16,10 +16,7 @@ from .webhook_handler import WebhookHandler
 from .progress_tracker import ProgressTracker
 from .avatar_validator import AvatarValidator
 
-logger = logging.getLogger(__name__)
-
-
-class AvatarTrainingService(BaseService):
+logger = logging.getLogger(__name__)class AvatarTrainingService(BaseService):
     """
     Основной сервис для управления обучением аватаров с интеграцией FAL AI.
     
@@ -229,4 +226,4 @@ class AvatarTrainingService(BaseService):
             progress: Прогресс обучения (0-100)
             **kwargs: Дополнительные параметры для обновления
         """
-        return await self.training_manager._update_avatar_status(avatar_id, status, progress, **kwargs) 
+        return await self.training_manager._update_avatar_status(avatar_id, status, progress, **kwargs)

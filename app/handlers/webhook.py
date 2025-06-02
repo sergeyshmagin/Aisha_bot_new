@@ -9,10 +9,7 @@ from ..core.logger import get_logger
 from ..database.connection import get_session_dependency
 from ..services.avatar.training_service import AvatarTrainingService
 
-logger = get_logger(__name__)
-
-
-class FalWebhookHandler:
+logger = get_logger(__name__)class FalWebhookHandler:
     """
     Обработчик webhook уведомлений от FAL AI
     
@@ -93,8 +90,5 @@ class FalWebhookHandler:
                     detail="Некорректный формат webhook"
                 )
 
-        logger.info("[FAL WEBHOOK] Маршруты webhook настроены: POST /webhook/fal/status")
-
-
-# Глобальный экземпляр обработчика
-fal_webhook_handler = FalWebhookHandler() 
+        logger.info("[FAL WEBHOOK] Маршруты webhook настроены: POST /webhook/fal/status")# Глобальный экземпляр обработчика
+fal_webhook_handler = FalWebhookHandler()

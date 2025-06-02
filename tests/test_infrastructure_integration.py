@@ -18,10 +18,7 @@ import redis.asyncio as redis
 from app.core.config import settings
 from app.database.models import User, Avatar, AvatarTrainingType, AvatarGender
 from app.core.database import get_session
-from app.services.avatar.redis_service import AvatarRedisService
-
-
-class TestDatabaseIntegration:
+from app.services.avatar.redis_service import AvatarRedisServiceclass TestDatabaseIntegration:
     """Тесты интеграции с PostgreSQL"""
     
     @pytest.mark.asyncio
@@ -159,10 +156,7 @@ class TestDatabaseIntegration:
                 
             except Exception as e:
                 await session.rollback()
-                pytest.fail(f"❌ Ошибка создания аватара: {e}")
-
-
-class TestRedisIntegration:
+                pytest.fail(f"❌ Ошибка создания аватара: {e}")class TestRedisIntegration:
     """Тесты интеграции с Redis"""
     
     @pytest.mark.asyncio
@@ -244,10 +238,7 @@ class TestRedisIntegration:
             await service.close()
             
         except Exception as e:
-            pytest.fail(f"❌ Ошибка сервиса Redis: {e}")
-
-
-class TestMinIOIntegration:
+            pytest.fail(f"❌ Ошибка сервиса Redis: {e}")class TestMinIOIntegration:
     """Тесты интеграции с MinIO"""
     
     def setup_minio_client(self) -> Optional[Minio]:
@@ -345,10 +336,7 @@ class TestMinIOIntegration:
                 print("✅ Файл действительно удален")
                 
         except Exception as e:
-            pytest.fail(f"❌ Ошибка операций с файлами MinIO: {e}")
-
-
-class TestFullIntegration:
+            pytest.fail(f"❌ Ошибка операций с файлами MinIO: {e}")class TestFullIntegration:
     """Комплексные интеграционные тесты"""
     
     @pytest.mark.asyncio
@@ -466,10 +454,7 @@ class TestFullIntegration:
                 print("✅ Очистка выполнена")
                 
             except Exception as cleanup_error:
-                print(f"⚠️ Ошибка очистки: {cleanup_error}")
-
-
-# Вспомогательные функции для запуска тестов
+                print(f"⚠️ Ошибка очистки: {cleanup_error}")# Вспомогательные функции для запуска тестов
 if __name__ == "__main__":
     async def run_tests():
         """Запуск всех тестов"""
@@ -507,4 +492,4 @@ if __name__ == "__main__":
         print('='*60)
     
     # Запуск тестов
-    asyncio.run(run_tests()) 
+    asyncio.run(run_tests())

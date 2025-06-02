@@ -44,4 +44,4 @@ def get_webhook_logger() -> logging.Logger:
 
 def get_api_logger() -> logging.Logger:
     """Получить логгер для API"""
-    return setup_logger("api", "logs/api.log") 
+    return setup_logger("api", "logs/api.log")

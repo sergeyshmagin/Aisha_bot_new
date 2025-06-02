@@ -13,10 +13,7 @@ from app.database.models.generation import (
     StyleCategory, StyleSubcategory, StyleTemplate, UserFavoriteTemplate
 )
 
-logger = get_logger(__name__)
-
-
-class StyleService:
+logger = get_logger(__name__)class StyleService:
     """Сервис для работы со стилями и шаблонами"""
     
     async def get_popular_categories(self, limit: int = 4) -> List[StyleCategory]:
@@ -367,4 +364,4 @@ class StyleService:
                 
         except Exception as e:
             logger.exception(f"Ошибка увеличения популярности шаблона {template_id}: {e}")
-            return False 
+            return False

@@ -10,10 +10,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.utils.timezone import TimezoneUtils
-from app.utils.uuid_utils import safe_uuid
-
-
-def get_transcript_menu_keyboard() -> InlineKeyboardMarkup:
+from app.utils.uuid_utils import safe_uuiddef get_transcript_menu_keyboard() -> InlineKeyboardMarkup:
     """
     Клавиатура меню транскрибации
     """
@@ -28,10 +25,7 @@ def get_transcript_menu_keyboard() -> InlineKeyboardMarkup:
     builder.row(
         InlineKeyboardButton(text="◀️ Назад", callback_data="back_to_main")
     )
-    return builder.as_markup()
-
-
-def get_transcripts_keyboard(transcripts: List[Dict], telegram_id: int) -> InlineKeyboardMarkup:
+    return builder.as_markup()def get_transcripts_keyboard(transcripts: List[Dict], telegram_id: int) -> InlineKeyboardMarkup:
     """
     Клавиатура списка транскриптов
     
@@ -90,10 +84,7 @@ def get_transcripts_keyboard(transcripts: List[Dict], telegram_id: int) -> Inlin
     
     builder.row(        InlineKeyboardButton(text="⬅️ Назад", callback_data="transcribe_back_to_menu")    )
     
-    return builder.as_markup()
-
-
-def get_format_keyboard(transcript_id: str | UUID) -> InlineKeyboardMarkup:
+    return builder.as_markup()def get_format_keyboard(transcript_id: str | UUID) -> InlineKeyboardMarkup:
     """Клавиатура выбора формата обработки"""
     uuid_obj = safe_uuid(transcript_id)
     if not uuid_obj:
@@ -121,10 +112,7 @@ def get_format_keyboard(transcript_id: str | UUID) -> InlineKeyboardMarkup:
             text="⬅️ Назад", callback_data="transcribe_back_to_menu"
         )
     )
-    return builder.as_markup()
-
-
-def get_transcript_actions_keyboard(transcript_id: str | UUID) -> InlineKeyboardMarkup:
+    return builder.as_markup()def get_transcript_actions_keyboard(transcript_id: str | UUID) -> InlineKeyboardMarkup:
     """
     Клавиатура действий с транскриптом
     
@@ -165,10 +153,7 @@ def get_transcript_actions_keyboard(transcript_id: str | UUID) -> InlineKeyboard
             callback_data="transcribe_back_to_menu"
         )
     )
-    return builder.as_markup()
-
-
-def get_back_to_transcript_keyboard(transcript_id: str | UUID) -> InlineKeyboardMarkup:
+    return builder.as_markup()def get_back_to_transcript_keyboard(transcript_id: str | UUID) -> InlineKeyboardMarkup:
     """
     Клавиатура возврата в главное меню транскрипции
     
@@ -185,10 +170,7 @@ def get_back_to_transcript_keyboard(transcript_id: str | UUID) -> InlineKeyboard
             callback_data="transcribe_back_to_menu"
         )
     )
-    return builder.as_markup()
-
-
-def get_back_to_menu_keyboard() -> InlineKeyboardMarkup:
+    return builder.as_markup()def get_back_to_menu_keyboard() -> InlineKeyboardMarkup:
     """
     Клавиатура для возврата в меню
     """

@@ -6,10 +6,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Optional, Tuple, Union
 
-logger = logging.getLogger(__name__)
-
-
-class TimezoneUtils:
+logger = logging.getLogger(__name__)class TimezoneUtils:
     """Утилитарный класс для работы с часовыми поясами"""
 
     @staticmethod

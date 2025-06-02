@@ -21,10 +21,7 @@ from app.core.config import settings
 from app.services.base import BaseService
 from app.shared.utils.openai import get_openai_headers
 
-logger = logging.getLogger(__name__)
-
-
-class TextProcessingService(BaseService):
+logger = logging.getLogger(__name__)class TextProcessingService(BaseService):
     """
     Сервис для обработки текста и генерации документов
     """

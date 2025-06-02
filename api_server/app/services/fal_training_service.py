@@ -230,4 +230,4 @@ class FALTrainingService:
             
         except Exception as e:
             logger.exception(f"[FAL TRAINING] Ошибка получения результата: {e}")
-            raise 
+            raise

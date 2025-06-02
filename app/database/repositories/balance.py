@@ -7,10 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import UserBalance
-from app.database.repositories.base import BaseRepository
-
-
-class BalanceRepository(BaseRepository[UserBalance]):
+from app.database.repositories.base import BaseRepositoryclass BalanceRepository(BaseRepository[UserBalance]):
     """
     Репозиторий для работы с балансом пользователей
     """

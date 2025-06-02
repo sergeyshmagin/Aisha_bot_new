@@ -244,4 +244,4 @@ class AIFormatter:
             "todo": "todo",
             "protocol": "protocol"
         }
-        return prefixes.get(format_type, format_type) 
+        return prefixes.get(format_type, format_type)

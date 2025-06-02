@@ -345,4 +345,4 @@ class PydubAudioConverter(AudioConverter):
             try:
                 Path(temp_path).unlink()
             except Exception as e:
-                logger.warning(f"Не удалось удалить временный файл {temp_path}: {e}") 
+                logger.warning(f"Не удалось удалить временный файл {temp_path}: {e}")

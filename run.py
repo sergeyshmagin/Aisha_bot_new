@@ -38,4 +38,4 @@ if __name__ == "__main__":
         print(f"❌ Ошибка запуска: {e}")
         import traceback
         traceback.print_exc()
-        sys.exit(1) 
+        sys.exit(1)

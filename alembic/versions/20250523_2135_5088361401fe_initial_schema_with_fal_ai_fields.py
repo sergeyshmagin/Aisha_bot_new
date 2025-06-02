@@ -8,17 +8,11 @@ Create Date: 2025-05-23 21:35:00.922235+05:00
 from typing import Sequence, Union
 
 from alembic import op
-import sqlalchemy as sa
-
-
-# revision identifiers, used by Alembic.
+import sqlalchemy as sa# revision identifiers, used by Alembic.
 revision: str = '5088361401fe'
 down_revision: Union[str, None] = None
 branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
-
-
-def upgrade() -> None:
+depends_on: Union[str, Sequence[str], None] = Nonedef upgrade() -> None:
     """Добавляем поля FAL AI в таблицу avatars"""
     
     # Создаем новые enum типы если их нет
@@ -247,9 +241,5 @@ def upgrade() -> None:
                 WHEN duplicate_table THEN null;
             END;
         END $$;
-    """)
-
-
-
-def downgrade() -> None:
+    """)def downgrade() -> None:
     pass

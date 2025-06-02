@@ -12,10 +12,7 @@ from app.core.logger import get_logger
 from app.core.database import get_session
 from app.database.models.user_settings import UserSettings
 
-logger = get_logger(__name__)
-
-
-class UserSettingsService:
+logger = get_logger(__name__)class UserSettingsService:
     """Сервис для управления настройками пользователей"""
     
     async def get_user_settings(self, user_id: UUID) -> Optional[UserSettings]:
@@ -189,4 +186,4 @@ class UserSettingsService:
                 
         except SQLAlchemyError as e:
             logger.exception(f"Ошибка удаления настроек пользователя {user_id}: {e}")
-            return False 
+            return False

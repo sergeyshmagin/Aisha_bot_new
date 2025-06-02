@@ -4,10 +4,7 @@
 """
 from typing import Optional, Dict, Any
 from uuid import UUID
-from .base_exceptions import BaseServiceError, BaseValidationError
-
-
-class AvatarError(BaseServiceError):
+from .base_exceptions import BaseServiceError, BaseValidationErrorclass AvatarError(BaseServiceError):
     """
     Базовая ошибка системы аватаров
     
@@ -42,10 +39,7 @@ class AvatarError(BaseServiceError):
         if self.user_id:
             parts.append(f"User: {self.user_id}")
         
-        return " | ".join(parts)
-
-
-class AvatarTrainingError(AvatarError):
+        return " | ".join(parts)class AvatarTrainingError(AvatarError):
     """
     Ошибка обучения аватара
     
@@ -88,10 +82,7 @@ class AvatarTrainingError(AvatarError):
         if self.fal_request_id:
             parts.append(f"FAL Request: {self.fal_request_id}")
         
-        return " | ".join(parts)
-
-
-class AvatarValidationError(BaseValidationError):
+        return " | ".join(parts)class AvatarValidationError(BaseValidationError):
     """
     Ошибка валидации аватара
     
@@ -132,10 +123,7 @@ class AvatarValidationError(BaseValidationError):
         if self.validation_rule:
             parts.append(f"Rule: {self.validation_rule}")
         
-        return " | ".join(parts)
-
-
-class AvatarPhotoError(AvatarError):
+        return " | ".join(parts)class AvatarPhotoError(AvatarError):
     """
     Ошибка работы с фотографиями аватара
     
@@ -176,10 +164,7 @@ class AvatarPhotoError(AvatarError):
         if self.operation:
             parts.append(f"Operation: {self.operation}")
         
-        return " | ".join(parts)
-
-
-class AvatarStateError(AvatarError):
+        return " | ".join(parts)class AvatarStateError(AvatarError):
     """
     Ошибка состояния аватара
     
@@ -218,10 +203,7 @@ class AvatarStateError(AvatarError):
         if self.required_status:
             parts.append(f"Required: {self.required_status}")
         
-        return " | ".join(parts)
-
-
-class AvatarNotFoundError(AvatarError):
+        return " | ".join(parts)class AvatarNotFoundError(AvatarError):
     """
     Ошибка отсутствия аватара
     
@@ -247,10 +229,7 @@ class AvatarNotFoundError(AvatarError):
             error_code=error_code,
             details=details
         )
-        self.context = context
-
-
-class AvatarPermissionError(AvatarError):
+        self.context = contextclass AvatarPermissionError(AvatarError):
     """
     Ошибка прав доступа к аватару
     
@@ -286,4 +265,4 @@ class AvatarPermissionError(AvatarError):
         if self.required_permission:
             parts.append(f"Required: {self.required_permission}")
         
-        return " | ".join(parts) 
+        return " | ".join(parts)

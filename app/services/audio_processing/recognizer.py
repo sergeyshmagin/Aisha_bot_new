@@ -183,4 +183,4 @@ class WhisperRecognizer(AudioRecognizer):
         success = bool(texts)
         error_msg = "; ".join(errors) if errors else None
         logger.info(f"[WhisperRecognizer] Итоговая транскрибация: success={success}, ошибок={len(errors)}")
-        return TranscribeResult(success=success, text=final_text, error=error_msg) 
+        return TranscribeResult(success=success, text=final_text, error=error_msg)

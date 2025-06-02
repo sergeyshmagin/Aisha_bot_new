@@ -146,4 +146,4 @@ class LargeFileHandler:
             Path(temp_path).unlink(missing_ok=True)
             logger.debug(f"Временный файл удален: {temp_path}")
         except Exception as e:
-            logger.warning(f"Ошибка при удалении временного файла {temp_path}: {e}") 
+            logger.warning(f"Ошибка при удалении временного файла {temp_path}: {e}")

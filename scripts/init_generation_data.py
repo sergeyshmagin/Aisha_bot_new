@@ -12,10 +12,7 @@ from app.core.database import get_session
 from app.database.models.generation import StyleCategory, StyleSubcategory, StyleTemplate
 from app.core.logger import get_logger
 
-logger = get_logger(__name__)
-
-
-async def init_generation_data():
+logger = get_logger(__name__)async def init_generation_data():
     """Инициализирует базовые данные для системы генерации"""
     
     try:
@@ -326,10 +323,7 @@ async def init_generation_data():
             
     except Exception as e:
         logger.exception(f"Ошибка инициализации данных генерации: {e}")
-        raise
-
-
-async def check_existing_data():
+        raiseasync def check_existing_data():
     """Проверяет существующие данные"""
     
     try:
@@ -362,10 +356,7 @@ async def check_existing_data():
             
     except Exception as e:
         logger.exception(f"Ошибка проверки существующих данных: {e}")
-        return False
-
-
-async def main():
+        return Falseasync def main():
     """Главная функция"""
     
     logger.info("🚀 Инициализация данных системы генерации изображений")
@@ -377,8 +368,5 @@ async def main():
     # Инициализируем новые данные
     await init_generation_data()
     
-    logger.info("🎉 Инициализация завершена успешно!")
-
-
-if __name__ == "__main__":
-    asyncio.run(main()) 
+    logger.info("🎉 Инициализация завершена успешно!")if __name__ == "__main__":
+    asyncio.run(main())

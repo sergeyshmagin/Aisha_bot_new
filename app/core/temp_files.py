@@ -109,4 +109,4 @@ def cleanup_temp_files(max_age_hours: int = 24):
                 except OSError:
                     pass  # Директория не пустая
         except OSError:
-            pass  # Игнорируем ошибки доступа 
+            pass  # Игнорируем ошибки доступа

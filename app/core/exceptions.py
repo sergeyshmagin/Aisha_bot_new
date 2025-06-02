@@ -12,4 +12,4 @@ from .exceptions.audio_exceptions import *
 from .exceptions.storage_exceptions import *
 from .exceptions.validation_exceptions import *
 from .exceptions.config_exceptions import *
-from .exceptions.avatar_exceptions import * 
+from .exceptions.avatar_exceptions import *

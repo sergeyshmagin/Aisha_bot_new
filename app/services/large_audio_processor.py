@@ -409,4 +409,4 @@ async def try_process_large_audio(
         Транскрипт или None если не удалось
     """
     processor = LargeAudioProcessor(bot_token)
-    return await processor.process_large_audio(file_id, file_path, file_size, audio_service) 
+    return await processor.process_large_audio(file_id, file_path, file_size, audio_service)

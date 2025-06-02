@@ -9,10 +9,7 @@ from pathlib import Path
 sys.path.append(str(Path(__file__).parent.parent))
 
 from sqlalchemy import create_engine, text
-from app.core.config import settings
-
-
-def create_test_database():
+from app.core.config import settingsdef create_test_database():
     """Создает тестовую базу данных"""
     # Подключаемся к базе данных postgres для создания новой БД
     engine = create_engine(
@@ -39,8 +36,5 @@ def create_test_database():
         conn.execute(text(f"CREATE DATABASE {test_db_name}"))
         conn.execute(text("commit"))
     
-    print(f"Test database '{test_db_name}' created successfully!")
-
-
-if __name__ == "__main__":
+    print(f"Test database '{test_db_name}' created successfully!")if __name__ == "__main__":
     create_test_database()

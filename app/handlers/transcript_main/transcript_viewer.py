@@ -12,10 +12,7 @@ from app.utils.uuid_utils import safe_uuid
 from app.keyboards.transcript import get_transcript_actions_keyboard
 from .models import TranscriptMainConfig
 
-logger = logging.getLogger(__name__)
-
-
-class TranscriptViewer:
+logger = logging.getLogger(__name__)class TranscriptViewer:
     """
     Просмотрщик транскриптов
     
@@ -262,4 +259,4 @@ class TranscriptViewer:
                 )
         except Exception as e:
             logger.error(f"Ошибка при отправке карточки транскрипта: {e}")
-            raise 
+            raise

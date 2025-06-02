@@ -3,10 +3,7 @@
 Выделено из app/handlers/transcript_main.py для соблюдения правила ≤500 строк
 """
 from typing import Dict, Any, Optional
-from datetime import datetime
-
-
-class TranscriptMainConfig:
+from datetime import datetimeclass TranscriptMainConfig:
     """Конфигурация для основного обработчика транскриптов"""
     
     PAGE_SIZE = 5
@@ -25,10 +22,7 @@ class TranscriptMainConfig:
         "audio": "Аудио", 
         "text": "Текст",
         "unknown": "Файл"
-    }
-
-
-class TranscriptDisplayData:
+    }class TranscriptDisplayData:
     """Класс для форматирования данных транскрипта для отображения"""
     
     def __init__(self, transcript_data: Dict[str, Any]):
@@ -114,10 +108,7 @@ class TranscriptDisplayData:
         if self.word_count and self.source == "text":
             friendly_name += f" ({self.word_count} сл.)"
         
-        return f"{friendly_name} • {self.formatted_date}"
-
-
-class UserRegistrationData:
+        return f"{friendly_name} • {self.formatted_date}"class UserRegistrationData:
     """Данные для регистрации пользователя"""
     
     def __init__(self, telegram_user):
@@ -133,4 +124,4 @@ class UserRegistrationData:
             "language_code": self.telegram_user.language_code or "ru",
             "is_bot": self.telegram_user.is_bot,
             "is_premium": getattr(self.telegram_user, "is_premium", False)
-        } 
+        }

@@ -90,13 +90,7 @@ class AvatarStatus(str, Enum):
     UPLOADING = "uploading"
     TRAINING = "training"
     READY = "ready"
-    ERROR = "error"
-
-
-# AvatarGender перенесен в app.database.models для согласованности с БД
-
-
-# Лимиты
+    ERROR = "error"# AvatarGender перенесен в app.database.models для согласованности с БД# Лимиты
 MAX_PHOTOS_PER_AVATAR = 20
 MIN_PHOTOS_PER_AVATAR = 10
 MAX_AVATAR_NAME_LENGTH = 50

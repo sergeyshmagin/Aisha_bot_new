@@ -3,10 +3,7 @@
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.types import Service
-
-
-class BaseService(Service):
+from app.core.types import Serviceclass BaseService(Service):
     """
     Базовый сервис приложения
     """

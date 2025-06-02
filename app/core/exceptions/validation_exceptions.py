@@ -3,20 +3,14 @@
 Выделено из app/core/exceptions.py для соблюдения правила ≤500 строк
 """
 from typing import Optional, Dict, Any, List
-from .base_exceptions import BaseValidationError
-
-
-class ValidationError(BaseValidationError):
+from .base_exceptions import BaseValidationErrorclass ValidationError(BaseValidationError):
     """
     Общая ошибка валидации
     
     Используется для ошибок валидации пользовательских данных,
     параметров запросов, конфигурации и т.д.
     """
-    pass
-
-
-class InvalidFormatError(ValidationError):
+    passclass InvalidFormatError(ValidationError):
     """
     Ошибка неверного формата данных
     
@@ -52,10 +46,7 @@ class InvalidFormatError(ValidationError):
         if self.actual_format:
             parts.append(f"Actual format: {self.actual_format}")
         
-        return " | ".join(parts)
-
-
-class InvalidParameterError(ValidationError):
+        return " | ".join(parts)class InvalidParameterError(ValidationError):
     """
     Ошибка неверного параметра
     
@@ -95,10 +86,7 @@ class InvalidParameterError(ValidationError):
         if self.allowed_values:
             parts.append(f"Allowed: {self.allowed_values}")
         
-        return " | ".join(parts)
-
-
-class InvalidStateError(ValidationError):
+        return " | ".join(parts)class InvalidStateError(ValidationError):
     """
     Ошибка неверного состояния объекта
     
@@ -140,10 +128,7 @@ class InvalidStateError(ValidationError):
         if self.required_state:
             parts.append(f"Required: {self.required_state}")
         
-        return " | ".join(parts)
-
-
-class InvalidRangeError(ValidationError):
+        return " | ".join(parts)class InvalidRangeError(ValidationError):
     """
     Ошибка выхода значения за допустимые пределы
     
@@ -180,10 +165,7 @@ class InvalidRangeError(ValidationError):
         elif self.max_value is not None:
             parts.append(f"Max: {self.max_value}")
         
-        return " | ".join(parts)
-
-
-class RequiredFieldError(ValidationError):
+        return " | ".join(parts)class RequiredFieldError(ValidationError):
     """
     Ошибка отсутствия обязательного поля
     
@@ -207,4 +189,4 @@ class RequiredFieldError(ValidationError):
             error_code=error_code,
             details=details
         )
-        self.context = context 
+        self.context = context

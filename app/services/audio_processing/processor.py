@@ -258,4 +258,4 @@ class AudioProcessor(AudioProcessor):
                 raise AudioProcessingError(f"ffmpeg chunk error: {chunk_stderr.decode()}")
             if os.path.exists(out_path) and os.path.getsize(out_path) > 10_000:
                 chunk_paths.append(out_path)
-        return chunk_paths 
+        return chunk_paths

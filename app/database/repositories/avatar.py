@@ -9,10 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database.models import Avatar, AvatarPhoto
-from app.database.repositories.base import BaseRepository
-
-
-class AvatarRepository(BaseRepository[Avatar]):
+from app.database.repositories.base import BaseRepositoryclass AvatarRepository(BaseRepository[Avatar]):
     """
     Репозиторий для работы с аватарами
     """
@@ -141,10 +138,7 @@ class AvatarRepository(BaseRepository[Avatar]):
             if avatar.photos:
                 avatar.photos.sort(key=lambda photo: photo.upload_order)
         
-        return avatars
-
-
-class AvatarPhotoRepository(BaseRepository[AvatarPhoto]):
+        return avatarsclass AvatarPhotoRepository(BaseRepository[AvatarPhoto]):
     """
     Репозиторий для работы с фотографиями аватаров
     """

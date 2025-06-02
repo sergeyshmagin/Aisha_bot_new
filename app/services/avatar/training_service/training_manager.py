@@ -18,10 +18,7 @@ from app.services.storage import StorageService
 from .avatar_validator import AvatarValidator
 from app.core.database import get_session
 
-logger = logging.getLogger(__name__)
-
-
-class TrainingManager:
+logger = logging.getLogger(__name__)class TrainingManager:
     """Управление запуском и отменой обучения аватаров"""
     
     def __init__(self, session: AsyncSession):
@@ -497,4 +494,4 @@ class TrainingManager:
                     logger.info(f"🔄 ✅ Данные аватара {avatar_id} дополнены для полноты")
                 
         except Exception as e:
-            logger.error(f"🔄 Ошибка проверки полноты данных аватара {avatar_id}: {e}") 
+            logger.error(f"🔄 Ошибка проверки полноты данных аватара {avatar_id}: {e}")

@@ -16,10 +16,7 @@ from app.core.resources import RedisConfig
 from app.database.models import Avatar, User
 from app.services.user import UserService
 
-logger = get_logger(__name__)
-
-
-class AvatarNotificationService:
+logger = get_logger(__name__)class AvatarNotificationService:
     """Сервис для отправки уведомлений о готовности аватаров"""
     
     # Минимальный интервал между уведомлениями (в секундах)
@@ -213,4 +210,4 @@ class AvatarNotificationService:
             
         except Exception as e:
             logger.exception(f"[NOTIFICATION] ❌ Ошибка получения аватара {avatar_id}: {e}")
-            return False 
+            return False

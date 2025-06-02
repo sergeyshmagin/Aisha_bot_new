@@ -7,10 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import UserState
-from app.database.repositories.base import BaseRepository
-
-
-class StateRepository(BaseRepository[UserState]):
+from app.database.repositories.base import BaseRepositoryclass StateRepository(BaseRepository[UserState]):
     """
     Репозиторий для работы с состояниями пользователей
     """

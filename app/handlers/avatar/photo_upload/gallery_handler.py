@@ -214,4 +214,4 @@ class GalleryHandler:
     def clear_gallery_cache(self, user_id: int):
         """Очищает кэш галереи для пользователя"""
         if user_id in user_gallery_cache:
-            del user_gallery_cache[user_id] 
+            del user_gallery_cache[user_id]

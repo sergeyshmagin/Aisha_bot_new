@@ -5,10 +5,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import User, UserBalance, UserState, Avatar, AvatarPhoto
-
-
-@pytest.mark.asyncio
+from app.database.models import User, UserBalance, UserState, Avatar, AvatarPhoto@pytest.mark.asyncio
 async def test_create_user(db_session: AsyncSession):
     """Тест создания пользователя"""
     # Arrange
@@ -34,10 +31,7 @@ async def test_create_user(db_session: AsyncSession):
     assert user.last_name == user_data["last_name"]
     assert user.username == user_data["username"]
     assert user.language_code == user_data["language_code"]
-    assert user.is_premium == user_data["is_premium"]
-
-
-@pytest.mark.asyncio
+    assert user.is_premium == user_data["is_premium"]@pytest.mark.asyncio
 async def test_create_user_with_balance(db_session: AsyncSession):
     """Тест создания пользователя с балансом"""
     # Arrange
@@ -57,10 +51,7 @@ async def test_create_user_with_balance(db_session: AsyncSession):
     # Assert
     assert user.balance is not None
     assert user.balance.coins == 100.0
-    assert user.balance.user_id == user.id
-
-
-@pytest.mark.asyncio
+    assert user.balance.user_id == user.id@pytest.mark.asyncio
 async def test_create_user_with_state(db_session: AsyncSession):
     """Тест создания пользователя с состоянием"""
     # Arrange
@@ -80,10 +71,7 @@ async def test_create_user_with_state(db_session: AsyncSession):
     # Assert
     assert user.state is not None
     assert user.state.state_data == {"current_step": "select_gender"}
-    assert user.state.user_id == user.id
-
-
-@pytest.mark.asyncio
+    assert user.state.user_id == user.id@pytest.mark.asyncio
 async def test_create_avatar_with_photos(db_session: AsyncSession):
     """Тест создания аватара с фотографиями"""
     # Arrange
@@ -114,10 +102,7 @@ async def test_create_avatar_with_photos(db_session: AsyncSession):
     assert len(user.avatars) == 1
     assert len(user.avatars[0].photos) == 2
     assert user.avatars[0].photos[0].minio_key == "test/photo1.jpg"
-    assert user.avatars[0].photos[1].minio_key == "test/photo2.jpg"
-
-
-@pytest.mark.asyncio
+    assert user.avatars[0].photos[1].minio_key == "test/photo2.jpg"@pytest.mark.asyncio
 async def test_cascade_delete_user(db_session: AsyncSession):
     """Тест каскадного удаления пользователя"""
     # Arrange

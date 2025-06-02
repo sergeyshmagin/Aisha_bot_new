@@ -78,10 +78,7 @@ class MockFalAIClient:
         
         image_url = "https://example.com/test_generated_image.jpg"
         print(f"   ✅ Изображение сгенерировано: {image_url}")
-        return image_url
-
-
-async def test_basic_functionality():
+        return image_urlasync def test_basic_functionality():
     """Тестирует базовый функционал FAL AI"""
     print("\n🧪 === ТЕСТИРОВАНИЕ БАЗОВОГО ФУНКЦИОНАЛА ===")
     
@@ -144,10 +141,7 @@ async def test_basic_functionality():
         
     except Exception as e:
         print(f"❌ Ошибка в тестировании: {e}")
-        return False
-
-
-async def test_webhook_format():
+        return Falseasync def test_webhook_format():
     """Тестирует формат webhook данных"""
     print("\n🧪 === ТЕСТИРОВАНИЕ ФОРМАТА WEBHOOK ===")
     
@@ -203,10 +197,7 @@ async def test_webhook_format():
         await asyncio.sleep(0.1)
     
     print("\n✅ Все форматы webhook корректны!")
-    return True
-
-
-async def test_configuration():
+    return Trueasync def test_configuration():
     """Тестирует различные конфигурации"""
     print("\n🧪 === ТЕСТИРОВАНИЕ КОНФИГУРАЦИЙ ===")
     
@@ -267,10 +258,7 @@ async def test_configuration():
             return False
     
     print("\n✅ Все конфигурации работают!")
-    return True
-
-
-async def main():
+    return Trueasync def main():
     """Основная функция тестирования"""
     print("🎯 === БАЗОВОЕ ТЕСТИРОВАНИЕ FAL AI ===")
     
@@ -318,10 +306,7 @@ async def main():
         print("⚠️ ЕСТЬ ПРОБЛЕМЫ В ТЕСТАХ")
         print("🔧 Необходимо исправить ошибки")
     
-    return all_passed
-
-
-if __name__ == "__main__":
+    return all_passedif __name__ == "__main__":
     try:
         result = asyncio.run(main())
         exit_code = 0 if result else 1
@@ -331,4 +316,4 @@ if __name__ == "__main__":
         sys.exit(1)
     except Exception as e:
         print(f"\n💥 Критическая ошибка: {e}")
-        sys.exit(1) 
+        sys.exit(1)

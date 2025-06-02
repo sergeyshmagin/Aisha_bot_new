@@ -12,10 +12,7 @@ from app.core.di import get_transcript_service
 from app.keyboards.transcript import get_back_to_menu_keyboard
 from .models import TranscriptMainConfig, TranscriptDisplayData
 
-logger = logging.getLogger(__name__)
-
-
-class TranscriptHistoryManager:
+logger = logging.getLogger(__name__)class TranscriptHistoryManager:
     """
     Менеджер истории транскриптов
     
@@ -234,4 +231,4 @@ class TranscriptHistoryManager:
                 )
         except Exception as e:
             logger.error(f"Ошибка при отправке сообщения: {e}")
-            raise 
+            raise

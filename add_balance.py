@@ -20,42 +20,27 @@ from app.core.config import settings
 from aiogram import Bot
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-logger = get_logger(__name__)
-
-
-async def find_user_by_telegram_id(session: AsyncSession, telegram_id: str) -> Optional[User]:
+logger = get_logger(__name__)async def find_user_by_telegram_id(session: AsyncSession, telegram_id: str) -> Optional[User]:
     """Найти пользователя по Telegram ID"""
     stmt = select(User).where(User.telegram_id == telegram_id)
     result = await session.execute(stmt)
-    return result.scalar_one_or_none()
-
-
-async def find_user_by_username(session: AsyncSession, username: str) -> Optional[User]:
+    return result.scalar_one_or_none()async def find_user_by_username(session: AsyncSession, username: str) -> Optional[User]:
     """Найти пользователя по username"""
     # Убираем @ если есть
     clean_username = username.replace('@', '').strip()
     stmt = select(User).where(User.username == clean_username)
     result = await session.execute(stmt)
-    return result.scalar_one_or_none()
-
-
-async def get_user_balance(session: AsyncSession, user_id: UUID) -> Optional[UserBalance]:
+    return result.scalar_one_or_none()async def get_user_balance(session: AsyncSession, user_id: UUID) -> Optional[UserBalance]:
     """Получить баланс пользователя"""
     stmt = select(UserBalance).where(UserBalance.user_id == user_id)
     result = await session.execute(stmt)
-    return result.scalar_one_or_none()
-
-
-async def create_user_balance(session: AsyncSession, user_id: UUID, initial_amount: float = 0.0) -> UserBalance:
+    return result.scalar_one_or_none()async def create_user_balance(session: AsyncSession, user_id: UUID, initial_amount: float = 0.0) -> UserBalance:
     """Создать баланс для пользователя"""
     balance = UserBalance(user_id=user_id, coins=initial_amount)
     session.add(balance)
     await session.commit()
     await session.refresh(balance)
-    return balance
-
-
-async def add_balance(session: AsyncSession, user_id: UUID, amount: float) -> UserBalance:
+    return balanceasync def add_balance(session: AsyncSession, user_id: UUID, amount: float) -> UserBalance:
     """Пополнить баланс пользователя"""
     # Получаем текущий баланс
     balance = await get_user_balance(session, user_id)
@@ -72,10 +57,7 @@ async def add_balance(session: AsyncSession, user_id: UUID, amount: float) -> Us
         await session.refresh(balance)
         logger.info(f"Баланс обновлен: {old_amount} + {amount} = {balance.coins}")
     
-    return balance
-
-
-async def send_balance_notification(telegram_id: str, added_amount: float, current_balance: float):
+    return balanceasync def send_balance_notification(telegram_id: str, added_amount: float, current_balance: float):
     """Отправляет уведомление о пополнении баланса с кнопкой для всплывающего окна"""
     try:
         bot = Bot(token=settings.TELEGRAM_TOKEN)
@@ -120,10 +102,7 @@ async def send_balance_notification(telegram_id: str, added_amount: float, curre
         
     except Exception as e:
         logger.exception(f"❌ Ошибка отправки уведомления пользователю {telegram_id}: {e}")
-        print(f"⚠️ Не удалось отправить уведомление в Telegram: {e}")
-
-
-async def send_simple_balance_notification(telegram_id: str, added_amount: float, current_balance: float):
+        print(f"⚠️ Не удалось отправить уведомление в Telegram: {e}")async def send_simple_balance_notification(telegram_id: str, added_amount: float, current_balance: float):
     """Отправляет простое всплывающее уведомление (как в справке)"""
     try:
         bot = Bot(token=settings.TELEGRAM_TOKEN)
@@ -150,10 +129,7 @@ async def send_simple_balance_notification(telegram_id: str, added_amount: float
         
     except Exception as e:
         logger.exception(f"❌ Ошибка отправки простого уведомления пользователю {telegram_id}: {e}")
-        print(f"⚠️ Не удалось отправить уведомление в Telegram: {e}")
-
-
-async def show_user_info(user: User, balance: Optional[UserBalance]):
+        print(f"⚠️ Не удалось отправить уведомление в Telegram: {e}")async def show_user_info(user: User, balance: Optional[UserBalance]):
     """Показать информацию о пользователе"""
     print(f"\n👤 Информация о пользователе:")
     print(f"   ID: {user.id}")
@@ -168,10 +144,7 @@ async def show_user_info(user: User, balance: Optional[UserBalance]):
         print(f"\n💰 Текущий баланс: {balance.coins} кредитов")
         print(f"   Обновлен: {balance.updated_at}")
     else:
-        print(f"\n💰 Баланс: не создан")
-
-
-async def main():
+        print(f"\n💰 Баланс: не создан")async def main():
     """Основная функция"""
     print("💰 Скрипт пополнения баланса пользователя")
     print("=" * 50)
@@ -277,8 +250,5 @@ async def main():
             
     except Exception as e:
         logger.exception(f"Ошибка при пополнении баланса: {e}")
-        print(f"❌ Ошибка: {e}")
-
-
-if __name__ == "__main__":
-    asyncio.run(main()) 
+        print(f"❌ Ошибка: {e}")if __name__ == "__main__":
+    asyncio.run(main())

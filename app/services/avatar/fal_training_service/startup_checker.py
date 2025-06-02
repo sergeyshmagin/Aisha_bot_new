@@ -11,10 +11,7 @@ from app.database.models import Avatar, AvatarStatus
 from app.core.database import get_session
 from .status_checker import status_checker
 
-logger = get_logger(__name__)
-
-
-class StartupChecker:
+logger = get_logger(__name__)class StartupChecker:
     """Проверяет и восстанавливает мониторинг аватаров при старте приложения"""
     
     def __init__(self):
@@ -306,8 +303,5 @@ class StartupChecker:
                 
             except Exception as e:
                 logger.error(f"❌ Ошибка в периодической проверке: {e}")
-                await asyncio.sleep(60)  # При ошибке ждём 1 минуту
-
-
-# Глобальный экземпляр
-startup_checker = StartupChecker() 
+                await asyncio.sleep(60)  # При ошибке ждём 1 минуту# Глобальный экземпляр
+startup_checker = StartupChecker()

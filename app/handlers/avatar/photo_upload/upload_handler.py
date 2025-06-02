@@ -205,4 +205,4 @@ class UploadHandler:
         elif "превышен лимит" in error_msg_lower:
             return f"Достигнут лимит {self.config.MAX_PHOTOS} фотографий"
         else:
-            return "Неизвестная ошибка загрузки" 
+            return "Неизвестная ошибка загрузки"

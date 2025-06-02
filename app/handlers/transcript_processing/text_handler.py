@@ -187,4 +187,4 @@ class TextHandler:
                 
         except Exception as e:
             logger.exception(f"[TEXT] Ошибка при сохранении транскрипта: {e}")
-            return None 
+            return None

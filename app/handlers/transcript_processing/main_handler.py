@@ -271,4 +271,4 @@ class TranscriptProcessingHandler(TranscriptBaseHandler):
                 "✅ Транскрипт готов, но произошла ошибка при отображении.\n"
                 "Проверьте историю транскриптов.",
                 reply_markup=get_back_to_menu_keyboard()
-            ) 
+            )

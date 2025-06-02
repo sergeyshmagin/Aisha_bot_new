@@ -9,10 +9,7 @@ from uuid import uuid4
 from PIL import Image
 
 from app.services.avatar.photo_validation import PhotoValidationService, PhotoValidationResult
-from app.database.models import AvatarPhoto
-
-
-class TestPhotoValidationService:
+from app.database.models import AvatarPhotoclass TestPhotoValidationService:
     """Тесты для PhotoValidationService"""
     
     @pytest.fixture
@@ -268,4 +265,4 @@ class TestPhotoValidationService:
         assert result.metadata['width'] == 512
         assert result.metadata['height'] == 512
         assert result.metadata['aspect_ratio'] == 1.0
-        assert result.metadata['megapixels'] == pytest.approx(0.262, rel=1e-2) 
+        assert result.metadata['megapixels'] == pytest.approx(0.262, rel=1e-2)

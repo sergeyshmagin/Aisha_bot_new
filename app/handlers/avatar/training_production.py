@@ -497,4 +497,4 @@ async def confirm_cancel_training(callback: CallbackQuery, state: FSMContext):
         await callback.answer("❌ Ошибка отмены", show_alert=True)
 
 # Экспорт
-__all__ = ["training_handler", "router"] 
+__all__ = ["training_handler", "router"]

@@ -31,10 +31,7 @@ AsyncSessionLocal = sessionmaker(
     async_engine,
     class_=AsyncSession,
     expire_on_commit=False
-)
-
-
-async def get_db() -> AsyncSession:
+)async def get_db() -> AsyncSession:
     """
     Получить асинхронную сессию БД для FastAPI
     """
@@ -46,10 +43,7 @@ async def get_db() -> AsyncSession:
             await session.rollback()
             raise
         finally:
-            await session.close()
-
-
-@asynccontextmanager
+            await session.close()@asynccontextmanager
 async def get_session():
     """
     Контекстный менеджер для асинхронной сессии БД
@@ -62,10 +56,7 @@ async def get_session():
         await session.rollback()
         raise
     finally:
-        await session.close()
-
-
-# Redis конфигурация
+        await session.close()# Redis конфигурация
 REDIS_CONFIG = {
     "host": settings.REDIS_HOST,
     "port": settings.REDIS_PORT,

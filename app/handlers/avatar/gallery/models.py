@@ -185,4 +185,4 @@ class GalleryCache:
             logger.warning(f"Ошибка очистки кэша пользователя {user_id}: {e}")
 
 # Глобальный экземпляр кэша
-gallery_cache = GalleryCache() 
+gallery_cache = GalleryCache()

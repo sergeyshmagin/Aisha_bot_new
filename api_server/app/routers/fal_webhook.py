@@ -242,4 +242,4 @@ async def test_webhook():
         "fal_webhook_url": settings.FAL_WEBHOOK_URL,
         "ssl_enabled": settings.SSL_ENABLED,
         "main_settings_webhook": main_settings.FAL_WEBHOOK_URL
-    } 
+    }

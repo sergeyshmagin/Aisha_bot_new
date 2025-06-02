@@ -1,10 +1,7 @@
 """
 Состояния для системы генерации изображений
 """
-from aiogram.fsm.state import State, StatesGroup
-
-
-class GenerationStates(StatesGroup):
+from aiogram.fsm.state import State, StatesGroupclass GenerationStates(StatesGroup):
     """Состояния для генерации изображений"""
     
     # Ожидание кастомного промпта
@@ -20,4 +17,4 @@ class GenerationStates(StatesGroup):
     waiting_for_quality_selection = State()
     
     # Процесс генерации
-    generation_in_progress = State() 
+    generation_in_progress = State()

@@ -260,4 +260,4 @@ class AvatarActionsHandler:
             await callback.message.answer(text, reply_markup=keyboard, parse_mode="Markdown")
         else:
             # Если сообщение текстовое, просто редактируем
-            await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown") 
+            await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")

@@ -44,4 +44,4 @@ async def init_alembic():
         print(f"❌ Ошибка инициализации Alembic: {e}")
 
 if __name__ == "__main__":
-    asyncio.run(init_alembic()) 
+    asyncio.run(init_alembic())

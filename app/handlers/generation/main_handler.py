@@ -22,10 +22,7 @@ from .states import GenerationStates
 from app.shared.utils.telegram_utils import safe_edit_callback_message
 
 logger = get_logger(__name__)
-router = Router()
-
-
-class GenerationMainHandler:
+router = Router()class GenerationMainHandler:
     """Главный обработчик генерации изображений"""
     
     def __init__(self):
@@ -1330,10 +1327,7 @@ class GenerationMainHandler:
         except Exception as e:
             logger.exception(f"Ошибка запуска фото-генерации: {e}")
             await message.edit_text("❌ Произошла ошибка при запуске генерации")
-            await state.clear()
-
-
-# Создаем экземпляр обработчика
+            await state.clear()# Создаем экземпляр обработчика
 generation_handler = GenerationMainHandler()
 
 # Регистрируем обработчики
@@ -1437,4 +1431,4 @@ async def handle_change_avatar_request(callback: CallbackQuery, state: FSMContex
     await state.clear()
     
     # Перенаправляем на меню аватаров
-    await avatar_main_handler.show_avatar_menu(callback, state) 
+    await avatar_main_handler.show_avatar_menu(callback, state)

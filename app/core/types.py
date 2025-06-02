@@ -6,10 +6,7 @@ from typing import Any, Dict, List, Optional, Protocol, TypeVar
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-Model = TypeVar("Model")
-
-
-class Repository(Protocol[Model]):
+Model = TypeVar("Model")class Repository(Protocol[Model]):
     """Базовый интерфейс репозитория"""
     
     @abstractmethod
@@ -30,28 +27,17 @@ class Repository(Protocol[Model]):
     @abstractmethod
     async def delete(self, id: Any) -> bool:
         """Удалить запись"""
-        pass
-
-
-class Service(ABC):
+        passclass Service(ABC):
     """Базовый класс сервиса"""
     
     def __init__(self, session: AsyncSession):
-        self.session = session
-
-
-class Handler(ABC):
+        self.session = sessionclass Handler(ABC):
     """Базовый класс обработчика"""
     
     def __init__(self, services: "ServiceContainer"):
-        self.services = services
-
-
-class ServiceContainer:
+        self.services = servicesclass ServiceContainer:
     """Контейнер для всех сервисов"""
     
     def __init__(self):
         self.user_service: "UserService"
         self.avatar_service: "AvatarService"
-        # self.backend_service: "BackendService"  # LEGACY - удален
-        # Другие сервисы

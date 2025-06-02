@@ -38,4 +38,4 @@ def get_main_menu() -> InlineKeyboardMarkup:
                 callback_data="main_help"
             )
         ]
-    ]) 
+    ])

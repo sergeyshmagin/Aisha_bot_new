@@ -31,4 +31,4 @@ def downgrade() -> None:
     """Восстанавливаем поле order"""
     print("🔄 Восстанавливаем поле order...")
     op.add_column('avatar_photos', sa.Column('order', sa.Integer, default=0, nullable=True))
-    print("⚠️  Поле order восстановлено!") 
+    print("⚠️  Поле order восстановлено!")

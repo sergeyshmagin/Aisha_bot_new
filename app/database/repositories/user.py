@@ -7,10 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database.models import User
-from app.database.repositories.base import BaseRepository
-
-
-class UserRepository(BaseRepository[User]):
+from app.database.repositories.base import BaseRepositoryclass UserRepository(BaseRepository[User]):
     """
     Репозиторий для работы с пользователями
     """

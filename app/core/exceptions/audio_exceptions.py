@@ -3,10 +3,7 @@
 Выделено из app/core/exceptions.py для соблюдения правила ≤500 строк
 """
 from typing import Optional, Dict, Any
-from .base_exceptions import BaseServiceError
-
-
-class AudioProcessingError(BaseServiceError):
+from .base_exceptions import BaseServiceErrorclass AudioProcessingError(BaseServiceError):
     """
     Ошибка обработки аудио
     
@@ -46,10 +43,7 @@ class AudioProcessingError(BaseServiceError):
         if self.processing_stage:
             parts.append(f"Stage: {self.processing_stage}")
         
-        return " | ".join(parts)
-
-
-class TranscriptionError(AudioProcessingError):
+        return " | ".join(parts)class TranscriptionError(AudioProcessingError):
     """
     Ошибка транскрибации аудио
     
@@ -86,10 +80,7 @@ class TranscriptionError(AudioProcessingError):
         if self.audio_duration:
             parts.append(f"Duration: {self.audio_duration}s")
         
-        return " | ".join(parts)
-
-
-class ConversionError(AudioProcessingError):
+        return " | ".join(parts)class ConversionError(AudioProcessingError):
     """
     Ошибка конвертации аудио
     
@@ -128,10 +119,7 @@ class ConversionError(AudioProcessingError):
         if self.ffmpeg_error:
             parts.append(f"FFmpeg: {self.ffmpeg_error}")
         
-        return " | ".join(parts)
-
-
-class AudioValidationError(AudioProcessingError):
+        return " | ".join(parts)class AudioValidationError(AudioProcessingError):
     """
     Ошибка валидации аудио файлов
     
@@ -168,4 +156,4 @@ class AudioValidationError(AudioProcessingError):
         if self.expected_value is not None and self.actual_value is not None:
             parts.append(f"Expected: {self.expected_value}, Got: {self.actual_value}")
         
-        return " | ".join(parts) 
+        return " | ".join(parts)

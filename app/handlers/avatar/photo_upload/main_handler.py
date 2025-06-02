@@ -329,4 +329,4 @@ class PhotoUploadHandler:
         from app.keyboards.photo_upload import get_photo_upload_keyboard
         keyboard = get_photo_upload_keyboard(existing_count, self.config.MIN_PHOTOS, self.config.MAX_PHOTOS)
         
-        await callback.message.edit_text(text=text, reply_markup=keyboard) 
+        await callback.message.edit_text(text=text, reply_markup=keyboard)

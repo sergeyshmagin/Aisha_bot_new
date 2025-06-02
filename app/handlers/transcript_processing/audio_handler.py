@@ -375,4 +375,4 @@ class AudioHandler:
             if original_audio:
                 message.audio = original_audio
             else:
-                delattr(message, 'audio') 
+                delattr(message, 'audio')

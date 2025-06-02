@@ -168,5 +168,3 @@ class ImageProcessingService(BaseService):
         
         await process.communicate()
         return thumbnail_path
-
- 

@@ -248,4 +248,4 @@ class ProgressHandler:
     def clear_progress_cache(self, user_id: int):
         """Очищает кэш прогресса для пользователя"""
         if user_id in user_progress_messages:
-            del user_progress_messages[user_id] 
+            del user_progress_messages[user_id]

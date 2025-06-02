@@ -118,4 +118,4 @@ def main():
     uvicorn.run(**run_config)
 
 if __name__ == "__main__":
-    main() 
+    main()

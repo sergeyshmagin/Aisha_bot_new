@@ -353,5 +353,3 @@ async def show_avatar_help(callback: CallbackQuery, state: FSMContext):
     except Exception as e:
         logger.exception(f"Ошибка при показе помощи по аватарам: {e}")
         await callback.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True)
-
- 

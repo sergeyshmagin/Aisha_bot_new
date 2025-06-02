@@ -8,10 +8,7 @@ from typing import AsyncGenerator
 
 import redis.asyncio as redis
 
-from app.core.config import settings
-
-
-@pytest_asyncio.fixture
+from app.core.config import settings@pytest_asyncio.fixture
 async def redis_client() -> AsyncGenerator[redis.Redis, None]:
     """
     Фикстура для подключения к Redis
@@ -24,20 +21,14 @@ async def redis_client() -> AsyncGenerator[redis.Redis, None]:
     try:
         yield redis_client
     finally:
-        await redis_client.close()
-
-
-@pytest.mark.asyncio
+        await redis_client.close()@pytest.mark.asyncio
 async def test_redis_connection(redis_client: redis.Redis):
     """Тест подключения к Redis"""
     # Arrange & Act
     ping_result = await redis_client.ping()
     
     # Assert
-    assert ping_result is True
-
-
-@pytest.mark.asyncio
+    assert ping_result is True@pytest.mark.asyncio
 async def test_redis_set_get(redis_client: redis.Redis):
     """Тест установки и получения значения из Redis"""
     # Arrange
@@ -52,10 +43,7 @@ async def test_redis_set_get(redis_client: redis.Redis):
     assert result.decode("utf-8") == test_value
     
     # Cleanup
-    await redis_client.delete(test_key)
-
-
-@pytest.mark.asyncio
+    await redis_client.delete(test_key)@pytest.mark.asyncio
 async def test_redis_json(redis_client: redis.Redis):
     """Тест сохранения и получения JSON из Redis"""
     # Arrange
@@ -80,10 +68,7 @@ async def test_redis_json(redis_client: redis.Redis):
     assert loaded_data["settings"]["language"] == "ru"
     
     # Cleanup
-    await redis_client.delete(test_key)
-
-
-@pytest.mark.asyncio
+    await redis_client.delete(test_key)@pytest.mark.asyncio
 async def test_redis_ttl(redis_client: redis.Redis):
     """Тест установки TTL (Time To Live) для ключа в Redis"""
     # Arrange
@@ -100,10 +85,7 @@ async def test_redis_ttl(redis_client: redis.Redis):
     assert ttl_result > 0
     
     # Cleanup
-    await redis_client.delete(test_key)
-
-
-@pytest.mark.asyncio
+    await redis_client.delete(test_key)@pytest.mark.asyncio
 async def test_redis_hash(redis_client: redis.Redis):
     """Тест работы с хеш-таблицами в Redis"""
     # Arrange

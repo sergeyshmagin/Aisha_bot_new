@@ -7,4 +7,4 @@ from .main_service import FALTrainingService
 
 __all__ = [
     "FALTrainingService"
-] 
+]

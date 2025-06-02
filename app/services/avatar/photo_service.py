@@ -18,14 +18,8 @@ from ...database.models import Avatar, AvatarPhoto, PhotoValidationStatus
 from ..base import BaseService
 from ..storage import StorageService
 
-logger = get_logger(__name__)
-
-
-# Импортируем PhotoValidationResult из нового модуля валидации
-from .photo_validation import PhotoValidationResult
-
-
-class PhotoUploadService(BaseService):
+logger = get_logger(__name__)# Импортируем PhotoValidationResult из нового модуля валидации
+from .photo_validation import PhotoValidationResultclass PhotoUploadService(BaseService):
     """
     Сервис для загрузки и валидации фотографий аватаров.
     
@@ -389,4 +383,4 @@ class PhotoUploadService(BaseService):
         Returns:
             str: MD5 хеш в hex формате
         """
-        return hashlib.md5(data).hexdigest() 
+        return hashlib.md5(data).hexdigest()

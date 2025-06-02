@@ -13,10 +13,7 @@ from app.database.models import Avatar
 from app.services.fal.client import FalAIClient
 from .models import TrainingProgress
 
-logger = logging.getLogger(__name__)
-
-
-class ProgressTracker:
+logger = logging.getLogger(__name__)class ProgressTracker:
     """Отслеживание прогресса обучения аватаров"""
     
     def __init__(self, session: AsyncSession):
@@ -179,4 +176,4 @@ class ProgressTracker:
             
         except Exception as e:
             logger.exception(f"[STATISTICS] Ошибка получения статистики: {e}")
-            raise 
+            raise

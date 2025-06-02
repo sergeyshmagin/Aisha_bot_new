@@ -6,10 +6,7 @@ from typing import Dict, Any, Optional
 from uuid import UUID
 from dataclasses import dataclass
 
-from app.core.config import settings
-
-
-@dataclass
+from app.core.config import settings@dataclass
 class TrainingConfig:
     """Конфигурация обучения аватара"""
     avatar_id: UUID
@@ -21,20 +18,14 @@ class TrainingConfig:
         """Получает пресет качества из пользовательских настроек"""
         if not self.user_preferences:
             return "balanced"
-        return self.user_preferences.get("quality", "balanced")
-
-
-@dataclass
+        return self.user_preferences.get("quality", "balanced")@dataclass
 class TrainingRequest:
     """Данные запроса на обучение"""
     request_id: str
     avatar_id: UUID
     training_type: str
     config: Dict[str, Any]
-    webhook_url: Optional[str] = None
-
-
-class FALConfigManager:
+    webhook_url: Optional[str] = Noneclass FALConfigManager:
     """Менеджер конфигурации FAL AI"""
     
     @staticmethod
@@ -82,10 +73,7 @@ class FALConfigManager:
             "api_key_configured": bool(settings.FAL_API_KEY),
             "supported_training_types": ["portrait", "style"],
             "quality_presets": ["fast", "balanced", "quality"]
-        }
-
-
-class WebhookURLBuilder:
+        }class WebhookURLBuilder:
     """Построитель URL для webhook"""
     
     @staticmethod
@@ -116,4 +104,4 @@ class WebhookURLBuilder:
         logger.info(f"   Separator: '{separator}'")
         logger.info(f"   ✅ Итоговый webhook URL: {final_url}")
         
-        return final_url 
+        return final_url

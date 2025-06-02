@@ -18,18 +18,12 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Получаем путь к корню проекта
-PROJECT_ROOT = Path(__file__).parent.parent
-
-
-def get_alembic_config() -> Config:
+PROJECT_ROOT = Path(__file__).parent.parentdef get_alembic_config() -> Config:
     """Создать конфигурацию Alembic"""
     config = Config(str(PROJECT_ROOT / "alembic.ini"))
     config.set_main_option("script_location", str(PROJECT_ROOT / "alembic"))
     config.set_main_option("sqlalchemy.url", settings.ASYNC_DATABASE_URL)
-    return config
-
-
-async def check_database_connection():
+    return configasync def check_database_connection():
     """Проверить подключение к базе данных"""
     engine = create_async_engine(settings.ASYNC_DATABASE_URL)
     try:
@@ -41,37 +35,22 @@ async def check_database_connection():
         logger.error(f"Database connection failed: {e}")
         return False
     finally:
-        await engine.dispose()
-
-
-def upgrade_database(revision: str = "head"):
+        await engine.dispose()def upgrade_database(revision: str = "head"):
     """Обновить базу данных до указанной ревизии"""
     config = get_alembic_config()
     command.upgrade(config, revision)
-    logger.info(f"Database upgraded to {revision}")
-
-
-def downgrade_database(revision: str):
+    logger.info(f"Database upgraded to {revision}")def downgrade_database(revision: str):
     """Откатить базу данных до указанной ревизии"""
     config = get_alembic_config()
     command.downgrade(config, revision)
-    logger.info(f"Database downgraded to {revision}")
-
-
-def create_migration(message: str):
+    logger.info(f"Database downgraded to {revision}")def create_migration(message: str):
     """Создать новую миграцию"""
     config = get_alembic_config()
     command.revision(config, message=message, autogenerate=True)
-    logger.info(f"Created new migration with message: {message}")
-
-
-def show_migrations():
+    logger.info(f"Created new migration with message: {message}")def show_migrations():
     """Показать список миграций"""
     config = get_alembic_config()
-    command.history(config)
-
-
-async def main():
+    command.history(config)async def main():
     """Основная функция"""
     parser = argparse.ArgumentParser(description="Database management script")
     parser.add_argument("command", choices=["upgrade", "downgrade", "create", "show", "check"])
@@ -104,8 +83,5 @@ async def main():
 
     except Exception as e:
         logger.error(f"Error executing command: {e}")
-        sys.exit(1)
-
-
-if __name__ == "__main__":
+        sys.exit(1)if __name__ == "__main__":
     asyncio.run(main())

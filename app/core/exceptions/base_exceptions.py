@@ -2,10 +2,7 @@
 Базовые исключения для иерархии
 Выделено из app/core/exceptions.py для соблюдения правила ≤500 строк
 """
-from typing import Optional, Dict, Any
-
-
-class BaseAppError(Exception):
+from typing import Optional, Dict, Anyclass BaseAppError(Exception):
     """
     Базовое исключение приложения
     
@@ -39,10 +36,7 @@ class BaseAppError(Exception):
             "error_code": self.error_code,
             "details": self.details,
             "cause": str(self.cause) if self.cause else None
-        }
-
-
-class BaseServiceError(BaseAppError):
+        }class BaseServiceError(BaseAppError):
     """
     Базовое исключение для сервисов
     
@@ -62,10 +56,7 @@ class BaseServiceError(BaseAppError):
     
     def __str__(self) -> str:
         base_msg = super().__str__()
-        return f"[{self.service_name}] {base_msg}"
-
-
-class BaseValidationError(BaseAppError):
+        return f"[{self.service_name}] {base_msg}"class BaseValidationError(BaseAppError):
     """
     Базовое исключение для валидации
     
@@ -87,10 +78,7 @@ class BaseValidationError(BaseAppError):
     def __str__(self) -> str:
         if self.field_name:
             return f"Validation error in '{self.field_name}': {self.message}"
-        return f"Validation error: {self.message}"
-
-
-class BaseConfigurationError(BaseAppError):
+        return f"Validation error: {self.message}"class BaseConfigurationError(BaseAppError):
     """
     Базовое исключение для конфигурации
     
@@ -110,4 +98,4 @@ class BaseConfigurationError(BaseAppError):
     def __str__(self) -> str:
         if self.config_key:
             return f"Configuration error for '{self.config_key}': {self.message}"
-        return f"Configuration error: {self.message}" 
+        return f"Configuration error: {self.message}"

@@ -12,10 +12,7 @@ from app.core.config import settings
 from app.core.logger import get_logger
 from app.shared.utils.openai import get_openai_headers
 
-logger = get_logger(__name__)
-
-
-class ImageAnalysisService:
+logger = get_logger(__name__)class ImageAnalysisService:
     """Сервис для анализа изображений и создания промптов"""
     
     def __init__(self):
@@ -623,4 +620,4 @@ professional lifestyle photography shot on Canon 5D Mark IV with 85mm f/2.8 lens
         
         logger.info(f"[Photo Analysis Enhanced] Промпт улучшен: {len(enhanced_prompt)} символов")
         
-        return enhanced_result 
+        return enhanced_result

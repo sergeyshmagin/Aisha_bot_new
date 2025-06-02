@@ -7,10 +7,7 @@ import re
 
 from app.database.models import User
 from app.database.repositories import BalanceRepository, StateRepository, UserRepository
-from app.services.base import BaseService
-
-
-class UserService(BaseService):
+from app.services.base import BaseServiceclass UserService(BaseService):
     """
     Сервис для работы с пользователями
     """

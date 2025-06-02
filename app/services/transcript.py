@@ -152,11 +152,7 @@ class TranscriptService(BaseService):
             "transcript_url": transcript_url,
             "created_at": created_at_str,
             "metadata": transcript.transcript_metadata
-        }
-
-
-
-    async def list_transcripts(self, user_id: Union[int, str, UUID], limit: int = 10, offset: int = 0) -> List[dict]:
+        }    async def list_transcripts(self, user_id: Union[int, str, UUID], limit: int = 10, offset: int = 0) -> List[dict]:
         """
         Получает список транскриптов пользователя с использованием MinIO для хранения
         

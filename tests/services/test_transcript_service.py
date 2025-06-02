@@ -9,10 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.transcript import TranscriptService
 from app.database.repositories.transcript import TranscriptRepository
-from app.database.models import UserTranscript, User
-
-
-class TestTranscriptService:
+from app.database.models import UserTranscript, Userclass TestTranscriptService:
     """Тесты для TranscriptService"""
     
     def test_transcript_service_import(self):
@@ -26,10 +23,7 @@ class TestTranscriptService:
         service = TranscriptService(mock_session)
         
         assert service.session == mock_session
-        assert hasattr(service, 'session')
-
-
-class TestTranscriptRepository:
+        assert hasattr(service, 'session')class TestTranscriptRepository:
     """Тесты для TranscriptRepository"""
     
     def test_transcript_repository_import(self):
@@ -43,10 +37,7 @@ class TestTranscriptRepository:
         repo = TranscriptRepository(mock_session)
         
         assert repo.session == mock_session
-        assert hasattr(repo, 'session')
-
-
-@pytest.mark.asyncio
+        assert hasattr(repo, 'session')@pytest.mark.asyncio
 class TestTranscriptServiceMethods:
     """Тесты методов TranscriptService"""
     
@@ -120,10 +111,7 @@ class TestTranscriptServiceMethods:
         assert "id" in transcript_dict
         assert "created_at" in transcript_dict
         assert "metadata" in transcript_dict
-        assert isinstance(transcript_dict["metadata"], dict)
-
-
-@pytest.mark.asyncio
+        assert isinstance(transcript_dict["metadata"], dict)@pytest.mark.asyncio
 class TestTranscriptRepositoryMethods:
     """Тесты методов TranscriptRepository"""
     
@@ -165,10 +153,7 @@ class TestTranscriptRepositoryMethods:
             
             # Проверяем что транскрипт был добавлен в сессию
             assert mock_session.add.called
-            assert mock_session.commit.called
-            
-
-class TestTranscriptModels:
+            assert mock_session.commit.calledclass TestTranscriptModels:
     """Тесты моделей транскриптов"""
     
     def test_transcript_model_import(self):
@@ -195,10 +180,7 @@ class TestTranscriptModels:
         ]
         
         for attr in expected_attributes:
-            assert hasattr(UserTranscript, attr), f"Атрибут {attr} отсутствует в модели UserTranscript"
-
-
-@pytest.mark.integration
+            assert hasattr(UserTranscript, attr), f"Атрибут {attr} отсутствует в модели UserTranscript"@pytest.mark.integration
 class TestTranscriptIntegration:
     """Интеграционные тесты транскриптов"""
     
@@ -238,10 +220,7 @@ class TestTranscriptIntegration:
             assert TranscriptTexts is not None
             assert get_transcript_menu is not None
         except ImportError as e:
-            pytest.fail(f"Не удалось импортировать UI компоненты транскриптов: {e}")
-
-
-class TestTranscriptErrorHandling:
+            pytest.fail(f"Не удалось импортировать UI компоненты транскриптов: {e}")class TestTranscriptErrorHandling:
     """Тесты обработки ошибок в транскриптах"""
     
     @pytest.mark.asyncio
@@ -278,4 +257,4 @@ class TestTranscriptErrorHandling:
         assert transcript_dict["id"] is None
         assert transcript_dict["created_at"] is None
         assert transcript_dict["metadata"] == {}
-        assert isinstance(transcript_dict["metadata"], dict) 
+        assert isinstance(transcript_dict["metadata"], dict)

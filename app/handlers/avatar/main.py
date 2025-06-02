@@ -96,4 +96,4 @@ async def show_avatar_help(callback: CallbackQuery):
 # Это сделано для лучшей организации кода и возможности повторного использования
 
 # Экспортируем обработчик для использования в других модулях
-__all__ = ["avatar_main_handler", "router"] 
+__all__ = ["avatar_main_handler", "router"]

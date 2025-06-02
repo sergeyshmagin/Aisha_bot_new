@@ -1,10 +1,7 @@
 """
 Клавиатуры для загрузки фотографий аватаров
 """
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-
-
-def get_photo_upload_keyboard(photos_count: int, min_photos: int, max_photos: int) -> InlineKeyboardMarkup:
+from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButtondef get_photo_upload_keyboard(photos_count: int, min_photos: int, max_photos: int) -> InlineKeyboardMarkup:
     """Клавиатура для управления загрузкой фотографий"""
     
     buttons = []
@@ -44,10 +41,7 @@ def get_photo_upload_keyboard(photos_count: int, min_photos: int, max_photos: in
         )
     ])
     
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-
-def get_photo_tips_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=buttons)def get_photo_tips_keyboard() -> InlineKeyboardMarkup:
     """Клавиатура для советов по фотографиям"""
     
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -75,10 +69,7 @@ def get_photo_tips_keyboard() -> InlineKeyboardMarkup:
                 callback_data="back_to_upload"
             )
         ]
-    ])
-
-
-def get_photo_gallery_navigation_keyboard(current_photo: int, total_photos: int, avatar_id: str) -> InlineKeyboardMarkup:
+    ])def get_photo_gallery_navigation_keyboard(current_photo: int, total_photos: int, avatar_id: str) -> InlineKeyboardMarkup:
     """Клавиатура навигации по галерее фотографий с улучшенными кнопками"""
     
     buttons = []
@@ -126,10 +117,7 @@ def get_photo_gallery_navigation_keyboard(current_photo: int, total_photos: int,
         )
     ])
     
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-
-def get_training_start_keyboard(avatar_id: str) -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=buttons)def get_training_start_keyboard(avatar_id: str) -> InlineKeyboardMarkup:
     """Клавиатура для начала обучения аватара"""
     
     return InlineKeyboardMarkup(inline_keyboard=[
@@ -151,4 +139,4 @@ def get_training_start_keyboard(avatar_id: str) -> InlineKeyboardMarkup:
                 callback_data="avatar_menu"
             )
         ]
-    ]) 
+    ])

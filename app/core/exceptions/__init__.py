@@ -79,4 +79,4 @@ __all__ = [
     "AvatarError",
     "AvatarTrainingError",
     "AvatarValidationError"
-] 
+]

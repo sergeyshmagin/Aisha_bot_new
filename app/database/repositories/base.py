@@ -9,10 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.types import Repository
 from app.database.models import Base
 
-ModelType = TypeVar("ModelType", bound=Base)
-
-
-class BaseRepository(Repository[ModelType], Generic[ModelType]):
+ModelType = TypeVar("ModelType", bound=Base)class BaseRepository(Repository[ModelType], Generic[ModelType]):
     """
     Базовый класс репозитория с основными CRUD операциями
     """

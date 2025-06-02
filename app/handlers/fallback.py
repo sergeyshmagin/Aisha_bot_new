@@ -27,4 +27,4 @@ async def fallback_unknown_message(message: Message, state: FSMContext):
         "❓ Я не понимаю эту команду.\n\n"
         "Используйте кнопки меню ниже или команду /start:",
         reply_markup=get_main_menu()
-    ) 
+    )

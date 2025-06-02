@@ -2,10 +2,7 @@
 """Скрипт для проверки состояния миграций"""
 import asyncio
 import asyncpg
-from app.core.config import settings
-
-
-async def check_migration_status():
+from app.core.config import settingsasync def check_migration_status():
     """Проверка текущего состояния миграций"""
     try:
         conn = await asyncpg.connect(
@@ -61,8 +58,5 @@ async def check_migration_status():
         await conn.close()
         
     except Exception as e:
-        print(f"❌ Ошибка: {e}")
-
-
-if __name__ == "__main__":
-    asyncio.run(check_migration_status()) 
+        print(f"❌ Ошибка: {e}")if __name__ == "__main__":
+    asyncio.run(check_migration_status())

@@ -10,16 +10,10 @@ from aiogram.fsm.context import FSMContext
 
 from app.handlers.avatar import AvatarHandler
 from app.handlers.state import AvatarStates
-from app.database.models import AvatarType, AvatarGender, Avatar, User
-
-
-@pytest.fixture
+from app.database.models import AvatarType, AvatarGender, Avatar, User@pytest.fixture
 def avatar_handler():
     """Фикстура для AvatarHandler"""
-    return AvatarHandler()
-
-
-@pytest.fixture
+    return AvatarHandler()@pytest.fixture
 def mock_user():
     """Мок пользователя Telegram"""
     return TgUser(
@@ -27,16 +21,10 @@ def mock_user():
         is_bot=False,
         first_name="Test",
         username="testuser"
-    )
-
-
-@pytest.fixture
+    )@pytest.fixture
 def mock_chat():
     """Мок чата"""
-    return Chat(id=12345, type="private")
-
-
-@pytest.fixture
+    return Chat(id=12345, type="private")@pytest.fixture
 def mock_callback_query(mock_user, mock_chat):
     """Мок callback query"""
     message = MagicMock()
@@ -49,10 +37,7 @@ def mock_callback_query(mock_user, mock_chat):
     callback.answer = AsyncMock()
     callback.data = "avatar_menu"
     
-    return callback
-
-
-@pytest.fixture
+    return callback@pytest.fixture
 def mock_message(mock_user, mock_chat):
     """Мок сообщения"""
     message = MagicMock(spec=Message)
@@ -61,10 +46,7 @@ def mock_message(mock_user, mock_chat):
     message.reply = AsyncMock()
     message.text = "Тестовый аватар"
     
-    return message
-
-
-@pytest.fixture
+    return message@pytest.fixture
 def mock_photo_message(mock_user, mock_chat):
     """Мок сообщения с фотографией"""
     message = MagicMock(spec=Message)
@@ -85,10 +67,7 @@ def mock_photo_message(mock_user, mock_chat):
     
     message.photo = [photo1, photo2]
     
-    return message
-
-
-@pytest.fixture
+    return message@pytest.fixture
 def mock_state():
     """Мок FSM состояния"""
     state = AsyncMock(spec=FSMContext)
@@ -97,10 +76,7 @@ def mock_state():
     state.set_state = AsyncMock()
     state.clear = AsyncMock()
     
-    return state
-
-
-@pytest.fixture
+    return state@pytest.fixture
 def mock_db_user():
     """Мок пользователя из базы данных"""
     user = User(
@@ -109,10 +85,7 @@ def mock_db_user():
         first_name="Test",
         username="testuser"
     )
-    return user
-
-
-@pytest.fixture
+    return user@pytest.fixture
 def mock_avatar():
     """Мок аватара из базы данных"""
     avatar = Avatar(
@@ -122,10 +95,7 @@ def mock_avatar():
         avatar_type=AvatarType.CHARACTER,
         gender=AvatarGender.MALE
     )
-    return avatar
-
-
-class TestAvatarHandler:
+    return avatarclass TestAvatarHandler:
     """Тесты для AvatarHandler"""
 
     @pytest.mark.asyncio
@@ -349,10 +319,7 @@ class TestAvatarHandler:
         
         mock_state.update_data.assert_called_once_with(gender=AvatarGender.MALE)
         mock_state.set_state.assert_called_once_with(AvatarStates.entering_name)
-        mock_callback_query.message.edit_text.assert_called_once()
-
-
-class TestAvatarHandlerIntegration:
+        mock_callback_query.message.edit_text.assert_called_once()class TestAvatarHandlerIntegration:
     """Интеграционные тесты для полного цикла создания аватара"""
 
     @pytest.mark.asyncio
@@ -402,4 +369,4 @@ class TestAvatarHandlerIntegration:
             
             # Проверяем что все этапы прошли успешно
             assert mock_services['avatar_service'].create_avatar.called
-            assert mock_state.set_state.call_count >= 4  # Минимум 4 смены состояния 
+            assert mock_state.set_state.call_count >= 4  # Минимум 4 смены состояния

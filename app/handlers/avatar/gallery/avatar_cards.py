@@ -203,4 +203,4 @@ class AvatarCardsHandler:
                 text=text,
                 reply_markup=keyboard,
                 parse_mode="Markdown"
-            ) 
+            )

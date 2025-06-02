@@ -13,10 +13,7 @@ from .models import TrainingConfig, FALConfigManager, WebhookURLBuilder
 from .fal_client import FALClient
 from .test_simulator import TestModeSimulator
 
-logger = get_logger(__name__)
-
-
-class FALTrainingService:
+logger = get_logger(__name__)class FALTrainingService:
     """
     Сервис для обучения аватаров через FAL AI с автовыбором модели
     
@@ -220,4 +217,4 @@ class FALTrainingService:
         return await self.fal_client.train_general_model(
             images_data_url, trigger_word, iterations, learning_rate, 
             priority, webhook_url, avatar_id
-        ) 
+        )

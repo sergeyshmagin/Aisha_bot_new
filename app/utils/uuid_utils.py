@@ -11,4 +11,4 @@ def safe_uuid(val):
         return UUID(str(val))
     except Exception as e:
         logger.error(f"Некорректный UUID: {val} ({e})")
-        return None 
+        return None

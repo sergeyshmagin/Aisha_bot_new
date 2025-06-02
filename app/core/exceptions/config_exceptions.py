@@ -3,20 +3,14 @@
 Выделено из app/core/exceptions.py для соблюдения правила ≤500 строк
 """
 from typing import Optional, Dict, Any
-from .base_exceptions import BaseConfigurationError
-
-
-class ConfigurationError(BaseConfigurationError):
+from .base_exceptions import BaseConfigurationErrorclass ConfigurationError(BaseConfigurationError):
     """
     Общая ошибка конфигурации
     
     Используется для ошибок настройки приложения,
     отсутствующих переменных окружения и т.д.
     """
-    pass
-
-
-class DependencyError(ConfigurationError):
+    passclass DependencyError(ConfigurationError):
     """
     Ошибка зависимостей
     
@@ -57,10 +51,7 @@ class DependencyError(ConfigurationError):
         if self.installation_hint:
             parts.append(f"Hint: {self.installation_hint}")
         
-        return " | ".join(parts)
-
-
-class InvalidCredentialsError(ConfigurationError):
+        return " | ".join(parts)class InvalidCredentialsError(ConfigurationError):
     """
     Ошибка неверных учетных данных
     
@@ -90,10 +81,7 @@ class InvalidCredentialsError(ConfigurationError):
         if self.credential_type:
             parts.append(f"Type: {self.credential_type}")
         
-        return " | ".join(parts)
-
-
-class MissingEnvironmentVariableError(ConfigurationError):
+        return " | ".join(parts)class MissingEnvironmentVariableError(ConfigurationError):
     """
     Ошибка отсутствующей переменной окружения
     
@@ -128,10 +116,7 @@ class MissingEnvironmentVariableError(ConfigurationError):
         if self.default_value:
             parts.append(f"Default: {self.default_value}")
         
-        return " | ".join(parts)
-
-
-class InvalidConfigurationValueError(ConfigurationError):
+        return " | ".join(parts)class InvalidConfigurationValueError(ConfigurationError):
     """
     Ошибка неверного значения конфигурации
     
@@ -170,10 +155,7 @@ class InvalidConfigurationValueError(ConfigurationError):
         if self.allowed_values:
             parts.append(f"Allowed: {self.allowed_values}")
         
-        return " | ".join(parts)
-
-
-class ServiceUnavailableError(ConfigurationError):
+        return " | ".join(parts)class ServiceUnavailableError(ConfigurationError):
     """
     Ошибка недоступности сервиса
     
@@ -208,4 +190,4 @@ class ServiceUnavailableError(ConfigurationError):
         if self.health_check_failed:
             parts.append("Health check failed")
         
-        return " | ".join(parts) 
+        return " | ".join(parts)

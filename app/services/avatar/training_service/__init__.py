@@ -23,4 +23,4 @@ __all__ = [
     "AvatarValidator",
     "TrainingConfig",
     "TrainingStatus"
-] 
+]

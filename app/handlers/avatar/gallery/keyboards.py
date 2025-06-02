@@ -130,4 +130,4 @@ class GalleryKeyboards:
         return InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🆕 Создать аватар", callback_data="create_avatar")],
             [InlineKeyboardButton(text="◀️ Главное меню", callback_data="avatar_menu")]
-        ]) 
+        ])

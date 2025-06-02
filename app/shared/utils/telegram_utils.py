@@ -133,4 +133,4 @@ async def safe_edit_callback_message(
                 await callback.answer("❌ Произошла ошибка", show_alert=True)
             except:
                 pass  # Игнорируем ошибки при ответе на callback
-        raise 
+        raise

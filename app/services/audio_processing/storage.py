@@ -158,4 +158,4 @@ class LocalAudioStorage(AudioStorage):
             
         except Exception as e:
             logger.error(f"Ошибка при очистке старых файлов: {e}")
-            raise AudioProcessingError(f"Ошибка очистки: {str(e)}") 
+            raise AudioProcessingError(f"Ошибка очистки: {str(e)}")

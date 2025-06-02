@@ -276,4 +276,4 @@ class TestDatabaseIntegrity:
 
 if __name__ == "__main__":
     # Запуск тестов напрямую
-    pytest.main([__file__, "-v"]) 
+    pytest.main([__file__, "-v"])

@@ -8,10 +8,7 @@ from datetime import datetime
 from app.utils.timezone import TimezoneUtils
 from app.services.user import UserService
 
-logger = logging.getLogger(__name__)
-
-
-class TimezoneHandler:
+logger = logging.getLogger(__name__)class TimezoneHandler:
     """
     Обработчик часовых поясов для приложения
     

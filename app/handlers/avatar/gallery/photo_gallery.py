@@ -178,4 +178,4 @@ class PhotoGalleryHandler:
 
 📸 Фото {photo_idx + 1} из {len(avatar.photos)}
 
-📅 Загружено: {photo.created_at.strftime("%d.%m.%Y %H:%M") if photo.created_at else "—"}""" 
+📅 Загружено: {photo.created_at.strftime("%d.%m.%Y %H:%M") if photo.created_at else "—"}"""

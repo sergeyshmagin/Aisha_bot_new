@@ -505,4 +505,4 @@ class AvatarRedisService:
             
         except Exception as e:
             logger.exception(f"Ошибка очистки данных пользователя {user_id} из Redis: {e}")
-            return False 
+            return False

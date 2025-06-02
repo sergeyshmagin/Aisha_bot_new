@@ -21,4 +21,4 @@ class PhotoUploadConfig:
     MAX_PHOTOS = 20
     MAX_FILE_SIZE = 20 * 1024 * 1024  # 20MB
     MIN_RESOLUTION = 512  # 512x512 пикселей
-    SUPPORTED_FORMATS = ["jpg", "jpeg", "png"] 
+    SUPPORTED_FORMATS = ["jpg", "jpeg", "png"]

@@ -19,10 +19,7 @@ from app.services.fal.client import FalAIClient
 from app.services.avatar.training_service import AvatarTrainingService
 from app.database.models import Avatar, AvatarStatus, AvatarType, AvatarGender
 
-logger = get_logger(__name__)
-
-
-async def test_fal_client():
+logger = get_logger(__name__)async def test_fal_client():
     """Тестирует FAL AI клиент"""
     print("\n🧪 === ТЕСТИРОВАНИЕ FAL AI КЛИЕНТА ===")
     
@@ -78,10 +75,7 @@ async def test_fal_client():
     except Exception as e:
         print(f"❌ Ошибка тестирования: {e}")
         logger.exception("Ошибка в test_fal_client")
-        return False
-
-
-async def test_training_service():
+        return Falseasync def test_training_service():
     """Тестирует сервис обучения аватаров"""
     print("\n🧪 === ТЕСТИРОВАНИЕ СЕРВИСА ОБУЧЕНИЯ ===")
     
@@ -145,10 +139,7 @@ async def test_training_service():
             # Очищаем тестовые данные
             await session.delete(test_avatar)
             await session.commit()
-            print(f"🧹 Тестовый аватар удален")
-
-
-async def test_webhook_simulation():
+            print(f"🧹 Тестовый аватар удален")async def test_webhook_simulation():
     """Симулирует работу webhook"""
     print("\n🧪 === СИМУЛЯЦИЯ WEBHOOK ===")
     
@@ -227,10 +218,7 @@ async def test_webhook_simulation():
             # Очищаем тестовые данные
             await session.delete(test_avatar)
             await session.commit()
-            print(f"🧹 Тестовый аватар удален")
-
-
-async def main():
+            print(f"🧹 Тестовый аватар удален")async def main():
     """Основная функция тестирования"""
     print("🎯 === ТЕСТИРОВАНИЕ FAL AI ИНТЕГРАЦИИ ===")
     print(f"Режим: {'TEST MODE ✅' if settings.AVATAR_TEST_MODE else 'PRODUCTION ⚠️'}")
@@ -283,10 +271,7 @@ async def main():
     else:
         print("\n🔧 Необходимо исправить ошибки перед продакшеном")
     
-    return all_passed
-
-
-if __name__ == "__main__":
+    return all_passedif __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
@@ -294,4 +279,4 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"\n💥 Критическая ошибка: {e}")
         logger.exception("Критическая ошибка в main")
-        sys.exit(1) 
+        sys.exit(1)

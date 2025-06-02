@@ -6,10 +6,7 @@
 class DatabaseNames:
     """Имена баз данных"""
     MAIN = "aisha_v2"  # Основная база данных
-    TEST = "aisha_v2_test"  # Тестовая база данных
-
-
-# Redis
+    TEST = "aisha_v2_test"  # Тестовая база данных# Redis
 class RedisConfig:
     """Конфигурация Redis"""
     DEFAULT_DB = 0
@@ -31,10 +28,7 @@ class RedisConfig:
         "user_session": 86400,  # 24 часа
         "avatar_cache": 1800,  # 30 минут
         "rate_limit": 60,  # 1 минута
-    }
-
-
-# MinIO
+    }# MinIO
 class MinioConfig:
     """Конфигурация MinIO"""
     BUCKET_NAMES = {
@@ -57,19 +51,13 @@ class MinioConfig:
     MAX_SIZES = {
         "photo": 5 * 1024 * 1024,  # 5MB
         "avatar": 10 * 1024 * 1024,  # 10MB
-    }
-
-
-# Очереди
+    }# Очереди
 class QueueNames:
     """Имена очередей"""
     PHOTO_PROCESSING = "aisha:v2:photo:processing"
     AVATAR_TRAINING = "aisha:v2:avatar:training"
     AVATAR_GENERATION = "aisha:v2:avatar:generation"
-    NOTIFICATIONS = "aisha:v2:notifications"
-
-
-# Лимиты API
+    NOTIFICATIONS = "aisha:v2:notifications"# Лимиты API
 class ApiLimits:
     """Лимиты API"""
     # Количество запросов в минуту
@@ -85,10 +73,7 @@ class ApiLimits:
         "photo_processing": 60,
         "avatar_training": 300,
         "avatar_generation": 120,
-    }
-
-
-# Настройки кэширования
+    }# Настройки кэширования
 class CacheConfig:
     """Настройки кэширования"""
     # Время жизни кэша (в секундах)

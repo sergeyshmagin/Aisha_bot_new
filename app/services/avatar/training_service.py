@@ -10,4 +10,4 @@ LEGACY: Файл рефакторен в модульную структуру a
 from .training_service.main_service import AvatarTrainingService
 
 # Экспорт для обратной совместимости
-__all__ = ["AvatarTrainingService"] 
+__all__ = ["AvatarTrainingService"]

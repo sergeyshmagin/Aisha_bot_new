@@ -50,11 +50,7 @@ def validate_audio_file(file_path: Path) -> None:
 
 def get_storage_path(filename: str) -> Path:
     """Получить путь для сохранения файла"""
-    return settings.AUDIO_STORAGE_PATH / filename
-
-
-
-def format_duration(seconds: float) -> str:
+    return settings.AUDIO_STORAGE_PATH / filenamedef format_duration(seconds: float) -> str:
     """Форматирование длительности в читаемый вид"""
     hours = int(seconds // 3600)
     minutes = int((seconds % 3600) // 60)
@@ -70,4 +66,4 @@ def format_size(size_bytes: int) -> str:
         if size_bytes < 1024:
             return f"{size_bytes:.1f} {unit}"
         size_bytes /= 1024
-    return f"{size_bytes:.1f} TB" 
+    return f"{size_bytes:.1f} TB"

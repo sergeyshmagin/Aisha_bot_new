@@ -9,17 +9,11 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
-
-
-# revision identifiers, used by Alembic.
+from sqlalchemy.dialects import postgresql# revision identifiers, used by Alembic.
 revision: str = '5f166bbd1e83'
 down_revision: Union[str, None] = 'c934618bfc8f'
 branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
-
-
-def upgrade() -> None:
+depends_on: Union[str, Sequence[str], None] = Nonedef upgrade() -> None:
     # Создаем таблицу user_settings
     op.create_table('user_settings',
         sa.Column('id', postgresql.UUID(as_uuid=True), nullable=False),
@@ -35,10 +29,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
         sa.UniqueConstraint('user_id')
     )
-    op.create_index(op.f('ix_user_settings_user_id'), 'user_settings', ['user_id'], unique=False)
-
-
-def downgrade() -> None:
+    op.create_index(op.f('ix_user_settings_user_id'), 'user_settings', ['user_id'], unique=False)def downgrade() -> None:
     # Удаляем таблицу user_settings
     op.drop_index(op.f('ix_user_settings_user_id'), table_name='user_settings')
     op.drop_table('user_settings')

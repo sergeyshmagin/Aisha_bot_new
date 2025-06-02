@@ -86,4 +86,4 @@ async def _debug_avatars_logic(message: Message):
             
     except Exception as e:
         logger.exception(f"Ошибка команды debug_avatars: {e}")
-        await message.reply(f"❌ Ошибка диагностики: {str(e)}") 
+        await message.reply(f"❌ Ошибка диагностики: {str(e)}")

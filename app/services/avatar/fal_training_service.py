@@ -9,4 +9,4 @@ FAL AI Training Service - Сервис для обучения аватаров 
 from .fal_training_service.main_service import FALTrainingService
 
 # Экспорт для обратной совместимости
-__all__ = ["FALTrainingService"] 
+__all__ = ["FALTrainingService"]

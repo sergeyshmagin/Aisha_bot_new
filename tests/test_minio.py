@@ -9,10 +9,7 @@ from typing import AsyncGenerator
 from minio import Minio
 from minio.error import S3Error
 
-from app.core.config import settings
-
-
-@pytest.fixture
+from app.core.config import settings@pytest.fixture
 def minio_client() -> Minio:
     """
     Фикстура для подключения к MinIO
@@ -23,18 +20,12 @@ def minio_client() -> Minio:
         secret_key=settings.MINIO_SECRET_KEY,
         secure=False
     )
-    return client
-
-
-@pytest.fixture
+    return client@pytest.fixture
 def test_bucket_name() -> str:
     """
     Имя тестового бакета
     """
-    return f"{settings.MINIO_BUCKET_AVATARS}_test"
-
-
-@pytest.fixture
+    return f"{settings.MINIO_BUCKET_AVATARS}_test"@pytest.fixture
 def setup_test_bucket(minio_client: Minio, test_bucket_name: str):
     """
     Создание и очистка тестового бакета
@@ -50,10 +41,7 @@ def setup_test_bucket(minio_client: Minio, test_bucket_name: str):
         for obj in minio_client.list_objects(test_bucket_name, recursive=True):
             minio_client.remove_object(test_bucket_name, obj.object_name)
     except S3Error:
-        pass
-
-
-@pytest.mark.usefixtures("setup_test_bucket")
+        pass@pytest.mark.usefixtures("setup_test_bucket")
 def test_minio_connection(minio_client: Minio):
     """Тест подключения к MinIO"""
     # Act
@@ -61,10 +49,7 @@ def test_minio_connection(minio_client: Minio):
     
     # Assert
     assert len(buckets) > 0
-    assert any(bucket.name == test_bucket_name for bucket in buckets)
-
-
-@pytest.mark.usefixtures("setup_test_bucket")
+    assert any(bucket.name == test_bucket_name for bucket in buckets)@pytest.mark.usefixtures("setup_test_bucket")
 def test_minio_put_get_object(minio_client: Minio, test_bucket_name: str):
     """Тест загрузки и получения объекта из MinIO"""
     # Arrange
@@ -88,10 +73,7 @@ def test_minio_put_get_object(minio_client: Minio, test_bucket_name: str):
     response.release_conn()
     
     # Assert
-    assert retrieved_content == test_content
-
-
-@pytest.mark.usefixtures("setup_test_bucket")
+    assert retrieved_content == test_content@pytest.mark.usefixtures("setup_test_bucket")
 def test_minio_list_objects(minio_client: Minio, test_bucket_name: str):
     """Тест получения списка объектов из MinIO"""
     # Arrange
@@ -118,10 +100,7 @@ def test_minio_list_objects(minio_client: Minio, test_bucket_name: str):
     assert len(objects) == 3
     object_names = [obj.object_name for obj in objects]
     for name, _ in test_files:
-        assert name in object_names
-
-
-@pytest.mark.usefixtures("setup_test_bucket")
+        assert name in object_names@pytest.mark.usefixtures("setup_test_bucket")
 def test_minio_remove_object(minio_client: Minio, test_bucket_name: str):
     """Тест удаления объекта из MinIO"""
     # Arrange
@@ -145,10 +124,7 @@ def test_minio_remove_object(minio_client: Minio, test_bucket_name: str):
     
     # Assert
     objects_after = list(minio_client.list_objects(test_bucket_name, recursive=True))
-    assert not any(obj.object_name == test_object_name for obj in objects_after)
-
-
-@pytest.mark.usefixtures("setup_test_bucket")
+    assert not any(obj.object_name == test_object_name for obj in objects_after)@pytest.mark.usefixtures("setup_test_bucket")
 def test_minio_presigned_url(minio_client: Minio, test_bucket_name: str):
     """Тест создания предподписанного URL для объекта в MinIO"""
     # Arrange

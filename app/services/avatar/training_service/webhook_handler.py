@@ -15,10 +15,7 @@ from .models import WebhookData
 from .progress_tracker import ProgressTracker
 from ..training_data_validator import AvatarTrainingDataValidator
 
-logger = logging.getLogger(__name__)
-
-
-class WebhookHandler:
+logger = logging.getLogger(__name__)class WebhookHandler:
     """Обработка webhook от FAL AI"""
     
     def __init__(self, session: AsyncSession):
@@ -288,4 +285,4 @@ class WebhookHandler:
         )
         
         await self.session.execute(stmt)
-        await self.session.commit() 
+        await self.session.commit()

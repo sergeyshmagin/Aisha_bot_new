@@ -42,4 +42,4 @@ class TranscriptService:
         """
         object_name = f"transcripts/{user_id}/{format_type}_{transcript_id}.txt"
         data = await self.minio.download_file("your-bucket", object_name)
-        return data.decode("utf-8") 
+        return data.decode("utf-8")

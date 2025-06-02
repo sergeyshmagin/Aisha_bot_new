@@ -5,19 +5,13 @@
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 from enum import Enum
-from datetime import datetime
-
-
-class TrainingStatus(Enum):
+from datetime import datetimeclass TrainingStatus(Enum):
     """Статусы обучения от FAL AI"""
     QUEUED = "queued"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
-@dataclass
+    CANCELLED = "cancelled"@dataclass
 class TrainingConfig:
     """Конфигурация обучения аватара"""
     learning_rate: float = 0.0001
@@ -42,10 +36,7 @@ class TrainingConfig:
         if self.custom_params:
             config.update(self.custom_params)
             
-        return config
-
-
-@dataclass
+        return config@dataclass
 class TrainingProgress:
     """Информация о прогрессе обучения"""
     avatar_id: str
@@ -58,10 +49,7 @@ class TrainingProgress:
     fal_request_id: Optional[str] = None
     training_duration_seconds: Optional[float] = None
     fal_status: Optional[Dict[str, Any]] = None
-    error_message: Optional[str] = None
-
-
-@dataclass
+    error_message: Optional[str] = None@dataclass
 class WebhookData:
     """Данные webhook от FAL AI"""
     request_id: str
@@ -79,4 +67,4 @@ class WebhookData:
             progress=data.get("progress", 0),
             message=data.get("message", ""),
             result=data.get("result")
-        ) 
+        )

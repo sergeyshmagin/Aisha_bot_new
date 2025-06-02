@@ -18,10 +18,7 @@ from ...core.config import settings
 from ...core.logger import get_logger
 from ...database.models import AvatarPhoto
 
-logger = get_logger(__name__)
-
-
-@dataclass
+logger = get_logger(__name__)@dataclass
 class PhotoValidationResult:
     """Результат валидации фотографии"""
     is_valid: bool
@@ -35,10 +32,7 @@ class PhotoValidationResult:
         if self.warnings is None:
             self.warnings = []
         if self.metadata is None:
-            self.metadata = {}
-
-
-class PhotoValidationService:
+            self.metadata = {}class PhotoValidationService:
     """
     Сервис валидации фотографий аватаров с функциями из legacy проекта:
     
@@ -377,4 +371,4 @@ class PhotoValidationService:
         return hashlib.md5(photo_data).hexdigest()
 
     # УДАЛЕН: check_photo_duplicate() - дублирует функциональность _validate_duplicates()
-    # Используйте _validate_duplicates() вместо этого метода 
+    # Используйте _validate_duplicates() вместо этого метода

@@ -100,4 +100,4 @@ class MinioStorage:
             return url
         except Exception as e:
             print(f"DEBUG: MinioStorage.generate_presigned_url: ОШИБКА {str(e)}")
-            return "" 
+            return ""

@@ -94,4 +94,4 @@ class AudioServiceFactory:
             cls.create_recognizer(),
             cls.create_processor(),
             cls.create_storage()
-        ) 
+        )

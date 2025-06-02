@@ -14,10 +14,7 @@ from app.utils.avatar_utils import (
     generate_trigger_word
 )
 
-logger = get_logger(__name__)
-
-
-class FALClient:
+logger = get_logger(__name__)class FALClient:
     """Клиент для работы с FAL AI API"""
     
     def __init__(self):
@@ -238,4 +235,4 @@ class FALClient:
         result = await self.fal_client.result_async(endpoint, request_id)
         
         logger.info(f"🎯 Результат обучения {request_id}: {result}")
-        return result 
+        return result

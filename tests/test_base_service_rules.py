@@ -5,10 +5,7 @@ import pytest
 from unittest.mock import Mock
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.base import BaseService
-
-
-class TestBaseServiceRules:
+from app.services.base import BaseServiceclass TestBaseServiceRules:
     """Тесты правил наследования от BaseService"""
     
     def test_base_service_requires_session(self):
@@ -73,10 +70,7 @@ class TestBaseServiceRules:
                 super().__init__()  # Ошибка - нет session
                 
         with pytest.raises(TypeError):
-            BadUtilityClass()
-
-
-class TestServiceClassification:
+            BadUtilityClass()class TestServiceClassification:
     """Тесты классификации сервисов"""
     
     def test_database_service_should_inherit_from_base_service(self):
@@ -125,10 +119,7 @@ class TestServiceClassification:
         helper = HelperClass()
         
         assert not isinstance(helper, BaseService)
-        assert helper.logger == "logger"
-
-
-class TestBaseServiceBestPractices:
+        assert helper.logger == "logger"class TestBaseServiceBestPractices:
     """Тесты лучших практик BaseService"""
     
     def test_service_constructor_pattern(self):
@@ -200,10 +191,7 @@ class TestBaseServiceBestPractices:
         
         assert service.session == mock_session
         assert service.api_client == mock_api_client
-        assert service.cache["key"] == "value"
-
-
-class TestErrorMessages:
+        assert service.cache["key"] == "value"class TestErrorMessages:
     """Тесты сообщений об ошибках"""
     
     def test_missing_session_error_message(self):
@@ -245,10 +233,7 @@ class TestErrorMessages:
         # Проверяем что у нас есть документация
         assert "❌" in common_mistake_example
         assert "✅" in correct_example
-        assert "super().__init__(session)" in correct_example
-
-
-@pytest.mark.integration
+        assert "super().__init__(session)" in correct_example@pytest.mark.integration
 class TestRealWorldServiceExamples:
     """Тесты реальных примеров сервисов из проекта"""
     
@@ -314,4 +299,4 @@ class TestRealWorldServiceExamples:
         # Проверяем что все работает
         assert data_service.session == mock_session
         assert api_client.api_key == "key"
-        assert isinstance(helper.utils, dict) 
+        assert isinstance(helper.utils, dict)

@@ -3,10 +3,7 @@
 Выделено из app/core/exceptions.py для соблюдения правила ≤500 строк
 """
 from typing import Optional, Dict, Any
-from .base_exceptions import BaseServiceError
-
-
-class StorageError(BaseServiceError):
+from .base_exceptions import BaseServiceErrorclass StorageError(BaseServiceError):
     """
     Ошибка хранения данных
     
@@ -47,10 +44,7 @@ class StorageError(BaseServiceError):
         if self.file_path:
             parts.append(f"Path: {self.file_path}")
         
-        return " | ".join(parts)
-
-
-class NetworkError(BaseServiceError):
+        return " | ".join(parts)class NetworkError(BaseServiceError):
     """
     Ошибка сети
     
@@ -95,10 +89,7 @@ class NetworkError(BaseServiceError):
             body = self.response_body[:200] + "..." if len(self.response_body) > 200 else self.response_body
             parts.append(f"Response: {body}")
         
-        return " | ".join(parts)
-
-
-class TimeoutError(NetworkError):
+        return " | ".join(parts)class TimeoutError(NetworkError):
     """
     Ошибка таймаута
     
@@ -134,10 +125,7 @@ class TimeoutError(NetworkError):
         if self.timeout_seconds:
             parts.append(f"Timeout: {self.timeout_seconds}s")
         
-        return " | ".join(parts)
-
-
-class DatabaseError(StorageError):
+        return " | ".join(parts)class DatabaseError(StorageError):
     """
     Ошибка базы данных
     
@@ -176,10 +164,7 @@ class DatabaseError(StorageError):
             query = self.query[:100] + "..." if len(self.query) > 100 else self.query
             parts.append(f"Query: {query}")
         
-        return " | ".join(parts)
-
-
-class FileSystemError(StorageError):
+        return " | ".join(parts)class FileSystemError(StorageError):
     """
     Ошибка файловой системы
     
@@ -213,4 +198,4 @@ class FileSystemError(StorageError):
         if self.permissions:
             parts.append(f"Permissions: {self.permissions}")
         
-        return " | ".join(parts) 
+        return " | ".join(parts)

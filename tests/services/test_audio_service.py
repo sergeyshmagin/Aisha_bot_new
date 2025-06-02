@@ -192,4 +192,4 @@ async def test_check_ffmpeg(audio_service):
             "-version",
             stdout=pytest.ANY,
             stderr=pytest.ANY
-        ) 
+        )
