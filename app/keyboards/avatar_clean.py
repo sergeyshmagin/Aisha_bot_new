@@ -7,12 +7,12 @@ from app.database.models import AvatarStatus
 
 
 def get_avatar_main_menu(avatars_count: int = 0) -> InlineKeyboardMarkup:
-    """Главное меню системы аватаров"""
+    """Главное меню системы аватаров (упрощенное с портретной моделью)"""
     
     buttons = [
         [
             InlineKeyboardButton(
-                text="🆕 Создать аватар",
+                text="🎭 Создать портретный аватар",
                 callback_data="create_avatar"
             )
         ]
@@ -29,7 +29,7 @@ def get_avatar_main_menu(avatars_count: int = 0) -> InlineKeyboardMarkup:
     buttons.extend([
         [
             InlineKeyboardButton(
-                text="ℹ️ Помощь",
+                text="ℹ️ Как работают аватары?",
                 callback_data="avatar_help"
             )
         ],
@@ -44,43 +44,25 @@ def get_avatar_main_menu(avatars_count: int = 0) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
-def get_training_type_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура выбора типа обучения (ИСПРАВЛЕНО после Legacy повреждения)"""
-    
-    return InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(
-                text="🎭 Портретный",
-                callback_data="training_type_portrait"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="🎨 Художественный",
-                callback_data="training_type_style"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="📊 Сравнить типы",
-                callback_data="detailed_comparison"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="◀️ Главное меню",
-                callback_data="back_to_avatar_menu"
-            ),
-            InlineKeyboardButton(
-                text="❌ Отмена",
-                callback_data="cancel_avatar_creation"
-            )
-        ]
-    ])
+# ==================== LEGACY: КЛАВИАТУРЫ ВЫБОРА ТИПА ОБУЧЕНИЯ ====================
+# УСТАРЕЛО: Теперь используется только портретный тип
+# Заменено на упрощенный workflow без выбора типа обучения
+
+# def get_training_type_keyboard() -> InlineKeyboardMarkup:
+#     """LEGACY: Клавиатура выбора типа обучения"""
+#     return InlineKeyboardMarkup(inline_keyboard=[])
+
+# def get_training_type_confirmation_keyboard(training_type: str) -> InlineKeyboardMarkup:
+#     """LEGACY: Клавиатура подтверждения выбора типа обучения"""
+#     return InlineKeyboardMarkup(inline_keyboard=[])
+
+# def get_comparison_keyboard() -> InlineKeyboardMarkup:
+#     """LEGACY: Клавиатура для сравнения типов обучения"""
+#     return InlineKeyboardMarkup(inline_keyboard=[])
 
 
 def get_avatar_gender_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура выбора пола аватара"""
+    """Клавиатура выбора пола аватара (упрощенная без выбора модели)"""
     
     return InlineKeyboardMarkup(inline_keyboard=[
         [
@@ -95,76 +77,18 @@ def get_avatar_gender_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                text="◀️ Назад",
-                callback_data="select_training_type"
-            )
-        ]
-    ])
-
-
-def get_training_type_confirmation_keyboard(training_type: str) -> InlineKeyboardMarkup:
-    """Клавиатура подтверждения выбора типа обучения"""
-    
-    # Подтверждение
-    buttons = [
-        [
-            InlineKeyboardButton(
-                text="✅ Выбрать этот тип",
-                callback_data=f"confirm_training_{training_type}"
-            )
-        ]
-    ]
-    
-    # Посмотреть другой тип
-    other_type = "style" if training_type == "portrait" else "portrait"
-    other_name = "Художественный" if training_type == "portrait" else "Портретный"
-    
-    buttons.append([
-        InlineKeyboardButton(
-            text=f"🔄 Посмотреть {other_name}",
-            callback_data=f"training_type_{other_type}"
-        )
-    ])
-    
-    # Сравнение
-    buttons.append([
-        InlineKeyboardButton(
-            text="📊 Подробное сравнение",
-            callback_data="detailed_comparison"
-        )
-    ])
-    
-    # Назад к выбору
-    buttons.append([
-        InlineKeyboardButton(
-            text="◀️ К выбору типа",
-            callback_data="select_training_type"
-        )
-    ])
-    
-    return InlineKeyboardMarkup(inline_keyboard=buttons)
-
-
-def get_comparison_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура для сравнения типов обучения"""
-    
-    return InlineKeyboardMarkup(inline_keyboard=[
-        # Выбор после сравнения
-        [
-            InlineKeyboardButton(
-                text="🎭 Выбрать Портретный",
-                callback_data="confirm_training_portrait"
-            ),
-            InlineKeyboardButton(
-                text="🎨 Выбрать Художественный", 
-                callback_data="confirm_training_style"
+                text="💡 Зачем выбирать пол?",
+                callback_data="explain_gender_choice"
             )
         ],
-        # Назад
         [
             InlineKeyboardButton(
-                text="◀️ К выбору типа",
-                callback_data="select_training_type"
+                text="◀️ Главное меню",
+                callback_data="back_to_avatar_menu"
+            ),
+            InlineKeyboardButton(
+                text="❌ Отмена",
+                callback_data="cancel_avatar_creation"
             )
         ]
     ])
@@ -303,10 +227,7 @@ def get_confirmation_keyboard(action: str, target_id: str) -> InlineKeyboardMark
 # Экспорт основных функций
 __all__ = [
     "get_avatar_main_menu",
-    "get_training_type_keyboard", 
     "get_avatar_gender_keyboard",
-    "get_training_type_confirmation_keyboard",
-    "get_comparison_keyboard",
     "get_avatar_gallery_keyboard",
     "get_avatar_actions_keyboard",
     "get_confirmation_keyboard"

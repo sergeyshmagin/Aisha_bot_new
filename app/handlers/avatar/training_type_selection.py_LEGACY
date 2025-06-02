@@ -1,6 +1,7 @@
 """
-Обработчики выбора типа обучения аватара
-Критическая реализация из плана avatar_implementation_plan.md - Этап 0
+LEGACY: Обработчики выбора типа обучения аватара
+УСТАРЕЛО: Теперь используется только портретный тип, выбор не нужен
+Заменено на упрощенный workflow в app/handlers/avatar/create.py
 """
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
