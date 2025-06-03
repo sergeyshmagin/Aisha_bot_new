@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.services.transcript import TranscriptService
 from app.database.repositories.transcript import TranscriptRepository
 from app.database.models import UserTranscript, User
+from app.handlers.transcript_main.main_handler import TranscriptMainHandler
 
 
 class TestTranscriptService:
@@ -221,7 +222,7 @@ class TestTranscriptIntegration:
     def test_transcript_handlers_import(self):
         """Тест импорта обработчиков транскриптов"""
         try:
-            from app.handlers.transcript_main import TranscriptMainHandler
+            from app.handlers.transcript_main.main_handler import TranscriptMainHandler
             from app.handlers.transcript_processing import TranscriptProcessingHandler
             
             assert TranscriptMainHandler is not None

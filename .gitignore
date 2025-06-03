@@ -198,3 +198,4 @@ INSTALL_*.md
 WINSCP_*.md
 nginx_*.conf
 env_example_*.txt
+/archive/

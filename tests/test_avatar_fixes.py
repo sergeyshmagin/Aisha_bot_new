@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.handlers.avatar import router as avatar_router
 from app.services.avatar.avatar_service import AvatarService
 from app.services.avatar.photo_service import PhotoUploadService
-from app.services.avatar.training_service import AvatarTrainingService
+from app.services.avatar.training_service.main_service import AvatarTrainingService
 from app.services.fal.client import FalAIClient
 
 
@@ -34,7 +34,7 @@ class TestAvatarImports:
         
     def test_training_service_import(self):
         """Тест импорта AvatarTrainingService"""
-        from app.services.avatar.training_service import AvatarTrainingService
+        from app.services.avatar.training_service.main_service import AvatarTrainingService
         assert AvatarTrainingService is not None
         
     def test_fal_client_import(self):
@@ -276,7 +276,7 @@ class TestAvatarFixesIntegration:
         from app.handlers.avatar import router
         from app.services.avatar.avatar_service import AvatarService
         from app.services.avatar.photo_service import PhotoUploadService
-        from app.services.avatar.training_service import AvatarTrainingService
+        from app.services.avatar.training_service.main_service import AvatarTrainingService
         from app.services.fal.client import FalAIClient
         from app.texts.avatar import AvatarTexts
         from app.keyboards.avatar import get_avatar_main_menu
