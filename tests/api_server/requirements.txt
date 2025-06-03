@@ -1,0 +1,29 @@
+# Webhook API Dependencies for Aisha Bot v2
+# Основные зависимости для обработки webhook от FAL AI
+
+# FastAPI и сервер
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# HTTP клиент для webhook
+aiohttp==3.9.1
+httpx==0.25.2
+
+# FAL AI клиент
+fal-client==0.2.8
+
+# База данных (для будущего подключения к основной БД)
+sqlalchemy[asyncio]==2.0.23
+asyncpg==0.29.0
+
+# Telegram Bot (для уведомлений)
+aiogram==3.2.0
+
+# Утилиты
+python-multipart==0.0.6
+python-dotenv==1.0.0
+
+# Логирование и мониторинг
+structlog==23.2.0 
