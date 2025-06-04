@@ -117,7 +117,7 @@ async def handle_gallery_delete(callback: CallbackQuery):
 async def handle_gallery_delete_confirm(callback: CallbackQuery):
     """Обработчик подтверждения удаления изображения"""
     gallery_manager = GalleryManager()
-    await gallery_manager.confirm_delete_image(callback)
+    await gallery_manager.deletion_manager.delete_image(callback)
 
 @router.callback_query(F.data.startswith("gallery_regenerate:"))
 async def handle_gallery_regenerate(callback: CallbackQuery):

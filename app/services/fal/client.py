@@ -1,26 +1,25 @@
 """
-FAL AI клиент для обучения моделей аватаров
+FAL AI клиент для обучения моделей аватаров (рефакторинг)
+Модульная архитектура для лучшей поддержки и читаемости
 """
 import asyncio
-import io
-import tempfile
-import zipfile
-from pathlib import Path
 from typing import Dict, List, Optional, Any
 from uuid import UUID
 
 import fal_client
-from PIL import Image
 
-from ...core.config import settings
-from ...core.logger import get_logger
+from app.core.config import settings
+from app.core.logger import get_logger
+from app.services.fal.files.file_manager import FalFileManager
+from app.services.fal.training.trainer import FalTrainer
+from app.services.fal.status.status_checker import FalStatusChecker
 
 logger = get_logger(__name__)
 
 
 class FalAIClient:
     """
-    Клиент для работы с FAL AI API.
+    Клиент для работы с FAL AI API (рефакторинг)
     
     Основные функции:
     - Обучение персональных моделей (finetune)
@@ -33,6 +32,11 @@ class FalAIClient:
         self.logger = logger
         self.api_key = settings.FAL_API_KEY
         self.test_mode = settings.AVATAR_TEST_MODE
+        
+        # Инициализируем модули
+        self.file_manager = FalFileManager()
+        self.trainer = FalTrainer()
+        self.status_checker = FalStatusChecker()
         
         # Настраиваем FAL клиент
         if self.api_key:
@@ -84,19 +88,18 @@ class FalAIClient:
             )
             
             # 1. Скачиваем фотографии и создаем архив
-            data_url = await self._download_and_create_archive(photo_urls, avatar_id)
+            data_url = await self.file_manager.download_and_create_archive(photo_urls, avatar_id)
             
             if not data_url:
                 raise RuntimeError("Не удалось скачать фотографии для создания архива")
             
-            # 2. Запускаем только портретное обучение
+            # 2. Запускаем обучение
             if training_type == "portrait":
-                # Портретное обучение через flux-lora-portrait-trainer
-                request_id = await self._train_portrait_avatar(
+                request_id = await self.trainer.train_avatar_with_config(
                     data_url=data_url,
                     user_id=user_id,
                     avatar_id=avatar_id,
-                    config=training_config or {}
+                    training_config=training_config or {}
                 )
             else:
                 logger.error(f"[FAL AI] Неподдерживаемый тип обучения: {training_type}")
@@ -111,57 +114,7 @@ class FalAIClient:
         
         finally:
             # Очищаем временные файлы
-            await self._cleanup_temp_files()
-
-    async def _train_portrait_avatar(
-        self,
-        data_url: str,
-        user_id: UUID,
-        avatar_id: UUID,
-        config: Dict[str, Any]
-    ) -> Optional[str]:
-        """
-        Запускает портретное обучение через flux-lora-portrait-trainer
-        
-        Args:
-            data_url: URL архива с фотографиями
-            user_id: ID пользователя
-            avatar_id: ID аватара
-            config: Конфигурация обучения
-            
-        Returns:
-            Optional[str]: request_id
-        """
-        try:
-            # Получаем настройки портретного обучения
-            trigger_phrase = config.get("trigger_phrase", f"PERSON_{avatar_id.hex[:8]}")
-            steps = config.get("steps", settings.FAL_PORTRAIT_STEPS)
-            learning_rate = config.get("learning_rate", settings.FAL_PORTRAIT_LEARNING_RATE)
-            multiresolution_training = config.get("multiresolution_training", settings.FAL_PORTRAIT_MULTIRESOLUTION)
-            subject_crop = config.get("subject_crop", settings.FAL_PORTRAIT_SUBJECT_CROP)
-            create_masks = config.get("create_masks", settings.FAL_PORTRAIT_CREATE_MASKS)
-            webhook_url = config.get("webhook_url", settings.FAL_WEBHOOK_URL)
-            
-            logger.info(f"[FAL AI] Портретное обучение аватара {avatar_id}: trigger='{trigger_phrase}', steps={steps}")
-            
-            # Запускаем портретное обучение
-            request_id = await self.train_portrait_model(
-                images_data_url=data_url,
-                trigger_phrase=trigger_phrase,
-                steps=steps,
-                learning_rate=learning_rate,
-                multiresolution_training=multiresolution_training,
-                subject_crop=subject_crop,
-                create_masks=create_masks,
-                webhook_url=webhook_url
-            )
-            
-            return request_id
-            
-        except Exception as e:
-            logger.exception(f"[FAL AI] Ошибка портретного обучения аватара {avatar_id}: {e}")
-            return None
-
+            await self.file_manager.cleanup_temp_files()
 
     async def get_training_status(self, request_id: str, training_type: str) -> Dict[str, Any]:
         """
@@ -174,310 +127,21 @@ class FalAIClient:
         Returns:
             Dict[str, Any]: Статус обучения
         """
-        try:
-            if self.test_mode:
-                # В тестовом режиме возвращаем мок статус
-                return {
-                    "status": "completed",
-                    "progress": 100,
-                    "created_at": "2025-05-23T16:00:00Z",
-                    "updated_at": "2025-05-23T16:30:00Z",
-                    "completed_at": "2025-05-23T16:30:00Z",
-                    "message": "Training completed successfully (test mode)"
-                }
-            
-            # TODO: Реализовать получение статуса через FAL API
-            # В FAL AI пока нет прямого API для получения статуса
-            # Статус приходит через webhook
-            
-            logger.warning(f"[FAL AI] Получение статуса {request_id} для типа {training_type} пока не реализовано")
-            return {
-                "status": "unknown",
-                "message": "Status checking not implemented yet"
-            }
-            
-        except Exception as e:
-            logger.exception(f"[FAL AI] Ошибка получения статуса {request_id} для типа {training_type}: {e}")
-            return {
-                "status": "error",
-                "message": str(e)
-            }
+        return await self.status_checker.get_training_status(request_id, training_type)
 
-    #         
-    #     except Exception as e:
-    #         logger.exception(f"[FAL AI] Ошибка генерации изображения: {e}")
-    #         return None
-
-    async def _download_and_create_archive(
-        self, 
-        photo_urls: List[str], 
-        avatar_id: UUID
-    ) -> Optional[str]:
-        """
-        Скачивает фотографии из MinIO и создает архив для FAL AI
-        
-        Args:
-            photo_urls: Список URL фотографий в MinIO
-            avatar_id: ID аватара
-            
-        Returns:
-            Optional[str]: URL загруженного архива
-        """
-        import tempfile
-        import zipfile
-        
-        with tempfile.TemporaryDirectory(prefix=f"avatar_{avatar_id}_") as temp_dir_name:
-            temp_dir = Path(temp_dir_name)
-            photo_paths = []
-            
-            try:
-                # Импортируем StorageService здесь чтобы избежать циклических импортов
-                from ..storage import StorageService
-                storage = StorageService()
-                
-                # Скачиваем фотографии
-                for i, minio_key in enumerate(photo_urls):
-                    try:
-                        # minio_key содержит полный путь, например: avatars/user_id/avatar_id/photo_1.jpeg
-                        # Используем весь путь как object_name, bucket всегда "avatars"
-                        bucket_name = "avatars"
-                        object_name = minio_key
-                        
-                        # Скачиваем файл из MinIO
-                        photo_data = await storage.download_file(bucket_name, object_name)
-                        
-                        if not photo_data:
-                            logger.warning(f"[FAL AI] Не удалось скачать фото {bucket_name}/{object_name}")
-                            continue
-                        
-                        # Сохраняем файл во временную директорию
-                        photo_path = temp_dir / f"photo_{i+1:02d}.jpg"
-                        
-                        # Проверяем и конвертируем изображение
-                        try:
-                            # Открываем изображение для валидации
-                            with Image.open(io.BytesIO(photo_data)) as img:
-                                # Конвертируем в RGB если нужно
-                                if img.mode != 'RGB':
-                                    img = img.convert('RGB')
-                                
-                                # Сохраняем в JPEG
-                                img.save(photo_path, 'JPEG', quality=95)
-                                photo_paths.append(photo_path)
-                                
-                                logger.debug(f"[FAL AI] Сохранено фото: {photo_path}")
-                        
-                        except Exception as img_error:
-                            logger.warning(f"[FAL AI] Ошибка обработки изображения {bucket_name}/{object_name}: {img_error}")
-                            continue
-                    
-                    except Exception as e:
-                        logger.warning(f"[FAL AI] Ошибка скачивания фото {minio_key}: {e}")
-                        continue
-                
-                if not photo_paths:
-                    logger.error(f"[FAL AI] Не удалось скачать ни одной фотографии для аватара {avatar_id}")
-                    return None
-                
-                logger.info(f"[FAL AI] Скачано {len(photo_paths)} фотографий для аватара {avatar_id}")
-                
-                # Создаем ZIP архив
-                zip_path = temp_dir / f"avatar_{avatar_id}.zip"
-                
-                with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-                    for photo_path in photo_paths:
-                        if photo_path.exists():
-                            # Используем только имя файла в архиве
-                            arcname = photo_path.name
-                            zipf.write(photo_path, arcname=arcname)
-                
-                logger.info(f"[FAL AI] Создан архив: {zip_path} ({len(photo_paths)} фото)")
-                
-                if self.test_mode:
-                    # В тестовом режиме возвращаем мок URL
-                    return f"https://fal.ai/test/archive_{avatar_id}.zip"
-                
-                # Загружаем архив на FAL AI
-                data_url = await fal_client.upload_file_async(str(zip_path))
-                
-                logger.info(f"[FAL AI] Архив загружен: {data_url}")
-                return data_url
-                
-            except Exception as e:
-                logger.exception(f"[FAL AI] Ошибка создания архива: {e}")
-                return None
-
-    async def download_photos_from_minio(
-        self, 
-        photo_urls: List[str], 
-        avatar_id: UUID
-    ) -> List[Path]:
-        """
-        Скачивает фотографии из MinIO во временную директорию
-        
-        Args:
-            photo_urls: Список URL фотографий в MinIO
-            avatar_id: ID аватара для создания временной директории
-            
-        Returns:
-            List[Path]: Пути к скачанным файлам
-        """
-        import tempfile
-        
-        with tempfile.TemporaryDirectory(prefix=f"avatar_{avatar_id}_") as temp_dir_name:
-            temp_dir = Path(temp_dir_name)
-            photo_paths = []
-            
-            try:
-                # Импортируем StorageService здесь чтобы избежать циклических импортов
-                from ..storage import StorageService
-                storage = StorageService()
-                
-                for i, minio_key in enumerate(photo_urls):
-                    try:
-                        # minio_key содержит полный путь, например: avatars/user_id/avatar_id/photo_1.jpeg
-                        # Используем весь путь как object_name, bucket всегда "avatars"
-                        bucket_name = "avatars"
-                        object_name = minio_key
-                        
-                        # Скачиваем файл из MinIO
-                        photo_data = await storage.download_file(bucket_name, object_name)
-                        
-                        if not photo_data:
-                            logger.warning(f"[FAL AI] Не удалось скачать фото {bucket_name}/{object_name}")
-                            continue
-                        
-                        # Сохраняем файл во временную директорию
-                        photo_path = temp_dir / f"photo_{i+1:02d}.jpg"
-                        
-                        # Проверяем и конвертируем изображение
-                        try:
-                            # Открываем изображение для валидации
-                            with Image.open(io.BytesIO(photo_data)) as img:
-                                # Конвертируем в RGB если нужно
-                                if img.mode != 'RGB':
-                                    img = img.convert('RGB')
-                                
-                                # Сохраняем в JPEG
-                                img.save(photo_path, 'JPEG', quality=95)
-                                photo_paths.append(photo_path)
-                                
-                                logger.debug(f"[FAL AI] Сохранено фото: {photo_path}")
-                        
-                        except Exception as img_error:
-                            logger.warning(f"[FAL AI] Ошибка обработки изображения {bucket_name}/{object_name}: {img_error}")
-                            continue
-                    
-                    except Exception as e:
-                        logger.warning(f"[FAL AI] Ошибка скачивания фото {minio_key}: {e}")
-                        continue
-                
-                logger.info(f"[FAL AI] Скачано {len(photo_paths)} фотографий для аватара {avatar_id}")
-                return photo_paths
-                
-            except Exception as e:
-                logger.exception(f"[FAL AI] Ошибка скачивания фотографий: {e}")
-                return []
-
-    async def create_and_upload_archive(
-        self, 
-        photo_paths: List[Path], 
-        avatar_id: UUID
-    ) -> Optional[str]:
-        """
-        Создает ZIP архив с фотографиями и загружает на FAL AI
-        
-        Args:
-            photo_paths: Пути к фотографиям
-            avatar_id: ID аватара
-            
-        Returns:
-            Optional[str]: URL загруженного архива
-        """
-        try:
-            with tempfile.TemporaryDirectory() as tmpdir:
-                zip_path = Path(tmpdir) / f"avatar_{avatar_id}.zip"
-                
-                # Создаем ZIP архив
-                with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-                    for photo_path in photo_paths:
-                        if photo_path.exists():
-                            # Используем только имя файла в архиве
-                            arcname = photo_path.name
-                            zipf.write(photo_path, arcname=arcname)
-                
-                logger.info(f"[FAL AI] Создан архив: {zip_path} ({len(photo_paths)} фото)")
-                
-                if self.test_mode:
-                    # В тестовом режиме возвращаем мок URL
-                    return f"https://fal.ai/test/archive_{avatar_id}.zip"
-                
-                # Загружаем архив на FAL AI
-                data_url = await fal_client.upload_file_async(str(zip_path))
-                
-                logger.info(f"[FAL AI] Архив загружен: {data_url}")
-                return data_url
-                
-        except Exception as e:
-            logger.exception(f"[FAL AI] Ошибка создания/загрузки архива: {e}")
-            return None
-
-    async def _submit_training(
-        self,
-        data_url: str,
-        user_id: UUID,
-        avatar_id: UUID,
-        config: Dict[str, Any]
-    ) -> Optional[str]:
-        """
-        Отправляет задачу на обучение в FAL AI
-        
-        Args:
-            data_url: URL архива с фотографиями
-            user_id: ID пользователя
-            avatar_id: ID аватара
-            config: Конфигурация обучения
-            
-        Returns:
-            Optional[str]: request_id (НЕ finetune_id!)
-        """
-        try:
-            # Формируем аргументы для FAL AI
-            arguments = {
-                "data_url": data_url,
-                "mode": config["mode"],
-                "finetune_comment": f"user_{user_id}_avatar_{avatar_id}",
-                "iterations": config["iterations"],
-                "priority": config["priority"],
-                "captioning": config["captioning"],
-                "trigger_word": config["trigger_word"],
-                "lora_rank": config["lora_rank"],
-                "finetune_type": config["finetune_type"],
-            }
-            
-            logger.info(f"[FAL AI] Отправка задачи на обучение: {arguments}")
-            
-            if self.test_mode:
-                # В тестовом режиме возвращаем мок request_id
-                return f"test_request_{avatar_id}_{user_id}"
-            
-            # Отправляем задачу на обучение (НЕ ЖДЕМ РЕЗУЛЬТАТ!)
-            handler = await fal_client.submit_async(
-                "fal-ai/flux-pro-trainer",
-                arguments=arguments,
-                webhook_url=config.get("webhook_url")
-            )
-            
-            # ИСПРАВЛЕНИЕ: Возвращаем request_id сразу, не ждем завершения
-            request_id = handler.request_id
-            
-            logger.info(f"[FAL AI] Задача отправлена, request_id: {request_id}")
-            return request_id
-            
-        except Exception as e:
-            logger.exception(f"[FAL AI] Ошибка отправки задачи на обучение: {e}")
-            return None
-
+    # Методы делегирования для обратной совместимости
+    async def download_and_create_archive(self, photo_urls: List[str], avatar_id: UUID) -> Optional[str]:
+        """Скачивает фотографии и создает архив"""
+        return await self.file_manager.download_and_create_archive(photo_urls, avatar_id)
+    
+    async def download_photos_from_minio(self, photo_urls: List[str], avatar_id: UUID) -> List:
+        """Скачивает фотографии из MinIO"""
+        return await self.file_manager.download_photos_from_minio(photo_urls, avatar_id)
+    
+    async def create_and_upload_archive(self, photo_paths: List, avatar_id: UUID) -> Optional[str]:
+        """Создает и загружает архив"""
+        return await self.file_manager.create_and_upload_archive(photo_paths, avatar_id)
+    
     async def train_portrait_model(
         self,
         images_data_url: str,
@@ -489,103 +153,40 @@ class FalAIClient:
         create_masks: bool = False,
         webhook_url: Optional[str] = None
     ) -> Optional[str]:
-        """
-        Обучение портретной модели через FAL AI flux-lora-portrait-trainer
-        
-        Args:
-            images_data_url: URL архива с изображениями
-            trigger_phrase: Триггерная фраза (если None, будет использоваться trigger_word)
-            steps: Количество шагов обучения (по умолчанию 1000)
-            learning_rate: Скорость обучения (по умолчанию 0.0002)
-            multiresolution_training: Мультиразрешающее обучение
-            subject_crop: Автообрезка субъекта
-            create_masks: Создание масок
-            webhook_url: URL для webhook уведомлений
-            
-        Returns:
-            Optional[str]: request_id или None при ошибке
-        """
-        try:
-            if self.test_mode:
-                logger.info(f"[FAL TEST MODE] Симуляция портретного обучения")
-                await asyncio.sleep(0.1)
-                return f"test_portrait_request_{int(asyncio.get_event_loop().time())}"
-            
-            # Формируем аргументы согласно FAL AI API
-            arguments = {
-                "images_data_url": images_data_url,
-                "learning_rate": learning_rate,
-                "steps": steps,
-                "multiresolution_training": multiresolution_training,
-                "subject_crop": subject_crop,
-                "create_masks": create_masks
-            }
-            
-            # Добавляем trigger_phrase если указан
-            if trigger_phrase:
-                arguments["trigger_phrase"] = trigger_phrase
-            
-            logger.info(f"[FAL AI] Запуск портретного обучения: {arguments}")
-            
-            # Отправляем задачу на обучение
-            handler = await fal_client.submit_async(
-                "fal-ai/flux-lora-portrait-trainer",
-                arguments=arguments,
-                webhook_url=webhook_url
-            )
-            
-            request_id = handler.request_id
-            logger.info(f"[FAL AI] Портретное обучение запущено, request_id: {request_id}")
-            return request_id
-            
-        except Exception as e:
-            logger.exception(f"[FAL AI] Ошибка запуска портретного обучения: {e}")
-            return None
-
+        """Запускает портретное обучение"""
+        return await self.trainer.train_portrait_model(
+            images_data_url=images_data_url,
+            trigger_phrase=trigger_phrase,
+            steps=steps,
+            learning_rate=learning_rate,
+            multiresolution_training=multiresolution_training,
+            subject_crop=subject_crop,
+            create_masks=create_masks,
+            webhook_url=webhook_url
+        )
+    
     async def _cleanup_temp_files(self):
         """Очищает временные файлы"""
-        try:
-            temp_dir = Path(settings.TEMP_DIR)
-            if temp_dir.exists():
-                # Удаляем только файлы аватаров старше 1 часа
-                import time
-                current_time = time.time()
-                
-                for avatar_dir in temp_dir.glob("avatar_*"):
-                    if avatar_dir.is_dir():
-                        # Проверяем время создания
-                        if current_time - avatar_dir.stat().st_ctime > 3600:  # 1 час
-                            import shutil
-                            shutil.rmtree(avatar_dir, ignore_errors=True)
-                            logger.debug(f"[FAL AI] Удалена временная директория: {avatar_dir}")
-                            
-        except Exception as e:
-            logger.warning(f"[FAL AI] Ошибка очистки временных файлов: {e}")
-
+        await self.file_manager.cleanup_temp_files()
+    
+    def parse_webhook_status(self, webhook_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Парсит данные webhook"""
+        return self.status_checker.parse_webhook_status(webhook_data)
+    
     def is_available(self) -> bool:
-        """
-        Проверяет доступность FAL AI сервиса
-        
-        Returns:
-            bool: True если сервис доступен
-        """
-        if self.test_mode:
-            return True
-            
-        return bool(self.api_key)
-
+        """Проверяет доступность FAL AI"""
+        return bool(self.api_key) or self.test_mode
+    
     def get_config_summary(self) -> Dict[str, Any]:
-        """
-        Возвращает сводку текущей конфигурации
-        
-        Returns:
-            Dict[str, Any]: Конфигурация клиента
-        """
-        return {
+        """Получает сводку конфигурации"""
+        base_config = {
+            "api_available": bool(self.api_key),
             "test_mode": self.test_mode,
-            "api_key_set": bool(self.api_key),
-            "webhook_url": settings.FAL_WEBHOOK_URL,
-            "portrait_steps": settings.FAL_PORTRAIT_STEPS,
-            "portrait_learning_rate": settings.FAL_PORTRAIT_LEARNING_RATE,
-            "portrait_subject_crop": settings.FAL_PORTRAIT_SUBJECT_CROP,
-        } 
+            "fal_api_key_set": bool(self.api_key)
+        }
+        
+        # Добавляем конфигурацию обучения
+        training_config = self.trainer.get_training_config_summary()
+        base_config.update(training_config)
+        
+        return base_config 

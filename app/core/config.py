@@ -100,6 +100,7 @@ class Settings(BaseSettings):
     # Стоимость сервисов (в кредитах)
     AVATAR_CREATION_COST: float = Field(10.0, env="AVATAR_CREATION_COST")
     AVATAR_GENERATION_COST: float = Field(1.0, env="AVATAR_GENERATION_COST")
+    IMAGE_GENERATION_COST: float = Field(50.0, env="IMAGE_GENERATION_COST")  # Стоимость генерации изображения
     
     # Управление хранением фотографий
     DELETE_PHOTOS_AFTER_TRAINING: bool = Field(True, env="DELETE_PHOTOS_AFTER_TRAINING")  # Удалять фото после обучения
