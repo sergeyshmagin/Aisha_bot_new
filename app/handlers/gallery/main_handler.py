@@ -101,6 +101,12 @@ async def handle_gallery_toggle_favorite(callback: CallbackQuery):
     gallery_manager = GalleryManager()
     await gallery_manager.toggle_favorite(callback)
 
+@router.callback_query(F.data.startswith("gallery_favorite:"))
+async def handle_gallery_favorite(callback: CallbackQuery):
+    """Обработчик избранного (новый callback)"""
+    gallery_manager = GalleryManager()
+    await gallery_manager.toggle_favorite(callback)
+
 @router.callback_query(F.data.startswith("gallery_delete:"))
 async def handle_gallery_delete(callback: CallbackQuery):
     """Обработчик запроса удаления изображения"""
@@ -188,3 +194,43 @@ async def handle_filter_favorites(callback: CallbackQuery):
 async def handle_noop(callback: CallbackQuery):
     """Обработчик пустых callback'ов"""
     await callback.answer()
+
+@router.callback_query(F.data == "show_current_image")
+async def handle_show_current_image(callback: CallbackQuery):
+    """Обработчик кнопки 'Показать изображение' при fallback"""
+    try:
+        # Принудительно обновляем текущее изображение
+        gallery_viewer = GalleryViewer()
+        
+        # Получаем пользователя
+        user = await gallery_viewer.get_user_from_callback(callback, show_error=False)
+        if not user:
+            await callback.answer("❌ Перезайдите в галерею", show_alert=True)
+            return
+        
+        # Получаем изображения из кэша или БД
+        from .gallery_viewer import ultra_gallery_cache
+        images = await ultra_gallery_cache.get_user_images(user.id)
+        if not images:
+            images = await gallery_viewer._get_user_completed_images_ultra_fast(user.id)
+            if not images:
+                await callback.answer("❌ Изображения не найдены", show_alert=True)
+                return
+        
+        # Берем первое изображение или восстанавливаем состояние
+        current_idx = 0
+        try:
+            saved_index = await ultra_gallery_cache.get_user_gallery_state(user.id)
+            if saved_index is not None and saved_index < len(images):
+                current_idx = saved_index
+        except:
+            pass
+        
+        # Принудительно обновляем изображение
+        await gallery_viewer._send_image_card_ultra_ultra_fast(callback, images, current_idx, user.id)
+        
+        logger.info(f"🔄 Принудительное обновление изображения для пользователя {user.telegram_id}")
+        
+    except Exception as e:
+        logger.exception(f"Ошибка принудительного показа изображения: {e}")
+        await callback.answer("❌ Ошибка загрузки изображения", show_alert=True)

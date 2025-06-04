@@ -50,92 +50,96 @@ async def start_command(message: Message, state: FSMContext):
 @router.callback_query(F.data == "main_menu")
 async def show_main_menu(call: CallbackQuery, state: FSMContext):
     """
-    Показывает главное меню.
+    Показывает главное меню БЕЗ создания новых сообщений.
     """
     await state.clear()
     
     menu_text = "🏠 **Главное меню**\n\nВыберите действие:"
     
     try:
-        # Проверяем, есть ли текст в сообщении
-        if call.message.text or call.message.caption:
-            # Уровень 1: Попытка с Markdown
+        if call.message.photo:
+            # ✅ ИСПРАВЛЕНИЕ: Если сообщение с фото - редактируем подпись
+            await call.message.edit_caption(
+                caption=menu_text,
+                reply_markup=get_main_menu(),
+                parse_mode="Markdown"
+            )
+            logger.debug("✅ Главное меню: отредактирована подпись фото")
+            
+        elif call.message.text or call.message.caption:
+            # ✅ Обычное текстовое сообщение - редактируем текст
             await call.message.edit_text(
                 menu_text,
                 reply_markup=get_main_menu(),
                 parse_mode="Markdown"
             )
+            logger.debug("✅ Главное меню: отредактирован текст")
+            
         else:
-            # Если сообщение не содержит текста (например, фото), отправляем новое
+            # ❌ Неизвестный тип сообщения - отправляем новое (крайний случай)
             await call.message.answer(
                 menu_text,
                 reply_markup=get_main_menu(),
                 parse_mode="Markdown"
             )
+            logger.debug("⚠️ Главное меню: отправлено новое сообщение (неизвестный тип)")
+            
     except TelegramBadRequest as markdown_error:
         if "parse entities" in str(markdown_error):
-            # Уровень 2: Проблема с парсингом Markdown - отправляем без форматирования
-            logger.warning(f"Проблема с Markdown парсингом в главном меню, отправляю без форматирования: {markdown_error}")
-            
-            menu_text_plain = menu_text.replace('**', '')
+            # Проблема с Markdown - повторяем без форматирования
+            menu_text_plain = "🏠 Главное меню\n\nВыберите действие:"
             
             try:
-                if call.message.text or call.message.caption:
+                if call.message.photo:
+                    await call.message.edit_caption(
+                        caption=menu_text_plain,
+                        reply_markup=get_main_menu()
+                    )
+                elif call.message.text or call.message.caption:
                     await call.message.edit_text(
                         menu_text_plain,
-                        reply_markup=get_main_menu(),
-                        parse_mode=None
+                        reply_markup=get_main_menu()
                     )
                 else:
                     await call.message.answer(
                         menu_text_plain,
-                        reply_markup=get_main_menu(),
-                        parse_mode=None
+                        reply_markup=get_main_menu()
                     )
             except Exception as fallback_error:
-                # Уровень 3: Критическая ошибка - отправляем новое сообщение
                 logger.exception(f"Критическая ошибка при fallback главного меню: {fallback_error}")
-                try:
-                    await call.message.answer(
-                        menu_text_plain,
-                        reply_markup=get_main_menu(),
-                        parse_mode=None
-                    )
-                except Exception as final_error:
-                    logger.exception(f"Финальная ошибка главного меню: {final_error}")
-                    await call.answer("❌ Ошибка главного меню", show_alert=True)
+                await call.answer("❌ Ошибка главного меню", show_alert=True)
+                
         elif "there is no text in the message to edit" in str(markdown_error):
-            # Специфическая ошибка - нет текста для редактирования
-            logger.warning(f"Сообщение не содержит текста для редактирования, отправляю новое: {markdown_error}")
+            # Нет текста для редактирования - пробуем edit_caption
             try:
+                await call.message.edit_caption(
+                    caption=menu_text.replace('**', ''),
+                    reply_markup=get_main_menu()
+                )
+            except Exception:
+                # Если и это не работает - отправляем новое
                 await call.message.answer(
                     menu_text.replace('**', ''),
-                    reply_markup=get_main_menu(),
-                    parse_mode=None
+                    reply_markup=get_main_menu()
                 )
-            except Exception as fallback_error:
-                logger.exception(f"Ошибка при отправке нового сообщения: {fallback_error}")
-                await call.answer("❌ Ошибка загрузки меню", show_alert=True)
+                
         else:
             # Другая ошибка Telegram
-            logger.exception(f"Другая ошибка Telegram в главном меню: {markdown_error}")
-            # Fallback - отправляем новое сообщение без форматирования
+            logger.warning(f"Telegram ошибка в главном меню: {markdown_error}")
             try:
                 await call.message.answer(
                     "🏠 Главное меню\n\nВыберите действие:",
-                    reply_markup=get_main_menu(),
-                    parse_mode=None
+                    reply_markup=get_main_menu()
                 )
             except Exception:
                 await call.answer("❌ Ошибка загрузки меню", show_alert=True)
+                
     except Exception as general_error:
-        # Общая ошибка
         logger.exception(f"Общая ошибка в главном меню: {general_error}")
         try:
             await call.message.answer(
                 "🏠 Главное меню\n\nВыберите действие:",
-                reply_markup=get_main_menu(),
-                parse_mode=None
+                reply_markup=get_main_menu()
             )
         except Exception:
             await call.answer("❌ Произошла ошибка", show_alert=True)

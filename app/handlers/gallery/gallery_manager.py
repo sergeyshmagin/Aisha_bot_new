@@ -274,9 +274,9 @@ class GalleryManager(BaseHandler):
             success = await self.generation_service.delete_generation(generation_id)
             
             if success:
-                # Очищаем кэш галереи (ВАЖНО для обновления)
-                from .gallery_viewer import gallery_cache
-                await gallery_cache.clear_user_cache(user.id)
+                # 🚀 ОЧИЩАЕМ УЛЬТРАБЫСТРЫЙ КЭШ ГАЛЕРЕИ (ВАЖНО для обновления)
+                from .gallery_viewer import ultra_gallery_cache
+                await ultra_gallery_cache.clear_all_cache(user.id)
                 
                 await callback.answer("✅ Изображение удалено", show_alert=True)
                 
