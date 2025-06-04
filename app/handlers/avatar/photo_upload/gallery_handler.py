@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 import logging
 import json
 
-from app.core.di import get_avatar_service, get_redis
+from app.core.di import get_avatar_service, get_redis, get_user_service
 from app.database.models import AvatarPhoto
 from app.keyboards.photo_upload import get_photo_gallery_navigation_keyboard
 
@@ -228,9 +228,17 @@ class PhotoUploadGalleryHandler:
             
             photo = photos[photo_index]
             
-            # Удаляем фото через сервис
+            # Получаем user UUID из БД
+            async with get_user_service() as user_service:
+                user = await user_service.get_user_by_telegram_id(str(user_id))
+                if not user:
+                    await callback.answer("❌ Пользователь не найден", show_alert=True)
+                    return
+                user_uuid = user.id
+            
+            # Удаляем фото через сервис с правильными параметрами
             async with get_avatar_service() as avatar_service:
-                await avatar_service.delete_avatar_photo(UUID(photo["id"]))
+                await avatar_service.delete_avatar_photo(UUID(photo["id"]), user_uuid)
             
             # Обновляем кэш
             photos.pop(photo_index)

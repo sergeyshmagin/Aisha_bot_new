@@ -14,29 +14,84 @@ from app.core.logger import get_logger
 logger = get_logger(__name__)
 router = Router()
 
+async def safe_edit_or_send_message(
+    callback: CallbackQuery, 
+    text: str, 
+    keyboard: InlineKeyboardMarkup = None, 
+    parse_mode: str = None
+):
+    """
+    Безопасная отправка или редактирование сообщения
+    Обрабатывает случаи когда сообщение содержит фото и не может быть отредактировано
+    """
+    try:
+        # Сначала пробуем редактировать
+        if callback.message.photo:
+            # Если это фото - удаляем и отправляем новое текстовое
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass  # Игнорируем ошибки удаления
+            
+            await callback.message.answer(
+                text=text,
+                reply_markup=keyboard,
+                parse_mode=parse_mode
+            )
+        else:
+            # Если это текстовое сообщение - редактируем
+            await callback.message.edit_text(
+                text=text,
+                reply_markup=keyboard,
+                parse_mode=parse_mode
+            )
+    except TelegramBadRequest as e:
+        if "message is not modified" in str(e).lower():
+            # Сообщение не изменилось - это нормально
+            pass
+        elif "there is no text in the message to edit" in str(e).lower():
+            # Нельзя редактировать - отправляем новое
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass
+            
+            await callback.message.answer(
+                text=text,
+                reply_markup=keyboard,
+                parse_mode=parse_mode
+            )
+        else:
+            # Другая ошибка - fallback на новое сообщение
+            logger.warning(f"Ошибка редактирования сообщения: {e}")
+            await callback.message.answer(
+                text=text,
+                reply_markup=keyboard,
+                parse_mode=parse_mode
+            )
+    except Exception as e:
+        # Общая ошибка - fallback на новое сообщение
+        logger.warning(f"Неожиданная ошибка отправки сообщения: {e}")
+        await callback.message.answer(
+            text=text,
+            reply_markup=keyboard,
+            parse_mode=parse_mode
+        )
+
 @router.callback_query(F.data == "create_avatar")
 async def start_avatar_creation(callback: CallbackQuery, state: FSMContext):
-    """Начинает создание аватара с упрощенным workflow - сразу портретная модель"""
+    """Начало создания аватара с выбором пола"""
     try:
-        logger.info(f"[CREATE_AVATAR] Получен callback create_avatar от пользователя {callback.from_user.id}")
+        await state.clear()
         
-        # Автоматически устанавливаем портретную модель как лучший выбор
+        # ✅ Устанавливаем training_type по умолчанию
         await state.update_data(training_type="portrait")
         
-        # Показываем приветствие и сразу переходим к выбору пола
         text = """
-🎭 **Создание AI аватара** ⭐
+🎭 **Создание вашего AI-аватара**
 
-**Мы выбрали для вас лучшую модель - Портретную!**
-
-✨ **Что вы получите:**
-• Высококачественные портреты с детализацией лица
-• Автоматическая оптимизация для людей
-• Быстрое обучение (3-15 минут)
-• Превосходное качество для селфи и фото
-
-🚀 **Процесс создания:**
-1. ✅ Модель: Портретная (уже выбрана)
+Простые шаги:
+1. ✅ Создаём новый аватар
 2. 👥 Выберите пол для оптимизации
 3. 📝 Придумайте имя аватара  
 4. 📸 Загрузите 10-20 фотографий
@@ -47,9 +102,11 @@ async def start_avatar_creation(callback: CallbackQuery, state: FSMContext):
         
         keyboard = get_avatar_gender_keyboard()
         
-        await callback.message.edit_text(
+        # ✅ БЕЗОПАСНАЯ отправка сообщения
+        await safe_edit_or_send_message(
+            callback=callback,
             text=text,
-            reply_markup=keyboard,
+            keyboard=keyboard,
             parse_mode="Markdown"
         )
         
@@ -73,9 +130,11 @@ async def show_gender_selection(callback: CallbackQuery, state: FSMContext):
         
         keyboard = get_avatar_gender_keyboard()
         
-        await callback.message.edit_text(
+        # ✅ БЕЗОПАСНАЯ отправка сообщения
+        await safe_edit_or_send_message(
+            callback=callback,
             text=text,
-            reply_markup=keyboard
+            keyboard=keyboard
         )
         await state.set_state(AvatarStates.selecting_gender)
         
@@ -115,7 +174,9 @@ async def select_avatar_gender(callback: CallbackQuery, state: FSMContext):
 ✍️ **Напишите имя:**
 """
         
-        await callback.message.edit_text(
+        # ✅ БЕЗОПАСНАЯ отправка сообщения
+        await safe_edit_or_send_message(
+            callback=callback,
             text=text
         )
         
@@ -176,12 +237,16 @@ async def process_avatar_name(message: Message, state: FSMContext):
             user_id = user.id
         
         async with get_avatar_service() as avatar_service:
+            # ✅ ИСПРАВЛЕНО: Правильное преобразование строк в enum
+            gender_enum = AvatarGender.MALE if gender.lower() == "male" else AvatarGender.FEMALE
+            training_type_enum = AvatarTrainingType.PORTRAIT if training_type.lower() == "portrait" else AvatarTrainingType.STYLE
+            
             avatar = await avatar_service.create_avatar(
                 user_id=user_id,
                 name=name,
-                gender=AvatarGender(gender),
+                gender=gender_enum,  # Правильный enum
                 avatar_type=AvatarType.CHARACTER,
-                training_type=AvatarTrainingType(training_type)
+                training_type=training_type_enum  # Правильный enum
             )
             
             # Сохраняем ID аватара в состоянии

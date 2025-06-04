@@ -58,13 +58,15 @@ class AvatarService(BaseService):
             "gender": gender_value,
             "avatar_type": avatar_type_value,
             "training_type": training_type_value,
-            "status": "draft",  # Передаём lowercase строковое значение
-            # FIXED: удаляем Legacy поле is_draft - используем только status="DRAFT"
+            "status": "DRAFT",  # ✅ ИСПРАВЛЕНО: используем uppercase как в архиве
             "avatar_data": avatar_data,
             # Принудительно передаем все enum поля как uppercase строки
             "fal_priority": "QUALITY",
             "finetune_type": "LORA",
         }
+        
+        # ✅ Создаем аватар без is_draft - поле удалено из БД
+        logger.info(f"[CREATE_AVATAR] data_for_repo содержит: {list(data_for_repo.keys())}")
         
         avatar = await self.avatar_repo.create(data_for_repo)
         
@@ -231,7 +233,7 @@ class AvatarService(BaseService):
     async def finalize_avatar(self, avatar_id: UUID) -> Optional[Avatar]:
         """Завершить создание аватара"""
         avatar = await self.avatar_repo.update(avatar_id, {
-            # FIXED: удаляем is_draft, оставляем только status
+            # ✅ ИСПРАВЛЕНО: используем только status - поле is_draft удалено из БД
             "status": "ready_for_training"  # Передаём lowercase строковое значение
         })
         
