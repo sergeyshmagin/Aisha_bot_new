@@ -9,10 +9,12 @@ from aiogram.fsm.context import FSMContext
 from app.shared.handlers.base_handler import BaseHandler
 from app.shared.decorators.auth_decorators import require_user, require_main_avatar
 from app.core.logger import get_logger
+from app.core.di import get_user_service
 from app.services.generation.image_analysis_service import ImageAnalysisService
 from app.services.user_settings import UserSettingsService
 from .states import GenerationStates
 from .keyboards import build_photo_prompt_keyboard, build_aspect_ratio_keyboard
+from app.database.models.user_settings import UserSettings
 
 logger = get_logger(__name__)
 
@@ -40,8 +42,15 @@ class PhotoPromptHandler(BaseHandler):
             data_parts = callback.data.split(":")
             avatar_id = UUID(data_parts[1])
             
+            # Добавляем логирование для диагностики
+            logger.info(f"[PhotoPromptInput] User {user.telegram_id}, callback_data: {callback.data}")
+            logger.info(f"[PhotoPromptInput] Avatar ID from callback: {avatar_id}")
+            logger.info(f"[PhotoPromptInput] Main avatar ID: {main_avatar.id}")
+            logger.info(f"[PhotoPromptInput] Main avatar name: {main_avatar.name}")
+            
             # Проверяем что это тот же аватар
             if avatar_id != main_avatar.id:
+                logger.warning(f"[PhotoPromptInput] Avatar mismatch: callback={avatar_id} != main={main_avatar.id}")
                 await callback.answer("❌ Неверный аватар", show_alert=True)
                 return
             
@@ -113,11 +122,17 @@ class PhotoPromptHandler(BaseHandler):
             
             # Получаем пользователя
             user = await self.get_user_from_message(message)
-            if not user or user.id != UUID(user_id):
+            if not user:
+                await message.reply("❌ Пользователь не найден")
+                await self.safe_clear_state(state)
+                return
+                
+            # Проверяем соответствие пользователя (сравниваем строковые представления UUID)
+            if str(user.id) != user_id:
                 await message.reply("❌ Ошибка авторизации")
                 await self.safe_clear_state(state)
                 return
-            
+
             # Получаем аватар
             avatar = await self.get_avatar_by_id(
                 UUID(avatar_id), 
@@ -134,7 +149,7 @@ class PhotoPromptHandler(BaseHandler):
                 await self.safe_clear_state(state)
                 return
             
-            # Показываем сообщение об анализе
+            # 🔍 ЭТАП 1: Анализ изображения
             analysis_message = await message.reply(
                 f"""🔍 <b>Анализирую изображение...</b>
 
@@ -155,6 +170,23 @@ class PhotoPromptHandler(BaseHandler):
             image_bytes = await self._extract_image_from_message(message, analysis_message)
             if not image_bytes:
                 return
+            
+            # 🤖 ЭТАП 2: ИИ-анализ
+            await analysis_message.edit_text(
+                f"""🤖 <b>ИИ анализирует изображение...</b>
+
+🎭 <b>Аватар:</b> {avatar.name}
+📸 <b>Изображение:</b> {len(image_bytes)} байт получено
+🔍 <b>GPT-4 Vision:</b> Анализирует содержимое...
+
+⏳ <b>Прогресс:</b>
+• ✅ Анализ изображения
+• ⏳ Создание промпта...
+• ⏳ Запуск генерации...
+
+💡 Создаём детальный фотореалистичный промпт""",
+                parse_mode="HTML"
+            )
             
             # Анализируем изображение
             avatar_type = avatar.training_type.value if avatar.training_type else "portrait"
@@ -183,19 +215,20 @@ class PhotoPromptHandler(BaseHandler):
             except Exception as e:
                 logger.warning(f"Не удалось удалить сообщение с фото: {e}")
             
-            # Обновляем сообщение с результатом анализа
+            # ✅ ЭТАП 3: Промпт создан - показываем выбор размера
             await analysis_message.edit_text(
-                f"""✅ <b>Анализ завершен!</b>
+                f"""✅ <b>Промпт создан!</b>
 
-🔍 <b>Анализ изображения:</b>
-{analysis_result['analysis']}
+🎭 <b>Аватар:</b> {avatar.name}
+✍️ <b>Промпт:</b> Создан ({len(analysis_result['prompt'])} символов)
+🎨 <b>Стиль:</b> Профессиональная фотография 8K
 
-✍️ <b>Создан детальный кинематографический промпт:</b>
-• Длина: {len(analysis_result['prompt'])} символов
-• Стиль: Профессиональная фотография 8K
-• Технические детали: Добавлены автоматически
+⏳ <b>Прогресс:</b>
+• ✅ Анализ изображения
+• ✅ Создание промпта
+• ⏳ Выберите размер...
 
-📐 <b>Выберите размер изображения...</b>""",
+📐 <b>Выберите размер изображения:</b>""",
                 parse_mode="HTML"
             )
             
@@ -206,10 +239,11 @@ class PhotoPromptHandler(BaseHandler):
             # Сохраняем данные анализа в состоянии
             await state.update_data(
                 avatar_id=str(avatar_id),
+                user_id=str(user.id),
                 custom_prompt=analysis_result['prompt'],  # Используем промпт от GPT Vision
                 avatar_name=avatar.name,
                 is_photo_analysis=True,
-                original_analysis=analysis_result['analysis']
+                original_analysis=analysis_result.get('analysis', 'Анализ выполнен')
             )
             
             if quick_mode:
@@ -277,11 +311,12 @@ class PhotoPromptHandler(BaseHandler):
             # Получаем данные из состояния
             data = await state.get_data()
             avatar_name = data.get("avatar_name")
+            custom_prompt = data.get("custom_prompt", "")
             
-            text = f"""📐 <b>Выберите формат изображения</b>
+            text = f"""📐 <b>Выберите размер изображения</b>
 
 🎭 <b>Аватар:</b> {avatar_name}
-🔍 <b>Анализ:</b> {analysis_result['analysis'][:100]}{"..." if len(analysis_result['analysis']) > 100 else ""}
+✍️ <b>Промпт:</b> Создан ({len(custom_prompt)} символов)
 
 👇 <b>Выберите соотношение сторон:</b>"""
             
@@ -307,23 +342,90 @@ class PhotoPromptHandler(BaseHandler):
         """Запускает генерацию изображения по фото-промпту"""
         
         try:
-            # Импортируем GenerationMonitor для запуска генерации
+            # Получаем данные из состояния
+            data = await state.get_data()
+            avatar_id = data.get("avatar_id")
+            custom_prompt = data.get("custom_prompt")
+            avatar_name = data.get("avatar_name")
+            
+            if not all([avatar_id, custom_prompt]):
+                await message.edit_text("❌ Ошибка: не найдены данные для генерации")
+                await self.safe_clear_state(state)
+                return
+            
+            user_telegram_id = message.chat.id
+            
+            # Получаем пользователя по telegram_id 
+            async with get_user_service() as user_service:
+                user = await user_service.get_user_by_telegram_id(str(user_telegram_id))
+                
+            if not user:
+                await message.edit_text("❌ Пользователь не найден")
+                await self.safe_clear_state(state)
+                return
+            
+            # Получаем название размера для отображения
+            valid_options = UserSettings.get_aspect_ratio_options()
+            aspect_name = valid_options.get(aspect_ratio, {}).get("name", aspect_ratio)
+            
+            # Обновляем сообщение на генерацию
+            await message.edit_text(
+                f"""🎨 <b>Создаю изображение по фото...</b>
+
+🔍 <b>Анализ:</b> {str(analysis_result.get('analysis', 'Анализ выполнен'))[:80]}{'...' if len(str(analysis_result.get('analysis', ''))) > 80 else ''}
+🎭 <b>Аватар:</b> {avatar_name}
+📐 <b>Размер:</b> {aspect_name}
+⚡ <b>Модель:</b> FLUX 1.1 Ultra (максимальный фотореализм)
+
+⏳ <b>Генерация запущена...</b>
+💡 Обычно занимает 30-60 секунд""",
+                parse_mode="HTML"
+            )
+            
+            # Импортируем генерационный сервис
+            from app.services.generation.generation_service import ImageGenerationService
+            from uuid import UUID
+            
+            generation_service = ImageGenerationService()
+            
+            # Запускаем генерацию
+            generation = await generation_service.generate_custom(
+                user_id=user.id,
+                avatar_id=UUID(avatar_id),
+                custom_prompt=custom_prompt,
+                aspect_ratio=aspect_ratio
+            )
+            
+            if not generation:
+                await message.edit_text(
+                    "❌ Не удалось запустить генерацию. Попробуйте еще раз.",
+                    parse_mode="HTML"
+                )
+                await self.safe_clear_state(state)
+                return
+            
+            # Очищаем состояние
+            await self.safe_clear_state(state)
+            
+            # Импортируем и запускаем мониторинг статуса
             from .generation_monitor import GenerationMonitor
             
             generation_monitor = GenerationMonitor()
             
-            # Обновляем состояние с флагом фото-анализа
-            await state.update_data(is_photo_analysis=True)
-            
-            # Запускаем генерацию через монитор
-            await generation_monitor.start_generation(
-                message, state, aspect_ratio, is_photo_analysis=True
+            # Сразу запускаем мониторинг статуса
+            await generation_monitor.monitor_generation_status(
+                message, 
+                generation, 
+                f"[Фото-анализ] {custom_prompt}", 
+                avatar_name
             )
             
+            logger.info(f"Запущена фото-генерация {generation.id} с размером {aspect_ratio} для пользователя {user_telegram_id}")
+            
+        except ValueError as e:
+            await message.edit_text(f"❌ {str(e)}")
+            await self.safe_clear_state(state)
         except Exception as e:
             logger.exception(f"Ошибка запуска фото-генерации: {e}")
-            await message.edit_text(
-                "❌ Произошла ошибка при запуске генерации",
-                parse_mode="HTML"
-            )
+            await message.edit_text("❌ Произошла ошибка при запуске генерации")
             await self.safe_clear_state(state) 

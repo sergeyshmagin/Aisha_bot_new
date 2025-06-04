@@ -7,6 +7,7 @@ from uuid import UUID
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 from app.database.models.generation import StyleCategory, StyleTemplate
+from app.database.models.user_settings import UserSettings
 
 
 def build_generation_menu_keyboard(
@@ -74,34 +75,42 @@ def build_generation_menu_keyboard(
 def build_aspect_ratio_keyboard() -> InlineKeyboardMarkup:
     """Строит клавиатуру выбора соотношения сторон"""
     
-    buttons = [
-        [
-            InlineKeyboardButton(
-                text="📱 Портрет (9:16)",
-                callback_data="aspect_ratio:9:16"
-            ),
-            InlineKeyboardButton(
-                text="🖼️ Квадрат (1:1)",
-                callback_data="aspect_ratio:1:1"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="🖥️ Альбом (16:9)",
-                callback_data="aspect_ratio:16:9"
-            ),
-            InlineKeyboardButton(
-                text="📄 A4 (3:4)",
-                callback_data="aspect_ratio:3:4"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                text="🔙 Назад",
-                callback_data="generation_menu"
-            )
-        ]
-    ]
+    # Получаем доступные варианты из модели
+    aspect_options = UserSettings.get_aspect_ratio_options()
+    
+    buttons = []
+    
+    # Первая строка: портрет и квадрат
+    buttons.append([
+        InlineKeyboardButton(
+            text=aspect_options["9:16"]["name"] + " (9:16)",
+            callback_data="aspect_ratio:9:16"
+        ),
+        InlineKeyboardButton(
+            text=aspect_options["1:1"]["name"] + " (1:1)",
+            callback_data="aspect_ratio:1:1"
+        )
+    ])
+    
+    # Вторая строка: альбом и A4
+    buttons.append([
+        InlineKeyboardButton(
+            text=aspect_options["16:9"]["name"] + " (16:9)",
+            callback_data="aspect_ratio:16:9"
+        ),
+        InlineKeyboardButton(
+            text=aspect_options["3:4"]["name"] + " (3:4)",
+            callback_data="aspect_ratio:3:4"
+        )
+    ])
+    
+    # Кнопка "Назад"
+    buttons.append([
+        InlineKeyboardButton(
+            text="🔙 Назад",
+            callback_data="generation_menu"
+        )
+    ])
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 

@@ -26,7 +26,7 @@ class AvatarService(BaseService):
 
     async def create_avatar(
         self, 
-        user_id: int, 
+        user_id: UUID, 
         name: str = None, 
         gender = None, 
         avatar_type = None, 
@@ -113,7 +113,7 @@ class AvatarService(BaseService):
             logger.exception(f"Ошибка при получении аватара {avatar_id}: {e}")
             raise
 
-    async def get_user_avatars(self, user_id: int) -> List[Avatar]:
+    async def get_user_avatars(self, user_id: UUID) -> List[Avatar]:
         """Получить все аватары пользователя с кешированием"""
         # ✅ Проверяем кеш списка аватаров
         cached_avatar_ids = await cache_service.get_cached_user_avatars_list(user_id)
@@ -136,7 +136,7 @@ class AvatarService(BaseService):
         
         return avatars
 
-    async def get_user_draft_avatar(self, user_id: int) -> Optional[Avatar]:
+    async def get_user_draft_avatar(self, user_id: UUID) -> Optional[Avatar]:
         """Получить черновик аватара пользователя"""
         return await self.avatar_repo.get_user_draft_avatar(user_id)
 
@@ -319,7 +319,7 @@ class AvatarService(BaseService):
             logger.exception(f"Ошибка при удалении фото аватара {photo_id}: {e}")
             return False
 
-    async def set_main_avatar(self, user_id: int, avatar_id: UUID) -> bool:
+    async def set_main_avatar(self, user_id: UUID, avatar_id: UUID) -> bool:
         """
         Устанавливает аватар как основной для пользователя
         
@@ -332,7 +332,7 @@ class AvatarService(BaseService):
         """
         try:
             # Сначала убираем флаг is_main у всех аватаров пользователя
-            await self.avatar_repo.unset_all_main_avatars(user_id)
+            await self.avatar_repo.clear_main_avatar(user_id)
             
             # Устанавливаем флаг is_main для указанного аватара
             avatar = await self.avatar_repo.update(avatar_id, {"is_main": True})
@@ -352,7 +352,7 @@ class AvatarService(BaseService):
             logger.exception(f"Ошибка при установке основного аватара {avatar_id} для пользователя {user_id}: {e}")
             return False
 
-    async def unset_main_avatar(self, user_id: int) -> bool:
+    async def unset_main_avatar(self, user_id: UUID) -> bool:
         """
         Убирает флаг основного аватара у всех аватаров пользователя
         
@@ -363,19 +363,19 @@ class AvatarService(BaseService):
             bool: Результат операции
         """
         try:
-            result = await self.avatar_repo.unset_all_main_avatars(user_id)
+            await self.avatar_repo.clear_main_avatar(user_id)
             
             # ✅ Сбрасываем кеш списка аватаров
             await cache_service.delete(f"user_avatars:{user_id}")
             
             logger.info(f"Убран флаг основного аватара для всех аватаров пользователя {user_id}")
-            return result
+            return True
             
         except Exception as e:
             logger.exception(f"Ошибка при сбросе основного аватара для пользователя {user_id}: {e}")
             return False
 
-    async def get_main_avatar(self, user_id: int) -> Optional[Avatar]:
+    async def get_main_avatar(self, user_id: UUID) -> Optional[Avatar]:
         """
         Получает основной аватар пользователя
         
@@ -391,7 +391,7 @@ class AvatarService(BaseService):
             logger.exception(f"Ошибка при получении основного аватара пользователя {user_id}: {e}")
             return None
 
-    async def get_user_avatars_with_photos(self, user_id: int) -> List[Avatar]:
+    async def get_user_avatars_with_photos(self, user_id: UUID) -> List[Avatar]:
         """
         Получает все аватары пользователя с загруженными фотографиями
         

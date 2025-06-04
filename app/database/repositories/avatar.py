@@ -36,7 +36,7 @@ class AvatarRepository(BaseRepository[Avatar]):
         
         return avatar
 
-    async def get_user_avatars(self, user_id: int) -> List[Avatar]:
+    async def get_user_avatars(self, user_id: UUID) -> List[Avatar]:
         """Получить все аватары пользователя (с фотографиями, отсортированными по порядку загрузки)"""
         stmt = (
             select(self.model)
@@ -53,7 +53,7 @@ class AvatarRepository(BaseRepository[Avatar]):
         
         return avatars
 
-    async def get_user_draft_avatar(self, user_id: int) -> Optional[Avatar]:
+    async def get_user_draft_avatar(self, user_id: UUID) -> Optional[Avatar]:
         """Получить черновик аватара пользователя (с фотографиями, отсортированными по порядку загрузки)"""
         stmt = (
             select(self.model)
@@ -69,7 +69,7 @@ class AvatarRepository(BaseRepository[Avatar]):
         
         return avatar
 
-    async def get_main_avatar(self, user_id: int) -> Optional[Avatar]:
+    async def get_main_avatar(self, user_id: UUID) -> Optional[Avatar]:
         """Получить основной аватар пользователя (с фотографиями, отсортированными по порядку загрузки)"""
         stmt = (
             select(self.model)
@@ -85,7 +85,7 @@ class AvatarRepository(BaseRepository[Avatar]):
         
         return avatar
 
-    async def clear_main_avatar(self, user_id: int) -> None:
+    async def clear_main_avatar(self, user_id: UUID) -> None:
         """
         Убирает флаг is_main у ВСЕХ аватаров пользователя
         
@@ -102,7 +102,7 @@ class AvatarRepository(BaseRepository[Avatar]):
         )
         await self.session.execute(stmt)
 
-    async def count_main_avatars(self, user_id: int) -> int:
+    async def count_main_avatars(self, user_id: UUID) -> int:
         """
         Подсчитывает количество основных аватаров у пользователя
         
@@ -122,7 +122,7 @@ class AvatarRepository(BaseRepository[Avatar]):
         result = await self.session.execute(stmt)
         return result.scalar() or 0
 
-    async def get_user_avatars_with_photos(self, user_id: int) -> List[Avatar]:
+    async def get_user_avatars_with_photos(self, user_id: UUID) -> List[Avatar]:
         """Получить все завершенные аватары пользователя с фотографиями (отсортированными по порядку загрузки)"""
         stmt = (
             select(self.model)

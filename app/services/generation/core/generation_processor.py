@@ -55,25 +55,34 @@ class GenerationProcessor:
                 generation.num_images
             )
             
+            # Получаем аватар для генерации
+            from app.services.generation.core.generation_manager import GenerationManager
+            manager = GenerationManager()
+            avatar = await manager.get_avatar(generation.avatar_id, generation.user_id)
+            
+            if not avatar:
+                raise Exception(f"Аватар {generation.avatar_id} не найден")
+            
             # Запускаем генерацию через FAL AI
             logger.info(f"[Generation Process] Отправляем запрос в FAL AI: {generation.final_prompt[:100]}...")
             
-            fal_result = await self.fal_service.generate_image(
+            image_url = await self.fal_service.generate_avatar_image(
+                avatar=avatar,
                 prompt=generation.final_prompt,
-                **config
+                generation_config=config
             )
             
-            if not fal_result or not fal_result.get('images'):
+            if not image_url:
                 raise Exception("FAL AI вернул пустой результат")
             
-            # Сохраняем изображения в MinIO
-            fal_urls = fal_result['images']
-            logger.info(f"[Generation Process] Получено {len(fal_urls)} изображений от FAL AI")
+            # Формируем результат в ожидаемом формате
+            fal_result = {'images': [image_url]}
             
-            saved_urls = await self.storage.save_images_to_minio(generation, fal_urls)
+            # Сохраняем изображения в MinIO
+            saved_urls = await self.storage.save_images_to_minio(generation, fal_result['images'])
             
             # Используем MinIO URL если удалось сохранить, иначе fallback к FAL URL
-            result_urls = saved_urls if saved_urls else fal_urls
+            result_urls = saved_urls if saved_urls else fal_result['images']
             
             # Обновляем генерацию с результатами
             generation.result_urls = result_urls

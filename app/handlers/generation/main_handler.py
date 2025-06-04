@@ -66,11 +66,36 @@ class GenerationMainHandler(BaseHandler):
                 generation_cost=GENERATION_COST
             )
             
-            await callback.message.edit_text(
-                text=text,
-                reply_markup=keyboard,
-                parse_mode="HTML"
-            )
+            # Правильная обработка сообщений с изображениями
+            try:
+                if callback.message.photo:
+                    # Если это сообщение с фото - удаляем и отправляем новое
+                    await callback.message.delete()
+                    await callback.message.answer(
+                        text=text,
+                        reply_markup=keyboard,
+                        parse_mode="HTML"
+                    )
+                else:
+                    # Если это текстовое сообщение - редактируем
+                    await callback.message.edit_text(
+                        text=text,
+                        reply_markup=keyboard,
+                        parse_mode="HTML"
+                    )
+            except Exception as msg_error:
+                # Fallback: всегда удаляем и отправляем новое
+                logger.debug(f"Ошибка редактирования сообщения: {msg_error}")
+                try:
+                    await callback.message.delete()
+                except Exception:
+                    pass
+                    
+                await callback.message.answer(
+                    text=text,
+                    reply_markup=keyboard,
+                    parse_mode="HTML"
+                )
             
             logger.info(f"Показано меню генерации для пользователя {user.telegram_id}")
             
@@ -81,37 +106,70 @@ class GenerationMainHandler(BaseHandler):
     async def process_aspect_ratio_selection(self, callback: CallbackQuery, state: FSMContext):
         """Обрабатывает выбор соотношения сторон"""
         
+        logger.info(f"[DEBUG] Получен aspect_ratio callback: {callback.data}")
         try:
-            # Извлекаем данные из callback (aspect_ratio:width:height)
-            data_parts = callback.data.split(":")
-            if len(data_parts) != 3:
+            # Извлекаем выбранное соотношение из callback_data (aspect_ratio:3:4)
+            callback_parts = callback.data.split(":")
+            if len(callback_parts) < 3:
+                logger.warning(f"[DEBUG] Неверный формат callback_data: {callback.data}")
                 await callback.answer("❌ Неверный формат данных", show_alert=True)
                 return
+                
+            aspect_ratio = ":".join(callback_parts[1:])  # Берет "3:4" из "aspect_ratio:3:4"
+            logger.info(f"[DEBUG] Извлеченное соотношение: {aspect_ratio}")
             
-            aspect_ratio = f"{data_parts[1]}:{data_parts[2]}"
+            # Проверяем что соотношение валидно
+            from app.database.models.user_settings import UserSettings
+            valid_options = UserSettings.get_aspect_ratio_options()
+            logger.info(f"[DEBUG] Доступные варианты: {list(valid_options.keys())}")
+            
+            if aspect_ratio not in valid_options:
+                logger.warning(f"[DEBUG] Соотношение {aspect_ratio} не найдено в {list(valid_options.keys())}")
+                try:
+                    await callback.answer("❌ Неверное соотношение сторон", show_alert=True)
+                except Exception:
+                    logger.warning("Callback устарел при проверке соотношения")
+                return
+            
+            logger.info(f"[DEBUG] Соотношение {aspect_ratio} найдено, запускаем генерацию")
             
             # Получаем данные из состояния
             data = await state.get_data()
             is_photo_analysis = data.get("is_photo_analysis", False)
             
             if is_photo_analysis:
-                # Фото-анализ - передаем в photo_prompt_handler
+                # Для фото-анализа создаем analysis_result из сохраненных данных
                 analysis_result = {
-                    'prompt': data.get("custom_prompt"),
-                    'analysis': data.get("original_analysis", "Анализ выполнен")
+                    'analysis': data.get("original_analysis", ""),
+                    'prompt': data.get("custom_prompt", "")
                 }
+                
+                # Запускаем фото-генерацию
                 await self.photo_prompt_handler.start_photo_generation(
                     callback.message, state, aspect_ratio, analysis_result
                 )
             else:
-                # Кастомный промпт - передаем в generation_monitor
+                # Обычная генерация через монитор
                 await self.generation_monitor.start_generation_from_callback(
                     callback, state, aspect_ratio
-                    )
+                )
+            
+            # ✅ БЕЗОПАСНОЕ ЗАВЕРШЕНИЕ - callback.answer() только если не устарел
+            try:
+                await callback.answer()
+            except Exception as e:
+                if "query is too old" in str(e):
+                    logger.info(f"Callback устарел для {callback.from_user.id}, но генерация запущена")
+                else:
+                    logger.warning(f"Ошибка callback.answer() в process_aspect_ratio_selection: {e}")
             
         except Exception as e:
-            logger.exception(f"Ошибка обработки выбора соотношения сторон: {e}")
-            await callback.answer("❌ Произошла ошибка", show_alert=True)
+            logger.exception(f"Ошибка обработки выбора размера: {e}")
+            # ✅ БЕЗОПАСНАЯ ОБРАБОТКА ОШИБОК  
+            try:
+                await callback.answer("❌ Произошла ошибка", show_alert=True)
+            except Exception:
+                logger.warning(f"Callback устарел при обработке ошибки: {e}")
             await self.safe_clear_state(state)
 
 

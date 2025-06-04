@@ -100,7 +100,7 @@ class CustomPromptHandler(BaseHandler):
             
             # Получаем пользователя
             user = await self.get_user_from_message(message)
-            if not user or user.id != user_id:
+            if not user or str(user.id) != str(user_id):
                 await message.reply("❌ Ошибка авторизации")
                 await self.safe_clear_state(state)
                 return

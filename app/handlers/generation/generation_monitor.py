@@ -43,7 +43,7 @@ class GenerationMonitor(BaseHandler):
             
             # Получаем пользователя
             user = await self.get_user_from_message(message, show_error=False)
-            if not user or user.id != user_id:
+            if not user or str(user.id) != str(user_id):
                 await message.reply("❌ Ошибка авторизации")
                 await self.safe_clear_state(state)
                 return
@@ -93,10 +93,10 @@ class GenerationMonitor(BaseHandler):
             )
             
             # Запускаем генерацию
-            generation = await self.generation_service.start_generation(
+            generation = await self.generation_service.generate_custom(
                 user_id=user.id,
                 avatar_id=avatar_id,
-                prompt=custom_prompt,
+                custom_prompt=custom_prompt,
                 aspect_ratio=aspect_ratio
             )
             
@@ -158,7 +158,7 @@ class GenerationMonitor(BaseHandler):
             
             # Получаем пользователя
             user = await self.get_user_from_callback(callback, show_error=False)
-            if not user or user.id != user_id:
+            if not user or str(user.id) != str(user_id):
                 await callback.answer("❌ Ошибка авторизации", show_alert=True)
                 await self.safe_clear_state(state)
                 return
@@ -208,10 +208,10 @@ class GenerationMonitor(BaseHandler):
             )
             
             # Запускаем генерацию
-            generation = await self.generation_service.start_generation(
+            generation = await self.generation_service.generate_custom(
                 user_id=user.id,
                 avatar_id=avatar_id,
-                prompt=custom_prompt,
+                custom_prompt=custom_prompt,
                 aspect_ratio=aspect_ratio
             )
             

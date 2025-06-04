@@ -104,10 +104,15 @@ class BaseHandler:
             Avatar объект или None если не найден
         """
         try:
+            logger.info(f"[BaseHandler] get_avatar_by_id called: avatar_id={avatar_id}, user_id={user_id}")
+            logger.info(f"[BaseHandler] Types: avatar_id={type(avatar_id)}, user_id={type(user_id)}")
+            
             async with get_avatar_service() as avatar_service:
                 avatar = await avatar_service.get_avatar(avatar_id)
+                logger.info(f"[BaseHandler] Avatar from service: {avatar}")
                 
                 if not avatar:
+                    logger.warning(f"[BaseHandler] Avatar {avatar_id} not found in database")
                     if show_error:
                         error_msg = "❌ Аватар не найден"
                         if callback:
@@ -116,16 +121,29 @@ class BaseHandler:
                             await message.reply(error_msg)
                     return None
                 
-                # Проверяем принадлежность пользователю
-                if user_id and avatar.user_id != user_id:
-                    if show_error:
-                        error_msg = "❌ Аватар не принадлежит вам"
-                        if callback:
-                            await callback.answer(error_msg, show_alert=True)
-                        elif message:
-                            await message.reply(error_msg)
-                    return None
+                logger.info(f"[BaseHandler] Avatar found: id={avatar.id}, user_id={avatar.user_id}, name={avatar.name}")
+                logger.info(f"[BaseHandler] Avatar user_id type: {type(avatar.user_id)}")
                 
+                # Проверяем принадлежность пользователю
+                if user_id:
+                    logger.info(f"[BaseHandler] Checking ownership: avatar.user_id={avatar.user_id} vs user_id={user_id}")
+                    
+                    # Приводим user_id к UUID если это строка
+                    user_uuid = UUID(user_id) if isinstance(user_id, str) else user_id
+                    logger.info(f"[BaseHandler] Converted user_id to UUID: {user_uuid}, type: {type(user_uuid)}")
+                    logger.info(f"[BaseHandler] Ownership check result: {avatar.user_id == user_uuid}")
+                    
+                    if avatar.user_id != user_uuid:
+                        logger.error(f"[BaseHandler] OWNERSHIP FAILED: avatar belongs to {avatar.user_id}, but checking for {user_uuid}")
+                        if show_error:
+                            error_msg = "❌ Аватар не принадлежит вам"
+                            if callback:
+                                await callback.answer(error_msg, show_alert=True)
+                            elif message:
+                                await message.reply(error_msg)
+                        return None
+                
+                logger.info(f"[BaseHandler] Ownership check passed, returning avatar")
                 return avatar
                 
         except Exception as e:
