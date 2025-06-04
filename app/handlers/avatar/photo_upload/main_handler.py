@@ -207,7 +207,7 @@ class PhotoUploadHandler:
         try:
             # Очищаем кэш галереи
             user_id = callback.from_user.id
-            self.gallery_handler.clear_gallery_cache(user_id)
+            await self.gallery_handler.clear_gallery_cache(user_id)
             
             # Получаем данные из состояния
             data = await state.get_data()
@@ -248,7 +248,7 @@ class PhotoUploadHandler:
             
             # Очищаем кэши
             self.progress_handler.clear_progress_cache(user_id)
-            self.gallery_handler.clear_gallery_cache(user_id)
+            await self.gallery_handler.clear_gallery_cache(user_id)
             
             # Очищаем кэш загрузок
             from .upload_handler import user_upload_locks

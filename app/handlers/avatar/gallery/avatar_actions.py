@@ -87,8 +87,8 @@ class AvatarActionsHandler:
                     return
             
             async with get_avatar_service() as avatar_service:
-                avatar = await avatar_service.get_avatar_by_id(avatar_id)
-                if not avatar or avatar.user_id != user.id:
+                avatar = await avatar_service.get_avatar(avatar_id)
+                if not avatar or str(avatar.user_id) != str(user.id):
                     await callback.answer("❌ Аватар не найден", show_alert=True)
                     return
             
@@ -167,8 +167,8 @@ class AvatarActionsHandler:
             # Получаем название аватара перед удалением
             avatar_name = "аватар"
             async with get_avatar_service() as avatar_service:
-                avatar = await avatar_service.get_avatar_by_id(avatar_id)
-                if avatar and avatar.user_id == user.id:
+                avatar = await avatar_service.get_avatar(avatar_id)
+                if avatar and str(avatar.user_id) == str(user.id):
                     avatar_name = avatar.name or "Безымянный аватар"
                 
                 # Удаляем аватар
