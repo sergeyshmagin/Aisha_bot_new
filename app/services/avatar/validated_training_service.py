@@ -115,7 +115,7 @@ class ValidatedTrainingService:
             logger.exception(f"❌ Критическая ошибка при запуске обучения аватара {avatar_id}: {e}")
             
             try:
-                await self._update_avatar_status(avatar_id, AvatarStatus.ERROR, error_message=str(e))
+                await self._update_avatar_status(avatar_id, AvatarStatus.error, error_message=str(e))
             except Exception as rollback_error:
                 logger.exception(f"Ошибка отката статуса: {rollback_error}")
             
@@ -192,7 +192,7 @@ class ValidatedTrainingService:
         if error_message:
             update_data["error_message"] = error_message
             
-        if status == AvatarStatus.TRAINING:
+        if status == AvatarStatus.TRAINING.value:
             update_data["training_started_at"] = datetime.utcnow()
 
         stmt = update(Avatar).where(Avatar.id == avatar_id).values(**update_data)
@@ -245,7 +245,7 @@ class ValidatedTrainingService:
             }
 
             # Проверяем статус
-            if avatar.status != AvatarStatus.COMPLETED:
+            if avatar.status != "completed":
                 report["issues_found"].append(f"Статус не COMPLETED: {avatar.status}")
                 return report
 

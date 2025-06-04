@@ -337,9 +337,8 @@ class TrainingHandler:
                     ])
                     
                     # Обновляем статус аватара на завершенный
-                    async with get_avatar_service() as avatar_service:
-                        await avatar_service.update_avatar_status(avatar_id, AvatarStatus.COMPLETED)
-                        
+                    await avatar_service.update_avatar_status(avatar_id, AvatarStatus.COMPLETED)
+                    
                 else:
                     # Показываем кнопку обновления только если есть смысл (прогресс > 0)
                     buttons = []
@@ -495,6 +494,53 @@ async def confirm_cancel_training(callback: CallbackQuery, state: FSMContext):
     except Exception as e:
         logger.exception(f"Ошибка при подтверждении отмены: {e}")
         await callback.answer("❌ Ошибка отмены", show_alert=True)
+
+@router.callback_query(F.data.startswith("generate_image_"))
+async def handle_generate_image(callback: CallbackQuery, state: FSMContext):
+    """Обработчик генерации изображения с аватаром"""
+    try:
+        # Извлекаем ID аватара
+        avatar_id_str = callback.data.split("_", 2)[2]
+        avatar_id = UUID(avatar_id_str)
+        
+        user_telegram_id = callback.from_user.id
+        
+        # Получаем пользователя
+        async with get_user_service() as user_service:
+            user = await user_service.get_user_by_telegram_id(str(user_telegram_id))
+            if not user:
+                await callback.answer("❌ Пользователь не найден", show_alert=True)
+                return
+        
+        # Получаем аватар
+        async with get_avatar_service() as avatar_service:
+            avatar = await avatar_service.get_avatar(avatar_id)
+            if not avatar or avatar.user_id != user.id:
+                await callback.answer("❌ Аватар не найден", show_alert=True)
+                return
+            
+            # Проверяем что аватар готов к использованию
+            if avatar.status != "completed":
+                await callback.answer("❌ Аватар ещё не готов к использованию", show_alert=True)
+                return
+            
+            # Устанавливаем этот аватар как основной если он не основной
+            if not avatar.is_main:
+                await avatar_service.set_main_avatar(user.id, avatar_id)
+                logger.info(f"Установлен основной аватар {avatar_id} для генерации пользователя {user_telegram_id}")
+        
+        # Переходим к основному menu генерации
+        from app.handlers.generation.main_handler import GenerationMainHandler
+        generation_handler = GenerationMainHandler()
+        
+        # Показываем основное меню генерации
+        await generation_handler.show_generation_menu(callback)
+        
+        logger.info(f"Пользователь {user_telegram_id} перенаправлен к генерации с аватаром {avatar_id}")
+        
+    except Exception as e:
+        logger.exception(f"Ошибка при переходе к генерации: {e}")
+        await callback.answer("❌ Произошла ошибка", show_alert=True)
 
 # Экспорт
 __all__ = ["training_handler", "router"] 

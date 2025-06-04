@@ -35,16 +35,11 @@ class AvatarMainHandler:
                     await callback.answer("❌ Пользователь не найден", show_alert=True)
                     return
             
-            # 🚀 ИСПРАВЛЕНИЕ: Получаем аватары через прямой SQL запрос
-            async with get_session() as session:
-                stmt = select(Avatar).where(
-                    Avatar.user_id == user.id,
-                    Avatar.status == AvatarStatus.COMPLETED
-                ).order_by(Avatar.created_at.desc())
-                
-                result = await session.execute(stmt)
-                user_avatars = list(result.scalars().all())
-                avatars_count = len(user_avatars)
+            # 🚀 ИСПРАВЛЕНИЕ: Используем ту же логику что и в галерее
+            async with get_avatar_service() as avatar_service:
+                # Получаем все аватары кроме черновиков (как в галерее)
+                avatars = await avatar_service.get_user_avatars_with_photos(user.id)
+                avatars_count = len(avatars)
             
             # Устанавливаем состояние
             await state.set_state(AvatarStates.menu)

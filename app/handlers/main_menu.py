@@ -159,13 +159,13 @@ async def show_my_gallery(call: CallbackQuery, state: FSMContext):
     Показывает персональную галерею пользователя.
     """
     # Импортируем обработчик галереи
-    from app.handlers.gallery import gallery_main_handler
+    from app.handlers.gallery import gallery_handler
     
     # Очищаем состояние
     await state.clear()
     
     # Вызываем метод нового обработчика галереи
-    await gallery_main_handler.show_gallery_main(call, state)
+    await gallery_handler.gallery_viewer.show_gallery_main(call, state)
 
 @router.callback_query(F.data == "transcribe_menu")
 async def show_transcribe_menu(call: CallbackQuery, state: FSMContext):

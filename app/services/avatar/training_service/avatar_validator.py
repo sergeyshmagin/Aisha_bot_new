@@ -46,7 +46,7 @@ class AvatarValidator:
             raise ValueError(f"Аватар {avatar_id} не готов к обучению (статус: {avatar.status})")
         
         # Проверяем что уже не обучается
-        if avatar.finetune_id and avatar.status == AvatarStatus.TRAINING:
+        if avatar.finetune_id and avatar.status == AvatarStatus.TRAINING.value:
             raise ValueError(f"Аватар {avatar_id} уже обучается (finetune_id: {avatar.finetune_id})")
         
         return avatar

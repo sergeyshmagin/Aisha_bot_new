@@ -202,13 +202,13 @@ class FALStatusChecker:
                             logger.warning(f"🔍 Аватар {avatar_id} не найден в БД")
                             return
                             
-                        if avatar.status != AvatarStatus.TRAINING:
+                        if avatar.status != "TRAINING":
                             consecutive_not_training_checks += 1
                             logger.info(f"🔍 Аватар {avatar_id} не в статусе TRAINING ({consecutive_not_training_checks}/{max_consecutive_checks})")
                             
                             # Останавливаем только после нескольких проверок подряд
                             if consecutive_not_training_checks >= max_consecutive_checks:
-                                logger.info(f"🔍 Останавливаем мониторинг для аватара {avatar_id} (статус: {avatar.status.value})")
+                                logger.info(f"🔍 Останавливаем мониторинг для аватара {avatar_id} (статус: {avatar.status})")
                                 return
                         else:
                             consecutive_not_training_checks = 0
@@ -276,16 +276,16 @@ class FALStatusChecker:
         
         # Маппинг статусов FAL AI в наши статусы
         status_mapping = {
-            "IN_QUEUE": AvatarStatus.TRAINING,
-            "IN_PROGRESS": AvatarStatus.TRAINING,
-            "COMPLETED": AvatarStatus.COMPLETED,
-            "FAILED": AvatarStatus.ERROR,
-            "CANCELLED": AvatarStatus.CANCELLED,
+            "IN_QUEUE": "TRAINING",
+            "IN_PROGRESS": "TRAINING",
+            "COMPLETED": "COMPLETED",
+            "FAILED": "ERROR",
+            "CANCELLED": "CANCELLED",
         }
         
-        new_status = status_mapping.get(fal_status, AvatarStatus.TRAINING)
+        new_status = status_mapping.get(fal_status, "TRAINING")
         
-        logger.info(f"🔍 Обновление статуса аватара {avatar_id}: {fal_status} -> {new_status.value}")
+        logger.info(f"🔍 Обновление статуса аватара {avatar_id}: {fal_status} -> {new_status}")
         
         # Если обучение завершено, получаем результат
         if fal_status == "COMPLETED":
@@ -385,7 +385,7 @@ class FALStatusChecker:
                 await self._set_completed_with_fallback(avatar_id, request_id, training_type)
             except Exception as fallback_error:
                 logger.error(f"🔍 Критическая ошибка установки fallback для аватара {avatar_id}: {fallback_error}")
-                await self._update_avatar_status(avatar_id, AvatarStatus.ERROR)
+                await self._update_avatar_status(avatar_id, "ERROR")
     
     async def _set_completed_with_fallback(self, avatar_id: UUID, request_id: str, training_type: str) -> None:
         """
@@ -412,14 +412,14 @@ class FALStatusChecker:
                 
                 # Применяем правила валидации для fallback данных
                 update_data = {
-                    "status": AvatarStatus.COMPLETED,
+                    "status": "completed",
                     "training_progress": 100,
                     "training_completed_at": datetime.utcnow(),
                     "updated_at": datetime.utcnow()
                 }
                 
                 # СТРОГИЕ ПРАВИЛА: разные данные для разных типов аватаров
-                if avatar.training_type == AvatarTrainingType.STYLE:
+                if avatar.training_type == "STYLE":
                     # Style аватары ДОЛЖНЫ иметь finetune_id и НЕ должны иметь LoRA
                     fallback_finetune_id = f"fallback-style-{avatar_name}-{avatar_id.hex[:8]}"
                     
@@ -518,7 +518,7 @@ class FALStatusChecker:
             logger.error(f"🔍 Ошибка запроса результата: {e}")
             return None
     
-    async def _update_avatar_status(self, avatar_id: UUID, status: AvatarStatus) -> None:
+    async def _update_avatar_status(self, avatar_id: UUID, status: str) -> None:
         """
         Обновляет статус аватара в БД
         
@@ -531,12 +531,12 @@ class FALStatusChecker:
                 avatar = await session.get(Avatar, avatar_id)
                 if avatar:
                     avatar.status = status
-                    if status == AvatarStatus.COMPLETED:
+                    if status == "completed":
                         avatar.training_completed_at = datetime.utcnow()
                         avatar.training_progress = 100
                     
                     await session.commit()
-                    logger.info(f"🔍 Статус аватара {avatar_id} обновлён на {status.value}")
+                    logger.info(f"🔍 Статус аватара {avatar_id} обновлён на {status}")
                     
         except Exception as e:
             logger.error(f"🔍 Ошибка обновления статуса аватара {avatar_id}: {e}")

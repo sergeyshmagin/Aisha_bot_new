@@ -213,79 +213,34 @@ class AvatarGalleryHandler:
                     return
             
             async with get_avatar_service() as avatar_service:
-                avatar = await avatar_service.get_avatar_by_id(avatar_id)
+                # 🚀 ИСПРАВЛЕНИЕ: используем правильный метод get_avatar и конвертируем в UUID
+                from uuid import UUID
+                avatar = await avatar_service.get_avatar(UUID(avatar_id))
                 if not avatar or avatar.user_id != user.id:
                     await callback.answer("❌ Аватар не найден", show_alert=True)
                     return
                 
                 # Проверяем что аватар готов к использованию
-                if avatar.status.value != "completed":
+                if avatar.status != "completed":
                     await callback.answer("❌ Аватар ещё не готов к использованию", show_alert=True)
                     return
             
-            # Переходим в меню генерации изображений
-            from app.handlers.image_generation.main import ImageGenerationHandler
+            # 🚀 КАРДИНАЛЬНОЕ ИСПРАВЛЕНИЕ: Используем основную логику генерации
+            # Вместо создания собственного потока, перенаправляем к GenerationMainHandler
             
-            # Сохраняем выбранный аватар в состояние
-            await state.update_data(selected_avatar_id=avatar_id)
+            # Сначала устанавливаем этот аватар как основной если он не основной
+            if not avatar.is_main:
+                await avatar_service.set_main_avatar(user.id, UUID(avatar_id))
+                logger.info(f"Установлен основной аватар {avatar_id} для генерации пользователя {user_telegram_id}")
             
-            # Показываем меню генерации изображений
-            text = f"""🎨 **Генерация изображений**
-
-🎭 **Выбранный аватар:** {avatar.name}
-✨ **Статус:** Готов к использованию
-
-📝 Введите описание изображения которое хотите создать с вашим аватаром.
-
-💡 **Примеры:**
-• "портрет в стиле ренессанса"
-• "космонавт в открытом космосе"
-• "супергерой в городе"
-• "художник за мольбертом"
-
-👆 Просто напишите ваше описание!"""
-
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [InlineKeyboardButton(
-                    text="🔙 Назад к аватарам",
-                    callback_data="avatar_gallery"
-                )]
-            ])
+            # Переходим к основному menu генерации
+            from app.handlers.generation.main_handler import GenerationMainHandler
+            generation_handler = GenerationMainHandler()
             
-            try:
-                # Уровень 1: Попытка с Markdown
-                await callback.message.edit_text(
-                    text,
-                    reply_markup=keyboard,
-                    parse_mode="Markdown"
-                )
-            except TelegramBadRequest as markdown_error:
-                if "parse entities" in str(markdown_error):
-                    # Уровень 2: Проблема с Markdown - отправляем без форматирования
-                    logger.warning(f"Проблема с Markdown в генерации с аватаром: {markdown_error}")
-                    text_plain = text.replace('**', '')
-                    
-                    try:
-                        await callback.message.edit_text(
-                            text_plain,
-                            reply_markup=keyboard,
-                            parse_mode=None
-                        )
-                    except Exception as fallback_error:
-                        logger.exception(f"Критическая ошибка при fallback генерации с аватаром: {fallback_error}")
-                        await callback.answer("❌ Ошибка отображения", show_alert=True)
-                        return
-                else:
-                    # Другая ошибка Telegram
-                    logger.exception(f"Другая ошибка Telegram при генерации с аватаром: {markdown_error}")
-                    await callback.answer("❌ Ошибка отображения", show_alert=True)
-                    return
+            # Показываем основное меню генерации
+            await generation_handler.show_generation_menu(callback)
             
-            # Устанавливаем состояние ожидания промпта
-            from app.handlers.image_generation.states import ImageGenerationStates
-            await state.set_state(ImageGenerationStates.waiting_for_prompt)
-            
-            logger.info(f"Пользователь {user_telegram_id} начал генерацию с аватаром {avatar_id}")
+            logger.info(f"Пользователь {user_telegram_id} перенаправлен к основной генерации с аватаром {avatar_id}")
             
         except Exception as e:
             logger.exception(f"Ошибка при переходе к генерации изображений: {e}")

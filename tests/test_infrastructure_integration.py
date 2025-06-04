@@ -6,19 +6,20 @@
 import asyncio
 import tempfile
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 import pytest
 import aiofiles
 import asyncpg
-from minio import Minio
-from minio.error import S3Error
+from minio import Minio, S3Error
 import redis.asyncio as redis
+import io
 
 from app.core.config import settings
 from app.database.models import User, Avatar, AvatarTrainingType, AvatarGender
 from app.core.database import get_session
 from app.services.avatar.redis_service import AvatarRedisService
+from app.core.logger import get_logger
 
 
 class TestDatabaseIntegration:
@@ -329,7 +330,7 @@ class TestMinIOIntegration:
                 print("✅ Файл скачан и содержимое совпадает")
             
             # Получение URL файла
-            url = client.presigned_get_object(bucket_name, test_filename, expires=3600)
+            url = client.presigned_get_object(bucket_name, test_filename, expires=timedelta(hours=1))
             assert url.startswith('http')
             print(f"✅ Presigned URL получен: {url[:50]}...")
             

@@ -58,7 +58,7 @@ class AvatarService(BaseService):
             "gender": gender_value,
             "avatar_type": avatar_type_value,
             "training_type": training_type_value,
-            "status": "DRAFT",  # Передаём uppercase строковое значение
+            "status": "draft",  # Передаём lowercase строковое значение
             # FIXED: удаляем Legacy поле is_draft - используем только status="DRAFT"
             "avatar_data": avatar_data,
             # Принудительно передаем все enum поля как uppercase строки
@@ -232,7 +232,7 @@ class AvatarService(BaseService):
         """Завершить создание аватара"""
         avatar = await self.avatar_repo.update(avatar_id, {
             # FIXED: удаляем is_draft, оставляем только status
-            "status": "READY_FOR_TRAINING"  # Передаём uppercase строковое значение
+            "status": "ready_for_training"  # Передаём lowercase строковое значение
         })
         
         # ✅ Сбрасываем кеши

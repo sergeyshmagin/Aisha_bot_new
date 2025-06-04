@@ -136,28 +136,28 @@ def get_avatar_actions_keyboard(avatar_id: str, status: AvatarStatus) -> InlineK
     buttons = []
     
     # Действия в зависимости от статуса
-    if status == AvatarStatus.COMPLETED:
+    if status == "completed":
         buttons.append([
             InlineKeyboardButton(
                 text="🎨 Генерировать изображение",
                 callback_data=f"generate_image_{avatar_id}"
             )
         ])
-    elif status == AvatarStatus.TRAINING:
+    elif status == "training":
         buttons.append([
             InlineKeyboardButton(
                 text="📊 Прогресс обучения",
                 callback_data=f"training_progress_{avatar_id}"
             )
         ])
-    elif status == AvatarStatus.READY_FOR_TRAINING:
+    elif status == "ready_for_training":
         buttons.append([
             InlineKeyboardButton(
                 text="🚀 Начать обучение",
                 callback_data=f"start_training_{avatar_id}"
             )
         ])
-    elif status == AvatarStatus.PHOTOS_UPLOADING:
+    elif status == "photos_uploading":
         buttons.append([
             InlineKeyboardButton(
                 text="📸 Продолжить загрузку",

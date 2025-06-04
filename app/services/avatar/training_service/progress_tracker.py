@@ -9,7 +9,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.database.models import Avatar
+from app.database.models import Avatar, AvatarStatus
 from app.services.fal.client import FalAIClient
 from .models import TrainingProgress
 
@@ -119,7 +119,6 @@ class ProgressTracker:
         """
         try:
             from sqlalchemy import func
-            from app.database.models import AvatarStatus
             
             # Базовый запрос
             query = select(
@@ -137,28 +136,43 @@ class ProgressTracker:
             # Дополнительная статистика
             total_avatars = sum(status_counts.values())
             
-            # Статистика времени обучения
+            # Статистика времени обучения для завершенных аватаров
             duration_query = select(
-                func.avg(
-                    func.extract('epoch', Avatar.training_completed_at - Avatar.training_started_at)
-                ).label('avg_duration'),
-                func.min(
-                    func.extract('epoch', Avatar.training_completed_at - Avatar.training_started_at)
-                ).label('min_duration'),
-                func.max(
-                    func.extract('epoch', Avatar.training_completed_at - Avatar.training_started_at)
-                ).label('max_duration')
+                Avatar.training_started_at,
+                Avatar.training_completed_at,
+                Avatar.status
             ).where(
                 Avatar.training_started_at.isnot(None),
-                Avatar.training_completed_at.isnot(None),
-                Avatar.status == AvatarStatus.COMPLETED
+                Avatar.training_completed_at.isnot(None)
             )
             
             if user_id:
                 duration_query = duration_query.where(Avatar.user_id == user_id)
             
             duration_result = await self.session.execute(duration_query)
-            duration_stats = duration_result.first()
+            completed_avatars = [
+                row for row in duration_result 
+                if row.status == AvatarStatus.COMPLETED.value
+            ]
+            
+            # Вычисляем статистику времени в Python
+            if completed_avatars:
+                durations = []
+                for row in completed_avatars:
+                    duration = (row.training_completed_at - row.training_started_at).total_seconds()
+                    durations.append(duration)
+                
+                duration_stats = {
+                    'avg_duration': sum(durations) / len(durations) if durations else 0,
+                    'min_duration': min(durations) if durations else 0,
+                    'max_duration': max(durations) if durations else 0
+                }
+            else:
+                duration_stats = {
+                    'avg_duration': 0,
+                    'min_duration': 0,
+                    'max_duration': 0
+                }
             
             statistics = {
                 "total_avatars": total_avatars,
@@ -167,11 +181,7 @@ class ProgressTracker:
                     status_counts.get("completed", 0) / total_avatars * 100 
                     if total_avatars > 0 else 0
                 ),
-                "training_duration": {
-                    "average_seconds": duration_stats.avg_duration if duration_stats.avg_duration else 0,
-                    "min_seconds": duration_stats.min_duration if duration_stats.min_duration else 0,
-                    "max_seconds": duration_stats.max_duration if duration_stats.max_duration else 0,
-                } if duration_stats else None
+                "training_duration": duration_stats
             }
             
             logger.info(f"[STATISTICS] Получена статистика обучения: {statistics}")

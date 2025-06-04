@@ -155,7 +155,7 @@ class WebhookHandler:
             "progress": webhook.progress,
         }
         
-        if new_status == AvatarStatus.ERROR:
+        if new_status == AvatarStatus.ERROR.value:
             update_params["error_message"] = webhook.message or "Ошибка обучения на FAL AI"
         
         await self._update_avatar_status(avatar_id, new_status, **update_params)

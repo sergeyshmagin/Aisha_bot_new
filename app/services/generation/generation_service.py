@@ -3,7 +3,7 @@
 """
 import asyncio
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Optional
 from uuid import UUID
 import aiohttp
@@ -372,7 +372,7 @@ class ImageGenerationService:
                         # Это MinIO URL
                         parts = url.split("/generated/")
                         if len(parts) > 1:
-                            object_path = "generated/" + parts[1].split("?")[0]  # Убираем query параметры
+                            object_path = parts[1].split("?")[0]  # 🔧 ИСПРАВЛЕНО: убран префикс "generated/"
                             bucket = "generated"
                             
                             logger.info(f"[MinIO Delete] Удаляем изображение {i+1}: bucket={bucket}, path={object_path}")
@@ -728,8 +728,7 @@ class ImageGenerationService:
         Returns:
             bool: True если аватар готов
         """
-        from app.database.models import AvatarStatus
-        return avatar.status == AvatarStatus.COMPLETED
+        return avatar.status == "completed"
     
     def _get_avatar_status_message(self, avatar: Avatar) -> str:
         """
@@ -741,15 +740,14 @@ class ImageGenerationService:
         Returns:
             str: Сообщение об ошибке для пользователя
         """
-        from app.database.models import AvatarStatus
-        
+        # Исправлено: используем строковые ключи вместо enum
         status_messages = {
-            AvatarStatus.DRAFT: f"Аватар '{avatar.name}' еще не готов - находится в статусе черновика",
-            AvatarStatus.PHOTOS_UPLOADING: f"Аватар '{avatar.name}' еще загружает фотографии",
-            AvatarStatus.READY_FOR_TRAINING: f"Аватар '{avatar.name}' готов к обучению, но обучение еще не запущено",
-            AvatarStatus.TRAINING: f"Аватар '{avatar.name}' в процессе обучения. Попробуйте позже",
-            AvatarStatus.ERROR: f"При обучении аватара '{avatar.name}' произошла ошибка",
-            AvatarStatus.CANCELLED: f"Обучение аватара '{avatar.name}' было отменено",
+            "draft": f"Аватар '{avatar.name}' еще не готов - находится в статусе черновика",
+            "photos_uploading": f"Аватар '{avatar.name}' еще загружает фотографии",
+            "ready_for_training": f"Аватар '{avatar.name}' готов к обучению, но обучение еще не запущено",
+            "training": f"Аватар '{avatar.name}' в процессе обучения. Попробуйте позже",
+            "error": f"При обучении аватара '{avatar.name}' произошла ошибка",
+            "cancelled": f"Обучение аватара '{avatar.name}' было отменено",
         }
         
         return status_messages.get(
@@ -790,13 +788,13 @@ class ImageGenerationService:
                                 logger.warning(f"[MinIO] Ошибка скачивания изображения {fal_url}: HTTP {response.status}")
                                 continue
                     
-                    # Генерируем путь для сохранения в MinIO
+                    # Генерируем путь для сохранения в MinIO (БЕЗ префикса "generated/")
                     date_str = datetime.now().strftime("%Y/%m/%d")
                     filename = f"{generation.id}_{i+1:02d}.jpg"
-                    object_path = f"generated/{date_str}/{filename}"
+                    object_path = f"{date_str}/{filename}"
                     
                     # Сохраняем в MinIO
-                    bucket = "generated"  # Или settings.MINIO_BUCKETS.get("generated", "generated")
+                    bucket = "generated"  # bucket уже содержит "generated"
                     
                     logger.info(f"[MinIO] Загружаем в MinIO: bucket={bucket}, path={object_path}")
                     
@@ -813,7 +811,7 @@ class ImageGenerationService:
                         minio_url = await storage.generate_presigned_url(
                             bucket=bucket,
                             object_name=object_path,
-                            expires=86400  # 1 день в секундах - безопасное значение
+                            expires=86400  # 1 день в секундах - ИСПРАВЛЕНО: используем int, а в MinioStorage происходит конвертация в timedelta
                         )
                         
                         if minio_url:

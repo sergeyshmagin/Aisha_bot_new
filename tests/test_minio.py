@@ -5,6 +5,7 @@ import io
 import pytest
 import pytest_asyncio
 from typing import AsyncGenerator
+from datetime import timedelta
 
 from minio import Minio
 from minio.error import S3Error
@@ -167,7 +168,7 @@ def test_minio_presigned_url(minio_client: Minio, test_bucket_name: str):
     presigned_url = minio_client.presigned_get_object(
         bucket_name=test_bucket_name,
         object_name=test_object_name,
-        expires=3600  # URL действителен 1 час
+        expires=timedelta(hours=1)  # URL действителен 1 час
     )
     
     # Assert

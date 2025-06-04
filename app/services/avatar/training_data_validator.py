@@ -48,7 +48,7 @@ class AvatarTrainingDataValidator:
         
         # Базовые данные
         update_data = {
-            "status": AvatarStatus.COMPLETED,
+            "status": AvatarStatus.COMPLETED.value,
             "training_progress": 100,
             "training_completed_at": self._parse_completed_at(webhook_result.get("completed_at")),
             "fal_response_data": webhook_result

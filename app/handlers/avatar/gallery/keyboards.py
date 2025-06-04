@@ -39,6 +39,12 @@ class GalleryKeyboards:
             
             buttons.append(nav_buttons)
         
+        # 🚀 НОВОЕ: Кнопка генерации для завершенных аватаров
+        if avatar_status == AvatarStatus.COMPLETED or avatar_status == "completed":
+            buttons.append([
+                InlineKeyboardButton(text="🎨 Генерировать", callback_data=f"avatar_generate:{avatar_id}")
+            ])
+        
         # Действия с аватаром
         action_buttons = []
         

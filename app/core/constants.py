@@ -84,18 +84,6 @@ class LogLevel(str, Enum):
     ERROR = "error"
     CRITICAL = "critical"
 
-class AvatarStatus(str, Enum):
-    """Статусы аватара"""
-    DRAFT = "draft"
-    UPLOADING = "uploading"
-    TRAINING = "training"
-    READY = "ready"
-    ERROR = "error"
-
-
-# AvatarGender перенесен в app.database.models для согласованности с БД
-
-
 # Лимиты
 MAX_PHOTOS_PER_AVATAR = 20
 MIN_PHOTOS_PER_AVATAR = 10

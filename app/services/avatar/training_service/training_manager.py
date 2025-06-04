@@ -79,7 +79,7 @@ class TrainingManager:
                 # Откатываем статус при ошибке
                 await self._update_avatar_status(
                     avatar_id,
-                    AvatarStatus.ERROR,
+                    AvatarStatus.error,
                     error_message="Не удалось запустить обучение на FAL AI"
                 )
                 raise RuntimeError("FAL AI не смог запустить обучение")
@@ -117,7 +117,7 @@ class TrainingManager:
             try:
                 await self._update_avatar_status(
                     avatar_id,
-                    AvatarStatus.ERROR,
+                    AvatarStatus.error,
                     error_message=str(e)
                 )
             except Exception as rollback_error:
@@ -153,7 +153,7 @@ class TrainingManager:
             # Обновляем статус на отмененный
             await self._update_avatar_status(
                 avatar_id,
-                AvatarStatus.CANCELLED,
+                AvatarStatus.cancelled,
                 progress=avatar.training_progress,
                 error_message="Обучение отменено пользователем"
             )
@@ -346,7 +346,7 @@ class TrainingManager:
                     return
                 
                 # Если аватар всё ещё в обучении - принудительно проверяем FAL AI
-                if avatar.status == AvatarStatus.TRAINING:
+                if avatar.status == "training":
                     logger.info(f"🔄 Отложенная проверка: аватар {avatar_id} всё ещё в обучении, проверяем FAL AI")
                     
                     from app.core.config import settings
@@ -414,7 +414,7 @@ class TrainingManager:
                                 logger.warning(f"🔄 Ошибка запроса к FAL AI при отложенной проверке {avatar_id}: HTTP {response.status}")
                                 await self._force_complete_avatar_with_fallback(avatar_id, request_id, training_type)
                 
-                elif avatar.status == AvatarStatus.COMPLETED:
+                elif avatar.status == "completed":
                     logger.info(f"🔄 Отложенная проверка: аватар {avatar_id} уже завершён")
                     
                     # Дополнительная проверка данных
@@ -422,7 +422,7 @@ class TrainingManager:
                         logger.warning(f"🔄 Аватар {avatar_id} завершён, но отсутствуют критичные данные, дополняем")
                         await self._ensure_avatar_data_completeness(avatar_id)
                 else:
-                    logger.info(f"🔄 Отложенная проверка: аватар {avatar_id} в статусе {avatar.status.value}")
+                    logger.info(f"🔄 Отложенная проверка: аватар {avatar_id} в статусе {avatar.status}")
                 
         except Exception as e:
             logger.error(f"🔄 Ошибка отложенной проверки для аватара {avatar_id}: {e}")
@@ -447,7 +447,7 @@ class TrainingManager:
                 fallback_lora_url = f"https://training-manager-fallback.com/lora/{avatar_name}.safetensors"
                 
                 # Устанавливаем завершённое состояние
-                avatar.status = AvatarStatus.COMPLETED
+                avatar.status = "completed"
                 avatar.training_progress = 100
                 avatar.training_completed_at = datetime.utcnow()
                 avatar.trigger_phrase = avatar.trigger_phrase or "TOK"

@@ -252,7 +252,7 @@ class FALGenerationService:
         from ...database.models import AvatarStatus
         
         # Проверяем статус
-        if avatar.status != AvatarStatus.COMPLETED:
+        if avatar.status != "completed":
             logger.warning(f"Аватар {avatar.id} не готов к генерации. Статус: {avatar.status}")
             return False
         

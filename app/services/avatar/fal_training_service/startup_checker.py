@@ -57,19 +57,21 @@ class StartupChecker:
         cutoff_time = datetime.utcnow() - timedelta(hours=self.max_training_age_hours)
         
         async with get_session() as session:
-            # Ищем аватары в статусе TRAINING с request_id
+            # Ищем аватары с request_id (фильтрация по статусу в Python)
             from sqlalchemy import select
             
             stmt = select(Avatar).where(
-                Avatar.status == AvatarStatus.TRAINING,
                 Avatar.fal_request_id.isnot(None),
                 Avatar.training_started_at > cutoff_time  # Не старше 24 часов
             )
             
             result = await session.execute(stmt)
-            avatars = result.scalars().all()
+            all_avatars = result.scalars().all()
             
-            return list(avatars)
+            # Фильтруем по статусу в Python коде
+            avatars = [avatar for avatar in all_avatars if avatar.status == AvatarStatus.TRAINING.value]
+            
+            return avatars
     
     async def _restore_avatar_monitoring(self, avatar: Avatar) -> None:
         """
@@ -278,7 +280,7 @@ class StartupChecker:
                 fallback_lora_url = f"https://startup-force-fallback.com/lora/{avatar_name}.safetensors"
                 
                 # Устанавливаем минимально необходимые данные
-                fresh_avatar.status = AvatarStatus.COMPLETED
+                fresh_avatar.status = AvatarStatus.COMPLETED.value
                 fresh_avatar.training_progress = 100
                 fresh_avatar.training_completed_at = datetime.utcnow()
                 fresh_avatar.trigger_phrase = fresh_avatar.trigger_phrase or "TOK"

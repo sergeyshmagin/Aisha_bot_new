@@ -4,7 +4,7 @@
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy import select, update, func
+from sqlalchemy import select, update, func, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -57,7 +57,7 @@ class AvatarRepository(BaseRepository[Avatar]):
         """Получить черновик аватара пользователя (с фотографиями, отсортированными по порядку загрузки)"""
         stmt = (
             select(self.model)
-            .where(self.model.user_id == user_id, self.model.status == "DRAFT")
+            .where(self.model.user_id == user_id, cast(self.model.status, String) == "draft")
             .options(selectinload(self.model.photos))
         )
         result = await self.session.execute(stmt)
@@ -128,7 +128,7 @@ class AvatarRepository(BaseRepository[Avatar]):
             select(self.model)
             .where(
                 self.model.user_id == user_id,
-                self.model.status != "DRAFT"
+                cast(self.model.status, String) != "draft"
             )
             .options(selectinload(self.model.photos))
             .order_by(self.model.is_main.desc(), self.model.created_at.desc())

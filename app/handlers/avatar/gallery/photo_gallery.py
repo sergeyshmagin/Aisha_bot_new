@@ -9,11 +9,12 @@ from aiogram.types import CallbackQuery, InputMediaPhoto, BufferedInputFile
 from aiogram.fsm.context import FSMContext
 
 from app.core.di import get_avatar_service
+from app.core.logger import get_logger
 from app.services.storage import StorageService
 from .keyboards import GalleryKeyboards
 from .models import gallery_cache
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 class PhotoGalleryHandler:
     """Обработчик фотогалереи аватаров"""
@@ -56,7 +57,19 @@ class PhotoGalleryHandler:
             
             # Загружаем фото из MinIO
             storage = StorageService()
-            photo_data = await storage.download_file("avatars", photo.minio_key)
+            
+            # 🔧 ИСПРАВЛЕНИЕ: Убираем дублирование префикса "avatars/"
+            # Если minio_key уже содержит "avatars/", используем его как есть
+            # Если нет - добавляем префикс
+            minio_key = photo.minio_key
+            if minio_key.startswith("avatars/"):
+                # Ключ уже содержит префикс - используем как object_name
+                photo_data = await storage.download_file("avatars", minio_key)
+            else:
+                # Ключ без префикса - добавляем его
+                photo_data = await storage.download_file("avatars", f"avatars/{minio_key}")
+            
+            logger.info(f"[Avatar Photo] Загружаем фото: bucket=avatars, key={minio_key}, размер={len(photo_data) if photo_data else 0} байт")
             
             if not photo_data:
                 await callback.answer("❌ Не удалось загрузить фото", show_alert=True)

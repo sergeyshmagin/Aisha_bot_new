@@ -3,6 +3,7 @@ from minio import Minio, S3Error
 from app.core.config import settings
 import asyncio
 from datetime import timedelta
+from typing import List
 
 class MinioStorage:
     def __init__(self):
@@ -100,4 +101,50 @@ class MinioStorage:
             return url
         except Exception as e:
             print(f"DEBUG: MinioStorage.generate_presigned_url: ОШИБКА {str(e)}")
-            return "" 
+            return ""
+
+    async def file_exists(self, bucket: str, object_name: str) -> bool:
+        """
+        Проверяет существование файла в MinIO
+        
+        Args:
+            bucket: Имя bucket
+            object_name: Путь к объекту
+            
+        Returns:
+            bool: True если файл существует
+        """
+        loop = asyncio.get_event_loop()
+        try:
+            # Используем stat_object для проверки существования
+            await loop.run_in_executor(
+                None,
+                lambda: self.client.stat_object(bucket, object_name)
+            )
+            return True
+        except Exception:
+            return False
+    
+    async def list_objects_with_prefix(self, bucket: str, prefix: str, limit: int = 10) -> List[str]:
+        """
+        Получает список объектов с определенным префиксом
+        
+        Args:
+            bucket: Имя bucket
+            prefix: Префикс для поиска
+            limit: Максимальное количество объектов
+            
+        Returns:
+            List[str]: Список путей объектов
+        """
+        loop = asyncio.get_event_loop()
+        try:
+            def _list_objects():
+                objects = self.client.list_objects(bucket, prefix=prefix)
+                return [obj.object_name for obj in list(objects)[:limit]]
+            
+            object_names = await loop.run_in_executor(None, _list_objects)
+            return object_names
+        except Exception as e:
+            print(f"DEBUG: MinioStorage.list_objects_with_prefix: ОШИБКА {str(e)}")
+            return [] 
