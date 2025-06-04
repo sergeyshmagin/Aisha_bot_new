@@ -610,4 +610,137 @@ cp .env /backup/config/env_$(date +%Y%m%d)
 - Логи: `/var/log/aisha_v2/`
 - Статус сервисов: `systemctl status aisha-*`
 - Мониторинг: Health check endpoints
-- Документация: `/opt/aisha_v2/docs/` 
+- Документация: `/opt/aisha_v2/docs/`
+
+# Развертывание AISHA Backend
+
+## Обзор
+
+Этот документ описывает процесс развертывания AISHA Backend в различных окружениях.
+
+## Требования
+
+### Системные требования
+- Python 3.11+
+- Redis 7.0+
+- PostgreSQL 14+
+- MinIO для хранения файлов
+- Достаточно места для моделей LoRA
+
+### Переменные окружения
+Скопируйте и настройте файл окружения:
+```bash
+cp env.example .env
+```
+
+Основные переменные:
+```bash
+# База данных
+DATABASE_URL=postgresql://user:password@localhost:5432/aisha_db
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
+
+# MinIO
+MINIO_ENDPOINT=localhost:9000
+MINIO_ACCESS_KEY=your_access_key
+MINIO_SECRET_KEY=your_secret_key
+
+# Telegram Bot
+TELEGRAM_BOT_TOKEN=your_bot_token
+
+# FAL AI
+FAL_KEY=your_fal_key
+```
+
+## Способы развертывания
+
+### 1. Локальная разработка
+
+```bash
+# Активируйте виртуальное окружение
+source .venv/bin/activate
+
+# Установите зависимости
+pip install -r requirements.txt
+
+# Выполните миграции
+alembic upgrade head
+
+# Запустите приложение
+python3 -m app.main
+```
+
+### 2. Docker (рекомендуется)
+
+См. [DOCKER_SETUP.md](DOCKER_SETUP.md) для подробной инструкции.
+
+```bash
+# Разработка
+docker-compose up -d
+
+# Продакшн
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+### 3. Продакшн
+
+Для продакшн развертывания рекомендуется:
+
+1. **Настройка сервера:**
+   - Ubuntu 22.04 LTS или новее
+   - Nginx как reverse proxy
+   - Systemd для управления сервисами
+   - SSL сертификаты
+
+2. **Безопасность:**
+   - Настройте firewall
+   - Используйте secrets management
+   - Настройте мониторинг
+
+3. **Мониторинг:**
+   - Логирование в structured format
+   - Health check endpoints
+   - Метрики производительности
+
+## Проверка развертывания
+
+```bash
+# Проверьте подключения
+python3 test_connections.py
+
+# Проверьте здоровье приложения
+curl http://localhost:8000/health
+```
+
+## Устранение неполадок
+
+### Частые проблемы
+
+1. **Ошибки подключения к БД:**
+   - Проверьте DATABASE_URL
+   - Убедитесь что PostgreSQL запущен
+
+2. **Проблемы с Redis:**
+   - Проверьте REDIS_URL
+   - Убедитесь что Redis доступен
+
+3. **Ошибки MinIO:**
+   - Проверьте endpoint и credentials
+   - Убедитесь что bucket существует
+
+### Логи
+
+```bash
+# Просмотр логов
+docker-compose logs -f app
+
+# Логи конкретного сервиса
+docker-compose logs redis
+```
+
+## См. также
+
+- [DOCKER_SETUP.md](DOCKER_SETUP.md) - Настройка Docker
+- [../development/PERFORMANCE.md](../development/PERFORMANCE.md) - Оптимизация производительности
+- [../architecture.md](../architecture.md) - Архитектура системы 

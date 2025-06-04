@@ -79,24 +79,25 @@ curl https://localhost:8443/health
 ## 📚 Документация
 
 ### 🏗️ Архитектура и разработка
-- **[ARCHITECTURE.md](ARCHITECTURE.md)** - архитектура системы и структура кода
-- **[DEVELOPMENT.md](DEVELOPMENT.md)** - настройка окружения и лучшие практики
+- **[architecture.md](architecture.md)** - Архитектура системы
+- **[TASK.md](TASK.md)** - Текущие задачи и планы
+- **[PLANNING.md](PLANNING.md)** - Долгосрочное планирование
+- **[best_practices.md](best_practices.md)** - Лучшие практики разработки
 
 ### 🚀 Развертывание
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** - полное руководство по развертыванию в продакшн
+- **[setup/DEPLOYMENT.md](setup/DEPLOYMENT.md)** - Полное руководство по развертыванию
+- **[setup/DOCKER_SETUP.md](setup/DOCKER_SETUP.md)** - Настройка Docker
 
-### 📋 Текущий статус
-- **[CURRENT_STATUS.md](CURRENT_STATUS.md)** - текущие задачи и планы развития
+### 🔧 Разработка
+- **[development/FIXES.md](development/FIXES.md)** - Актуальные исправления и решения
+- **[development/PERFORMANCE.md](development/PERFORMANCE.md)** - Оптимизация производительности
 
-### 📖 Руководства
-- **[guides/avatar_system.md](guides/avatar_system.md)** - система аватаров
-- **[guides/fal_ai_integration.md](guides/fal_ai_integration.md)** - интеграция с FAL AI
-- **[guides/image_generation.md](guides/image_generation.md)** - генерация изображений
+### ✨ Функциональность
+- **[features/PHOTO_PROMPT_FEATURE.md](features/PHOTO_PROMPT_FEATURE.md)** - Генерация промптов по фото
+- **[features/PHOTO_ANALYSIS_IMPROVEMENTS.md](features/PHOTO_ANALYSIS_IMPROVEMENTS.md)** - Улучшения анализа фото
 
-### 📚 Справочники
-- **[reference/troubleshooting.md](reference/troubleshooting.md)** - решение проблем
-- **[reference/api_reference.md](reference/api_reference.md)** - API справочник
-- **[reference/changelog.md](reference/changelog.md)** - история изменений
+### 📚 Справочная информация
+- **[reference/fal_knowlege_base/](reference/fal_knowlege_base/)** - База знаний FAL AI
 
 ## 🎭 Система аватаров
 
@@ -262,15 +263,16 @@ cp .env backup_env_$(date +%Y%m%d)
 
 ### Структура проекта
 ```
-aisha_v2/
+aisha-backend/
 ├── app/                    # Основное приложение
 │   ├── handlers/          # Обработчики Telegram
 │   ├── services/          # Бизнес-логика
 │   ├── database/          # Модели и миграции
-│   └── core/              # Конфигурация
-├── api_server/            # API сервер для webhook
+│   └── core/              # Конфигурация и DI
 ├── docs/                  # Документация
-└── tests/                 # Тесты
+├── scripts/               # Утилиты и скрипты
+├── tests/                 # Тесты
+└── archive/               # Архивные файлы
 ```
 
 ### Принципы разработки
