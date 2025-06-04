@@ -29,69 +29,138 @@ class AudioProcessor(AudioProcessor):
         """
         Разбивает аудио на части по тишине (через pydub или ffmpeg)
         """
+        logger.info(f"[AUDIO SPLIT] Начинаем разбиение аудио, use_ffmpeg={use_ffmpeg}, размер: {len(audio_data)} байт")
+        
+        # ✅ ИСПРАВЛЕНИЕ: Добавляем двухуровневую стратегию с fallback
         if use_ffmpeg:
-            # Сохраняем во временный файл
-            with NamedTemporaryFile(suffix='.mp3', delete=False) as temp_in:
-                temp_in.write(audio_data)
-                temp_in_path = temp_in.name
-            output_dir = mkdtemp()
             try:
-                chunk_paths = await self.split_audio_by_silence_ffmpeg(temp_in_path, output_dir)
-                # Читаем чанки в память
-                result = []
-                for path in chunk_paths:
-                    with open(path, 'rb') as f:
-                        result.append(f.read())
-                return result
-            finally:
-                Path(temp_in_path).unlink(missing_ok=True)
-                shutil.rmtree(output_dir, ignore_errors=True)
-        else:
-            try:
-                # Создаем временный файл
-                with NamedTemporaryFile(suffix='.mp3', delete=False) as temp:
-                    temp.write(audio_data)
-                    temp_path = temp.name
+                logger.info(f"[AUDIO SPLIT] Попытка 1: ffmpeg разбиение")
                 
+                # Сохраняем во временный файл
+                with NamedTemporaryFile(suffix='.mp3', delete=False) as temp_in:
+                    temp_in.write(audio_data)
+                    temp_in_path = temp_in.name
+                output_dir = mkdtemp()
+                
+                try:
+                    # ✅ Добавляем общий timeout для всего процесса ffmpeg
+                    chunk_paths = await asyncio.wait_for(
+                        self.split_audio_by_silence_ffmpeg(temp_in_path, output_dir),
+                        timeout=300.0  # 5 минут максимум на весь процесс
+                    )
+                    
+                    # Читаем чанки в память
+                    result = []
+                    for path in chunk_paths:
+                        with open(path, 'rb') as f:
+                            chunk_data = f.read()
+                            if len(chunk_data) > 1000:  # Минимум 1KB
+                                result.append(chunk_data)
+                    
+                    if result:
+                        logger.info(f"[AUDIO SPLIT] ffmpeg успешно: создано {len(result)} кусков")
+                        return result
+                    else:
+                        logger.warning(f"[AUDIO SPLIT] ffmpeg не создал валидных кусков, переключаемся на pydub")
+                        
+                except asyncio.TimeoutError:
+                    logger.error(f"[AUDIO SPLIT] ffmpeg timeout, переключаемся на pydub")
+                except Exception as e:
+                    logger.error(f"[AUDIO SPLIT] ffmpeg ошибка: {e}, переключаемся на pydub")
+                    
+                finally:
+                    Path(temp_in_path).unlink(missing_ok=True)
+                    shutil.rmtree(output_dir, ignore_errors=True)
+                    
+            except Exception as e:
+                logger.error(f"[AUDIO SPLIT] Критическая ошибка ffmpeg: {e}, переключаемся на pydub")
+        
+        # ✅ Fallback на pydub или основной метод
+        logger.info(f"[AUDIO SPLIT] Попытка 2: pydub разбиение")
+        
+        try:
+            # Создаем временный файл
+            with NamedTemporaryFile(suffix='.mp3', delete=False) as temp:
+                temp.write(audio_data)
+                temp_path = temp.name
+            
+            # ✅ Добавляем timeout для pydub операций
+            async def _split_with_pydub():
                 # Загружаем аудио
                 audio = AudioSegment.from_file(temp_path)
+                logger.info(f"[AUDIO SPLIT] Длительность аудио: {len(audio)/1000:.2f} сек")
                 
-                # Разбиваем на части по тишине
-                chunks = split_on_silence(
-                    audio,
-                    min_silence_len=700,  # 700 мс
-                    silence_thresh=-30,  # -30 dB
-                    keep_silence=300  # 300 мс тишины в начале и конце
-                )
+                # ✅ Ограничиваем максимальную длительность
+                MAX_DURATION_MS = 600_000  # 10 минут
+                if len(audio) > MAX_DURATION_MS:
+                    logger.warning(f"[AUDIO SPLIT] Обрезаем длинное аудио с {len(audio)/1000:.2f}s до {MAX_DURATION_MS/1000:.2f}s")
+                    audio = audio[:MAX_DURATION_MS]
+                
+                # ✅ Упрощенное разбиение для длинных файлов
+                if len(audio) > 120_000:  # Больше 2 минут - простое разбиение
+                    logger.info(f"[AUDIO SPLIT] Длинное аудио, используем простое разбиение по 60 сек")
+                    chunks = []
+                    chunk_duration = 60_000  # 60 секунд
+                    for i in range(0, len(audio), chunk_duration):
+                        chunk = audio[i:i + chunk_duration]
+                        if len(chunk) > 5_000:  # Минимум 5 секунд
+                            chunks.append(chunk)
+                else:
+                    # Обычное разбиение по тишине для коротких файлов
+                    logger.info(f"[AUDIO SPLIT] Короткое аудио, используем разбиение по тишине")
+                    chunks = split_on_silence(
+                        audio,
+                        min_silence_len=500,  # Уменьшили с 700 до 500 мс
+                        silence_thresh=-35,   # Более чувствительно к тишине  
+                        keep_silence=200      # Меньше тишины в начале/конце
+                    )
+                
+                # Если не удалось разбить - возвращаем весь файл
+                if not chunks:
+                    logger.warning(f"[AUDIO SPLIT] Не удалось разбить, возвращаем весь файл")
+                    chunks = [audio]
                 
                 # Конвертируем части обратно в байты
                 result = []
                 for i, chunk in enumerate(chunks):
                     with NamedTemporaryFile(suffix='.mp3', delete=False) as temp_chunk:
-                        chunk.export(temp_chunk.name, format="mp3")
+                        chunk.export(temp_chunk.name, format="mp3", bitrate="128k")  # Понижаем битрейт
                         try:
-                            test_audio = AudioSegment.from_file(temp_chunk.name)
                             with open(temp_chunk.name, 'rb') as f:
                                 chunk_bytes = f.read()
-                            if not chunk_bytes or len(chunk_bytes) < 10_000:
-                                logger.warning(f"Пропущен пустой/маленький chunk {i+1}")
-                                continue
-                            result.append(chunk_bytes)
+                            if len(chunk_bytes) > 5_000:  # Понижаем минимальный размер
+                                result.append(chunk_bytes)
+                                logger.info(f"[AUDIO SPLIT] Кусок {i+1}: {len(chunk_bytes)} байт")
+                            else:
+                                logger.warning(f"[AUDIO SPLIT] Пропущен маленький кусок {i+1}")
                         except Exception as e:
-                            logger.warning(f"Битый chunk {i+1}: {e}")
-                        Path(temp_chunk.name).unlink()
+                            logger.warning(f"[AUDIO SPLIT] Битый кусок {i+1}: {e}")
+                        finally:
+                            Path(temp_chunk.name).unlink(missing_ok=True)
                 
                 return result
-                
-            except Exception as e:
-                logger.error(f"Ошибка при разбиении аудио: {e}")
-                raise AudioProcessingError(f"Ошибка разбиения: {str(e)}")
             
-            finally:
-                try:
-                    Path(temp_path).unlink()
-                except Exception as e:
-                    logger.warning(f"Не удалось удалить временный файл {temp_path}: {e}")
+            # Выполняем с timeout
+            result = await asyncio.wait_for(_split_with_pydub(), timeout=180.0)  # 3 минуты на pydub
+            
+            if result:
+                logger.info(f"[AUDIO SPLIT] pydub успешно: создано {len(result)} кусков")
+                return result
+            else:
+                logger.error(f"[AUDIO SPLIT] pydub не создал кусков")
+                raise AudioProcessingError("Не удалось разбить аудио на куски")
+                
+        except asyncio.TimeoutError:
+            logger.error(f"[AUDIO SPLIT] pydub timeout")
+            raise AudioProcessingError("Превышено время ожидания при разбиении аудио")
+        except Exception as e:
+            logger.error(f"[AUDIO SPLIT] pydub ошибка: {e}")
+            raise AudioProcessingError(f"Ошибка разбиения: {str(e)}")
+        finally:
+            try:
+                Path(temp_path).unlink(missing_ok=True)
+            except Exception as e:
+                logger.warning(f"[AUDIO SPLIT] Не удалось удалить временный файл {temp_path}: {e}")
     
     async def normalize_audio(self, audio_data: bytes) -> bytes:
         """
@@ -207,55 +276,98 @@ class AudioProcessor(AudioProcessor):
         :return: список путей к кускам
         """
         import os
+        
+        # ✅ ИСПРАВЛЕНИЕ: Добавляем timeout и логирование прогресса
         ffmpeg_path = shutil.which('ffmpeg') or self.ffmpeg_path or 'ffmpeg'
         ffprobe_path = shutil.which('ffprobe') or 'ffprobe'
-        # Получаем длительность файла
-        proc = await asyncio.create_subprocess_exec(
-            ffprobe_path, '-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1',
-            input_path,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-        )
-        stdout, stderr = await proc.communicate()
-        if proc.returncode != 0:
-            raise AudioProcessingError(f"ffprobe error: {stderr.decode()}")
-        duration = float(stdout.decode().strip())
-        # Запускаем ffmpeg для поиска пауз
-        command = [
-            ffmpeg_path, '-i', input_path, '-af', f'silencedetect=noise={silence_thresh}dB:d={min_silence_len}', '-f', 'null', '-'
-        ]
-        proc = await asyncio.create_subprocess_exec(*command, stderr=asyncio.subprocess.PIPE)
-        _, stderr = await proc.communicate()
-        stderr_str = stderr.decode()
-        if proc.returncode != 0:
-            raise AudioProcessingError(f"ffmpeg silencedetect error: {stderr_str}")
-        silence_starts = []
-        silence_ends = []
-        for line in stderr_str.splitlines():
-            if "silence_start" in line:
-                silence_starts.append(float(line.split("silence_start: ")[-1]))
-            if "silence_end" in line:
-                silence_ends.append(float(line.split("silence_end: ")[-1].split(" |")[0]))
-        # Формируем интервалы для нарезки
-        segments = []
-        prev_end = 0.0
-        for start in silence_starts:
-            segments.append((prev_end, start))
-            prev_end = start
-        if prev_end < duration:
-            segments.append((prev_end, duration))
-        chunk_paths = []
-        os.makedirs(output_dir, exist_ok=True)
-        for i, (start, end) in enumerate(segments):
-            out_path = os.path.join(output_dir, f"chunk_{i+1}.mp3")
-            proc = await asyncio.create_subprocess_exec(
-                ffmpeg_path, '-y', '-i', input_path, '-ss', str(start), '-to', str(end),
-                '-acodec', 'libmp3lame', '-ab', '192k', out_path,
-                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
+        
+        logger.info(f"[FFMPEG SPLIT] Начинаем разбиение файла: {input_path}")
+        
+        try:
+            # ✅ Получаем длительность файла с timeout
+            logger.info(f"[FFMPEG SPLIT] Шаг 1: Определяем длительность файла")
+            proc = await asyncio.wait_for(
+                asyncio.create_subprocess_exec(
+                    ffprobe_path, '-v', 'error', '-show_entries', 'format=duration', 
+                    '-of', 'default=noprint_wrappers=1:nokey=1', input_path,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                ),
+                timeout=30.0  # 30 секунд timeout
             )
-            _, chunk_stderr = await proc.communicate()
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=30.0)
+            
             if proc.returncode != 0:
-                raise AudioProcessingError(f"ffmpeg chunk error: {chunk_stderr.decode()}")
-            if os.path.exists(out_path) and os.path.getsize(out_path) > 10_000:
-                chunk_paths.append(out_path)
-        return chunk_paths 
+                raise AudioProcessingError(f"ffprobe error: {stderr.decode()}")
+                
+            duration = float(stdout.decode().strip())
+            logger.info(f"[FFMPEG SPLIT] Длительность файла: {duration:.2f} сек")
+            
+            # ✅ КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Ограничиваем максимальную длительность
+            MAX_DURATION = 600  # 10 минут максимум
+            if duration > MAX_DURATION:
+                logger.warning(f"[FFMPEG SPLIT] Файл слишком длинный ({duration:.2f}s), обрезаем до {MAX_DURATION}s")
+                duration = MAX_DURATION
+            
+            # ✅ Упрощенная логика: разбиваем на куски по 60 секунд вместо поиска тишины
+            CHUNK_SIZE = 60  # 60 секунд на кусок
+            segments = []
+            
+            current_time = 0.0
+            while current_time < duration:
+                end_time = min(current_time + CHUNK_SIZE, duration)
+                segments.append((current_time, end_time))
+                current_time = end_time
+                
+            logger.info(f"[FFMPEG SPLIT] Будет создано {len(segments)} кусков по {CHUNK_SIZE}s")
+            
+            # ✅ Создаем куски с timeout для каждого
+            chunk_paths = []
+            os.makedirs(output_dir, exist_ok=True)
+            
+            for i, (start, end) in enumerate(segments):
+                logger.info(f"[FFMPEG SPLIT] Создаем кусок {i+1}/{len(segments)}: {start:.2f}-{end:.2f}s")
+                
+                out_path = os.path.join(output_dir, f"chunk_{i+1}.mp3")
+                
+                try:
+                    proc = await asyncio.wait_for(
+                        asyncio.create_subprocess_exec(
+                            ffmpeg_path, '-y', '-i', input_path, 
+                            '-ss', str(start), '-to', str(end),
+                            '-acodec', 'libmp3lame', '-ab', '128k',  # Понижаем битрейт для скорости
+                            out_path,
+                            stdout=asyncio.subprocess.PIPE, 
+                            stderr=asyncio.subprocess.PIPE
+                        ),
+                        timeout=60.0  # 60 секунд на каждый кусок
+                    )
+                    
+                    _, chunk_stderr = await asyncio.wait_for(proc.communicate(), timeout=60.0)
+                    
+                    if proc.returncode != 0:
+                        logger.warning(f"[FFMPEG SPLIT] Ошибка при создании куска {i+1}: {chunk_stderr.decode()}")
+                        continue
+                        
+                    if os.path.exists(out_path) and os.path.getsize(out_path) > 5_000:  # Понижаем минимальный размер
+                        chunk_paths.append(out_path)
+                        logger.info(f"[FFMPEG SPLIT] Кусок {i+1} создан: {os.path.getsize(out_path)} байт")
+                    else:
+                        logger.warning(f"[FFMPEG SPLIT] Кусок {i+1} слишком маленький или пустой")
+                        
+                except asyncio.TimeoutError:
+                    logger.error(f"[FFMPEG SPLIT] Timeout при создании куска {i+1}")
+                    continue
+                except Exception as e:
+                    logger.error(f"[FFMPEG SPLIT] Ошибка при создании куска {i+1}: {e}")
+                    continue
+            
+            logger.info(f"[FFMPEG SPLIT] Завершено! Создано {len(chunk_paths)} кусков")
+            return chunk_paths
+            
+        except asyncio.TimeoutError:
+            logger.error(f"[FFMPEG SPLIT] Общий timeout при обработке файла")
+            raise AudioProcessingError("Превышено время ожидания при обработке аудио")
+        except Exception as e:
+            logger.error(f"[FFMPEG SPLIT] Критическая ошибка: {e}")
+            raise AudioProcessingError(f"Ошибка при разбиении аудио: {str(e)}") 

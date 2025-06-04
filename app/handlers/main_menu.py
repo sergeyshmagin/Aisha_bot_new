@@ -256,46 +256,88 @@ async def show_help(call: CallbackQuery):
 📞 **Поддержка:** @support_username"""
 
     try:
-        # Уровень 1: Попытка с Markdown
+        # ✅ Проверяем тип сообщения перед редактированием
+        if call.message.photo:
+            # Сообщение с фото - удаляем и отправляем новое текстовое
+            await call.message.delete()
+            await call.message.answer(
+                help_text,
+                reply_markup=get_main_menu(),
+                parse_mode="Markdown"
+            )
+            logger.debug("✅ show_help: удалено фото, отправлен новый текст")
+            return
+            
+        # Обычное текстовое сообщение - пробуем редактировать
         await call.message.edit_text(
             help_text,
             reply_markup=get_main_menu(),
             parse_mode="Markdown"
         )
+        
     except TelegramBadRequest as markdown_error:
         if "parse entities" in str(markdown_error):
             # Уровень 2: Проблема с парсингом Markdown - отправляем без форматирования
-            logger.warning(f"Проблема с Markdown парсингом в справке, отправляю без форматирования: {markdown_error}")
+            logger.warning(f"Проблема с Markdown парсингом в справке: {markdown_error}")
             
             # Убираем Markdown символы из текста
             help_text_plain = help_text.replace('**', '').replace('*', '')
             
             try:
-                await call.message.edit_text(
-                    help_text_plain,
-                    reply_markup=get_main_menu(),
-                    parse_mode=None
-                )
-            except Exception as fallback_error:
-                # Уровень 3: Критическая ошибка - отправляем новое сообщение
-                logger.exception(f"Критическая ошибка даже при fallback справке: {fallback_error}")
-                try:
+                if call.message.photo:
+                    # Для фото - удаляем и отправляем новое
+                    await call.message.delete()
                     await call.message.answer(
                         help_text_plain,
                         reply_markup=get_main_menu(),
                         parse_mode=None
                     )
-                except Exception as final_error:
-                    logger.exception(f"Финальная ошибка отправки справки: {final_error}")
+                else:
+                    # Для текста - редактируем
+                    await call.message.edit_text(
+                        help_text_plain,
+                        reply_markup=get_main_menu(),
+                        parse_mode=None
+                    )
+                    
+            except TelegramBadRequest as edit_error:
+                if "there is no text in the message to edit" in str(edit_error):
+                    # Finall fallback - отправляем новое сообщение
+                    logger.warning(f"Fallback: отправляем новое сообщение в справке: {edit_error}")
+                    await call.message.answer(
+                        help_text_plain,
+                        reply_markup=get_main_menu(),
+                        parse_mode=None
+                    )
+                else:
+                    logger.exception(f"Критическая ошибка при fallback справке: {edit_error}")
                     await call.answer("❌ Ошибка отображения справки", show_alert=True)
+                    
         else:
-            # Другая ошибка Telegram
-            logger.exception(f"Другая ошибка Telegram при отправке справки: {markdown_error}")
-            await call.answer("❌ Ошибка загрузки справки", show_alert=True)
+            # Другая ошибка Telegram - всегда отправляем новое сообщение
+            logger.exception(f"Ошибка Telegram при отправке справки: {markdown_error}")
+            help_text_plain = help_text.replace('**', '').replace('*', '')
+            try:
+                await call.message.answer(
+                    help_text_plain,
+                    reply_markup=get_main_menu(),
+                    parse_mode=None
+                )
+            except Exception:
+                await call.answer("❌ Ошибка загрузки справки", show_alert=True)
+                
     except Exception as general_error:
-        # Общая ошибка
+        # Общая ошибка - финальный fallback
         logger.exception(f"Общая ошибка в функции справки: {general_error}")
-        await call.answer("❌ Произошла ошибка", show_alert=True)
+        help_text_plain = help_text.replace('**', '').replace('*', '')
+        try:
+            await call.message.answer(
+                help_text_plain,
+                reply_markup=get_main_menu(),
+                parse_mode=None
+            )
+        except Exception:
+            await call.answer("❌ Произошла ошибка", show_alert=True)
 
 @router.callback_query(F.data.startswith("balance_details_"))
 async def show_balance_details(call: CallbackQuery):
