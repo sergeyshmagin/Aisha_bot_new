@@ -50,16 +50,42 @@ class AvatarMainHandler:
             
             # Проверяем тип сообщения и выбираем правильный метод
             if callback.message.photo:
-                # Если сообщение содержит фото, удаляем его и отправляем текстовое
+                # ✅ ИСПРАВЛЕНИЕ: Редактируем подпись фото вместо удаления
                 try:
-                    await callback.message.delete()
-                except Exception:
-                    pass  # Игнорируем ошибки удаления
+                    await callback.message.edit_caption(
+                        caption=text,
+                        reply_markup=keyboard
+                    )
+                    logger.debug("✅ Avatar menu: отредактирована подпись фото")
+                except Exception as edit_error:
+                    logger.debug(f"Не удалось отредактировать подпись, отправляю новое: {edit_error}")
+                    await callback.message.answer(
+                        text=text,
+                        reply_markup=keyboard
+                    )
                 
-                await callback.message.answer(text, reply_markup=keyboard)
+            elif callback.message.text or callback.message.caption:
+                # ✅ Обычное текстовое сообщение - редактируем текст
+                try:
+                    await callback.message.edit_text(
+                        text=text,
+                        reply_markup=keyboard
+                    )
+                    logger.debug("✅ Avatar menu: отредактирован текст")
+                except Exception as edit_error:
+                    logger.debug(f"Не удалось отредактировать текст, отправляю новое: {edit_error}")
+                    await callback.message.answer(
+                        text=text,
+                        reply_markup=keyboard
+                    )
+                
             else:
-                # Если сообщение текстовое, просто редактируем
-                await callback.message.edit_text(text, reply_markup=keyboard)
+                # ❌ Неизвестный тип - отправляем новое (крайний случай)
+                await callback.message.answer(
+                    text=text,
+                    reply_markup=keyboard
+                )
+                logger.debug("⚠️ Avatar menu: отправлено новое сообщение")
             
             await callback.answer()
             

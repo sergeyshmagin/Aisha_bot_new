@@ -333,32 +333,59 @@ async def show_balance_details(call: CallbackQuery):
 @router.callback_query(F.data == "back_to_main")
 async def back_to_main(call: CallbackQuery):
     """
-    Возвращает в главное меню.
+    Возвращает в главное меню БЕЗ создания новых сообщений.
     """
     await call.answer("🔄 Возврат в главное меню...", show_alert=False)
     
-    menu_text = "👋 Главное меню\n\nВыберите действие:"
+    menu_text = "🏠 Главное меню\n\nВыберите действие:"
     
     try:
-        # Уровень 1: Попытка редактирования
-        await call.message.edit_text(
-            menu_text,
-            reply_markup=get_main_menu()
-        )
-    except TelegramBadRequest as edit_error:
-        # Уровень 2: Не удалось редактировать - отправляем новое
-        logger.warning(f"Не удалось редактировать сообщение в back_to_main: {edit_error}")
-        try:
+        if call.message.photo:
+            # ✅ Если сообщение с фото - редактируем подпись
+            await call.message.edit_caption(
+                caption=menu_text,
+                reply_markup=get_main_menu()
+            )
+            logger.debug("✅ back_to_main: отредактирована подпись фото")
+            
+        elif call.message.text or call.message.caption:
+            # ✅ Обычное текстовое сообщение - редактируем текст  
+            await call.message.edit_text(
+                menu_text,
+                reply_markup=get_main_menu()
+            )
+            logger.debug("✅ back_to_main: отредактирован текст")
+            
+        else:
+            # ❌ Неизвестный тип - отправляем новое (крайний случай)
             await call.message.answer(
                 menu_text,
                 reply_markup=get_main_menu()
             )
+            logger.debug("⚠️ back_to_main: отправлено новое сообщение")
+            
+    except TelegramBadRequest as edit_error:
+        # Не удалось редактировать - fallback стратегии
+        logger.warning(f"Не удалось редактировать в back_to_main: {edit_error}")
+        
+        try:
+            if "there is no text in the message to edit" in str(edit_error):
+                # Пробуем edit_caption для фото
+                await call.message.edit_caption(
+                    caption=menu_text,
+                    reply_markup=get_main_menu()
+                )
+            else:
+                # Другая ошибка - отправляем новое сообщение
+                await call.message.answer(
+                    menu_text,
+                    reply_markup=get_main_menu()
+                )
         except Exception as send_error:
-            # Уровень 3: Критическая ошибка
             logger.exception(f"Критическая ошибка в back_to_main: {send_error}")
             await call.answer("❌ Ошибка возврата в меню", show_alert=True)
+            
     except Exception as general_error:
-        # Общая ошибка
         logger.exception(f"Общая ошибка в back_to_main: {general_error}")
         try:
             await call.message.answer(
