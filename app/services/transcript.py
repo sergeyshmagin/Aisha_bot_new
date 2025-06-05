@@ -39,6 +39,15 @@ class TranscriptService(BaseService):
         self.transcript_repo = TranscriptRepository(self.session)
         self.bucket = settings.MINIO_BUCKETS.get("transcripts", "transcripts")
 
+    def _get_transcript_repository(self) -> TranscriptRepository:
+        """Возвращает репозиторий транскриптов.
+
+        Этот метод используется в тестах для подмены репозитория моками,
+        поэтому его явное наличие упрощает тестирование и делает зависимость
+        сервисa от репозитория более явной.
+        """
+        return TranscriptRepository(self.session)
+
     async def save_transcript(
         self,
         user_id: Union[int, str, UUID],
