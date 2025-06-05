@@ -48,20 +48,24 @@ class GalleryKeyboards:
         # Действия с аватаром
         action_buttons = []
         
-        # Кнопка "Сделать основным" только если не основной
-        if not is_main:
+        # Кнопка "Сделать основным" только если не основной И не черновик
+        if not is_main and avatar_status not in [AvatarStatus.DRAFT, AvatarStatus.PHOTOS_UPLOADING]:
             action_buttons.append(
                 InlineKeyboardButton(text="⭐ Основной", callback_data=f"avatar_set_main:{avatar_id}")
             )
+        elif not is_main:
+            # Для черновиков не показываем кнопку вообще (пустое место)
+            pass
         else:
+            # Если уже основной аватар - показываем неактивную кнопку
             action_buttons.append(
                 InlineKeyboardButton(text="⭐ Основной", callback_data="noop")
             )
         
-        # Кнопка "Фото" только для черновиков и загрузки фото
+        # Кнопка "Продолжить" только для черновиков и загрузки фото
         if avatar_status in [AvatarStatus.DRAFT, AvatarStatus.PHOTOS_UPLOADING]:
             action_buttons.append(
-                InlineKeyboardButton(text="📸 Фото", callback_data=f"avatar_view_photos:{avatar_id}")
+                InlineKeyboardButton(text="🔄 Продолжить", callback_data=f"avatar_continue_creation:{avatar_id}")
             )
         
         # Удаление

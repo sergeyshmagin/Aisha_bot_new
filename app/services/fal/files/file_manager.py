@@ -14,6 +14,7 @@ from PIL import Image
 
 from app.core.config import settings
 from app.core.logger import get_logger
+from app.services.storage.minio import MinioStorage
 
 logger = get_logger(__name__)
 
@@ -23,6 +24,7 @@ class FalFileManager:
     
     def __init__(self):
         self.temp_files = []
+        self.minio_storage = MinioStorage()
     
     async def download_and_create_archive(
         self, 
@@ -33,7 +35,7 @@ class FalFileManager:
         Скачивает фотографии и создает архив для обучения
         
         Args:
-            photo_urls: Список URL фотографий в MinIO
+            photo_urls: Список ключей MinIO фотографий
             avatar_id: ID аватара
             
         Returns:
@@ -65,14 +67,14 @@ class FalFileManager:
     
     async def download_photos_from_minio(
         self, 
-        photo_urls: List[str], 
+        photo_keys: List[str], 
         avatar_id: UUID
     ) -> List[Path]:
         """
         Скачивает фотографии из MinIO
         
         Args:
-            photo_urls: Список URL фотографий
+            photo_keys: Список ключей MinIO фотографий
             avatar_id: ID аватара
             
         Returns:
@@ -87,12 +89,29 @@ class FalFileManager:
             
             logger.info(f"[FAL Files] Скачивание в {temp_dir}")
             
+            # ИСПРАВЛЕНИЕ: Используем правильный bucket для аватаров
+            bucket = settings.MINIO_BUCKET_AVATARS  # 'avatars' вместо 'aisha'
+            logger.info(f"[FAL Files] Используем bucket: {bucket}")
+            
             async with aiohttp.ClientSession() as session:
-                for i, url in enumerate(photo_urls):
+                for i, minio_key in enumerate(photo_keys):
                     try:
-                        logger.debug(f"[FAL Files] Скачивание фото {i+1}/{len(photo_urls)}: {url}")
+                        logger.debug(f"[FAL Files] Скачивание фото {i+1}/{len(photo_keys)}: {minio_key}")
                         
-                        async with session.get(url) as response:
+                        # Генерируем presigned URL для скачивания
+                        download_url = await self.minio_storage.generate_presigned_url(
+                            bucket=bucket,
+                            object_name=minio_key,
+                            expires=3600  # 1 час
+                        )
+                        
+                        if not download_url:
+                            logger.error(f"[FAL Files] Не удалось создать presigned URL для {minio_key}")
+                            continue
+                        
+                        logger.debug(f"[FAL Files] Presigned URL создан для {minio_key}")
+                        
+                        async with session.get(download_url) as response:
                             if response.status == 200:
                                 # Получаем содержимое файла
                                 content = await response.read()
@@ -118,17 +137,17 @@ class FalFileManager:
                                     logger.debug(f"[FAL Files] Сохранено: {file_path}")
                                     
                                 except Exception as img_error:
-                                    logger.error(f"[FAL Files] Ошибка обработки изображения {url}: {img_error}")
+                                    logger.error(f"[FAL Files] Ошибка обработки изображения {minio_key}: {img_error}")
                                     continue
                             else:
-                                logger.error(f"[FAL Files] Ошибка скачивания {url}: HTTP {response.status}")
+                                logger.error(f"[FAL Files] Ошибка скачивания {minio_key}: HTTP {response.status}")
                                 continue
                                 
                     except Exception as e:
-                        logger.error(f"[FAL Files] Ошибка скачивания фото {url}: {e}")
+                        logger.error(f"[FAL Files] Ошибка скачивания фото {minio_key}: {e}")
                         continue
             
-            logger.info(f"[FAL Files] Скачано {len(photo_paths)} из {len(photo_urls)} фотографий")
+            logger.info(f"[FAL Files] Скачано {len(photo_paths)} из {len(photo_keys)} фотографий")
             return photo_paths
             
         except Exception as e:
@@ -197,15 +216,31 @@ class FalFileManager:
         """
         try:
             import fal_client
+            import os
             
             logger.info(f"[FAL Files] Загрузка архива {archive_path} в FAL AI")
             
-            # Загружаем файл через FAL клиент
-            with open(archive_path, 'rb') as f:
-                file_url = fal_client.upload_file(f)
+            # ИСПРАВЛЕНИЕ: Устанавливаем FAL API ключ из настроек
+            fal_api_key = settings.effective_fal_api_key
+            if not fal_api_key:
+                raise ValueError("FAL API ключ не настроен в конфигурации")
             
-            logger.info(f"[FAL Files] Архив загружен успешно: {file_url}")
-            return file_url
+            # Временно устанавливаем переменную среды для fal_client
+            original_fal_key = os.environ.get('FAL_KEY')
+            os.environ['FAL_KEY'] = fal_api_key
+            
+            try:
+                # Передаем путь к файлу как строку
+                file_url = fal_client.upload_file(str(archive_path))
+                
+                logger.info(f"[FAL Files] Архив загружен успешно: {file_url}")
+                return file_url
+            finally:
+                # Восстанавливаем оригинальное значение переменной среды
+                if original_fal_key is not None:
+                    os.environ['FAL_KEY'] = original_fal_key
+                else:
+                    os.environ.pop('FAL_KEY', None)
             
         except Exception as e:
             logger.exception(f"[FAL Files] Ошибка загрузки архива {archive_path}: {e}")

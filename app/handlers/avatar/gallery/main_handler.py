@@ -82,12 +82,7 @@ class AvatarGalleryHandler:
             F.data.startswith("avatar_delete_cancel:")
         )
         
-        # Фотогалерея
-        self.router.callback_query.register(
-            self.handle_view_avatar_photos,
-            F.data.startswith("avatar_view_photos:")
-        )
-        
+        # Фотогалерея (навигация по фотографиям)
         self.router.callback_query.register(
             self.handle_photo_navigation,
             F.data.startswith("avatar_photo_prev:")
@@ -113,6 +108,12 @@ class AvatarGalleryHandler:
         self.router.callback_query.register(
             self.handle_avatar_generate,
             F.data.startswith("avatar_generate:")
+        )
+        
+        # Продолжение создания аватара
+        self.router.callback_query.register(
+            self.handle_continue_avatar_creation,
+            F.data.startswith("avatar_continue_creation:")
         )
 
     async def register_handlers(self):
@@ -181,17 +182,13 @@ class AvatarGalleryHandler:
         """Делегирует отмену удаления аватара"""
         await self.actions_handler.handle_delete_avatar_cancel(callback)
 
-    async def handle_view_avatar_photos(self, callback: CallbackQuery, state: FSMContext):
-        """Делегирует просмотр фотографий аватара"""
-        await self.photo_handler.handle_view_avatar_photos(callback)
+    async def handle_view_avatar_card(self, callback: CallbackQuery, state: FSMContext):
+        """Делегирует возврат к карточке аватара"""
+        await self.photo_handler.handle_view_avatar_card(callback, state)
 
     async def handle_photo_navigation(self, callback: CallbackQuery, state: FSMContext):
         """Делегирует навигацию по фотографиям"""
         await self.photo_handler.handle_photo_navigation(callback)
-
-    async def handle_view_avatar_card(self, callback: CallbackQuery, state: FSMContext):
-        """Делегирует возврат к карточке аватара"""
-        await self.photo_handler.handle_view_avatar_card(callback, state)
 
     async def handle_noop(self, callback: CallbackQuery):
         """Обработка пустых callback'ов (для неактивных кнопок)"""
@@ -201,22 +198,23 @@ class AvatarGalleryHandler:
         """Обработчик генерации изображений с аватаром"""
         try:
             # Извлекаем ID аватара из callback_data
-            avatar_id = callback.data.split(":")[-1]
-            
-            # Проверяем что аватар существует и принадлежит пользователю
+            avatar_id_str = callback.data.split(":")[-1]
             user_telegram_id = callback.from_user.id
             
+            # Получаем пользователя
             async with get_user_service() as user_service:
                 user = await user_service.get_user_by_telegram_id(user_telegram_id)
                 if not user:
                     await callback.answer("❌ Пользователь не найден", show_alert=True)
                     return
             
+            # Проверяем существование аватара и его принадлежность
             async with get_avatar_service() as avatar_service:
-                # 🚀 ИСПРАВЛЕНИЕ: используем правильный метод get_avatar и конвертируем в UUID
                 from uuid import UUID
-                avatar = await avatar_service.get_avatar(UUID(avatar_id))
-                if not avatar or avatar.user_id != user.id:
+                avatar_id = UUID(avatar_id_str)
+                avatar = await avatar_service.get_avatar(avatar_id)
+                if not avatar or str(avatar.user_id) != str(user.id):
+                    logger.warning(f"Аватар {avatar_id_str} не найден или не принадлежит пользователю {user.id}")
                     await callback.answer("❌ Аватар не найден", show_alert=True)
                     return
                 
@@ -224,14 +222,11 @@ class AvatarGalleryHandler:
                 if avatar.status != "completed":
                     await callback.answer("❌ Аватар ещё не готов к использованию", show_alert=True)
                     return
-            
-            # 🚀 КАРДИНАЛЬНОЕ ИСПРАВЛЕНИЕ: Используем основную логику генерации
-            # Вместо создания собственного потока, перенаправляем к GenerationMainHandler
-            
-            # Сначала устанавливаем этот аватар как основной если он не основной
-            if not avatar.is_main:
-                await avatar_service.set_main_avatar(user.id, UUID(avatar_id))
-                logger.info(f"Установлен основной аватар {avatar_id} для генерации пользователя {user_telegram_id}")
+                
+                # Устанавливаем этот аватар как основной если он не основной
+                if not avatar.is_main:
+                    await avatar_service.set_main_avatar(user.id, avatar_id)
+                    logger.info(f"Установлен основной аватар {avatar_id_str} для генерации пользователя {user_telegram_id}")
             
             # Переходим к основному menu генерации
             from app.handlers.generation.main_handler import GenerationMainHandler
@@ -240,10 +235,59 @@ class AvatarGalleryHandler:
             # Показываем основное меню генерации
             await generation_handler.show_generation_menu(callback)
             
-            logger.info(f"Пользователь {user_telegram_id} перенаправлен к основной генерации с аватаром {avatar_id}")
+            logger.info(f"Пользователь {user_telegram_id} перенаправлен к основной генерации с аватаром {avatar_id_str}")
             
         except Exception as e:
             logger.exception(f"Ошибка при переходе к генерации изображений: {e}")
+            await callback.answer("❌ Произошла ошибка", show_alert=True)
+
+    async def handle_continue_avatar_creation(self, callback: CallbackQuery, state: FSMContext):
+        """Обработчик продолжения создания аватара (переход к загрузке фото)"""
+        try:
+            # Извлекаем ID аватара из callback_data
+            avatar_id_str = callback.data.split(":")[-1]
+            user_telegram_id = callback.from_user.id
+            
+            # Получаем пользователя
+            async with get_user_service() as user_service:
+                user = await user_service.get_user_by_telegram_id(user_telegram_id)
+                if not user:
+                    await callback.answer("❌ Пользователь не найден", show_alert=True)
+                    return
+            
+            # Проверяем существование аватара
+            async with get_avatar_service() as avatar_service:
+                from uuid import UUID
+                avatar_id = UUID(avatar_id_str)
+                avatar = await avatar_service.get_avatar(avatar_id)
+                if not avatar or str(avatar.user_id) != str(user.id):
+                    await callback.answer("❌ Аватар не найден", show_alert=True)
+                    return
+                
+                # Проверяем что аватар в статусе черновика или загрузки фото
+                if avatar.status not in ["draft", "photos_uploading"]:
+                    await callback.answer("❌ Этот аватар уже завершен", show_alert=True)
+                    return
+            
+            # Устанавливаем данные аватара в состояние FSM для продолжения
+            await state.update_data({
+                "avatar_id": avatar_id_str,
+                "avatar_name": avatar.name,
+                "gender": avatar.gender.value if avatar.gender else "unknown",
+                "training_type": avatar.training_type.value if avatar.training_type else "portrait"
+            })
+            
+            # Переходим к загрузке фото - используем PhotoUploadHandler
+            from app.handlers.avatar.photo_upload.main_handler import PhotoUploadHandler
+            photo_upload_handler = PhotoUploadHandler()
+            
+            # Вызываем метод начала загрузки фото
+            await photo_upload_handler.start_photo_upload(callback, state)
+            
+            logger.info(f"Пользователь {user_telegram_id} продолжил создание аватара {avatar_id}")
+            
+        except Exception as e:
+            logger.exception(f"Ошибка при продолжении создания аватара: {e}")
             await callback.answer("❌ Произошла ошибка", show_alert=True)
 
     # Вспомогательные методы

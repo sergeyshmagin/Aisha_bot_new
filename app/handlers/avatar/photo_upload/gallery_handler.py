@@ -210,8 +210,69 @@ class PhotoUploadGalleryHandler:
             logger.exception(f"Ошибка навигации по галерее: {e}")
             await callback.answer("❌ Ошибка навигации", show_alert=True)
 
+    async def handle_delete_photo_by_id(self, callback: CallbackQuery, avatar_id: UUID, photo_id: UUID, photo_index: int):
+        """Обрабатывает удаление фото из галереи по ID (новый безопасный метод)"""
+        try:
+            user_id = callback.from_user.id
+            
+            cache_data = await self._get_gallery_cache(user_id)
+            if cache_data is None:
+                await callback.answer("❌ Галерея не найдена", show_alert=True)
+                return
+            
+            photos = cache_data["photos"]
+            
+            # Проверяем что индекс корректный и фото соответствует ID
+            if photo_index < 0 or photo_index >= len(photos):
+                await callback.answer("❌ Фото не найдено", show_alert=True)
+                return
+            
+            photo = photos[photo_index]
+            if photo["id"] != str(photo_id):
+                await callback.answer("❌ Ошибка: фото не соответствует отображаемому", show_alert=True)
+                return
+            
+            # Получаем user UUID из БД
+            async with get_user_service() as user_service:
+                user = await user_service.get_user_by_telegram_id(str(user_id))
+                if not user:
+                    await callback.answer("❌ Пользователь не найден", show_alert=True)
+                    return
+                user_uuid = user.id
+            
+            # Удаляем фото через сервис с правильными параметрами
+            async with get_avatar_service() as avatar_service:
+                await avatar_service.delete_avatar_photo(photo_id, user_uuid)
+            
+            # Обновляем кэш
+            photos.pop(photo_index)
+            cache_data["photos"] = photos
+            
+            if not photos:
+                # Если фото больше нет, закрываем галерею
+                await callback.message.edit_text(
+                    "📸 Все фотографии удалены.\n\nВернитесь к загрузке фотографий.",
+                    reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                        [InlineKeyboardButton(text="⬅️ Назад к загрузке", callback_data="back_to_upload")]
+                    ])
+                )
+                await self._clear_gallery_cache(user_id)
+            else:
+                # Показываем следующее фото или предыдущее
+                new_index = min(photo_index, len(photos) - 1)
+                cache_data["current_index"] = new_index
+                await self._set_gallery_cache(user_id, cache_data)
+                await self._show_gallery_photo(callback, user_id, new_index)
+            
+            await callback.answer("✅ Фото удалено")
+            logger.info(f"Удалено фото {photo_id} из аватара {avatar_id}")
+            
+        except Exception as e:
+            logger.exception(f"Ошибка при удалении фото по ID: {e}")
+            await callback.answer("❌ Ошибка при удалении фото", show_alert=True)
+
     async def handle_delete_photo(self, callback: CallbackQuery, avatar_id: UUID, photo_index: int):
-        """Обрабатывает удаление фото из галереи"""
+        """Обрабатывает удаление фото из галереи (LEGACY метод)"""
         try:
             user_id = callback.from_user.id
             

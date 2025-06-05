@@ -78,7 +78,7 @@ def get_photo_tips_keyboard() -> InlineKeyboardMarkup:
     ])
 
 
-def get_photo_gallery_navigation_keyboard(current_photo: int, total_photos: int, avatar_id: str) -> InlineKeyboardMarkup:
+def get_photo_gallery_navigation_keyboard(current_photo: int, total_photos: int, photo_id: str) -> InlineKeyboardMarkup:
     """Клавиатура навигации по галерее фотографий с улучшенными кнопками"""
     
     buttons = []
@@ -110,11 +110,11 @@ def get_photo_gallery_navigation_keyboard(current_photo: int, total_photos: int,
     
     buttons.append(nav_buttons)
     
-    # Действия с фото - как в старом проекте
+    # Действия с фото - используем photo_id вместо позиции
     buttons.append([
         InlineKeyboardButton(
             text="🗑️ Удалить фото",
-            callback_data=f"delete_photo_{avatar_id}_{current_photo}"
+            callback_data=f"delete_photo_{photo_id}"
         )
     ])
     

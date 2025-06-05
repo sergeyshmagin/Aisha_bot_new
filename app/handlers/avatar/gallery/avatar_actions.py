@@ -79,68 +79,91 @@ class AvatarActionsHandler:
             user_telegram_id = callback.from_user.id
             avatar_id = UUID(callback.data.split(":")[1])
             
-            # Получаем информацию об аватаре для подтверждения
+            # Получаем пользователя и аватар
             async with get_user_service() as user_service:
                 user = await user_service.get_user_by_telegram_id(user_telegram_id)
                 if not user:
                     await callback.answer("❌ Пользователь не найден", show_alert=True)
                     return
             
+            # Получаем информацию об аватаре
+            avatar_name = "аватар"
             async with get_avatar_service() as avatar_service:
                 avatar = await avatar_service.get_avatar(avatar_id)
                 if not avatar or str(avatar.user_id) != str(user.id):
                     await callback.answer("❌ Аватар не найден", show_alert=True)
                     return
+                
+                avatar_name = avatar.name or "Безымянный аватар"
+                photos, total_photos = await avatar_service.get_avatar_photos(avatar_id)
             
             # Формируем текст подтверждения
-            avatar_name = avatar.name or "Безымянный аватар"
-            status_text = self._get_status_text(avatar.status.value)
-            
-            text = f"""🗑️ **Подтверждение удаления**
+            text = f"""🗑️ **Удаление аватара**
 
-❓ Вы действительно хотите удалить аватар?
+Вы действительно хотите удалить аватар **«{avatar_name}»**?
 
-🎭 **Название:** {avatar_name}
-📊 **Статус:** {status_text}
+⚠️ **Это действие необратимо!**
 
-⚠️ **Внимание!** Это действие нельзя отменить.
-Все данные аватара будут удалены навсегда:
-• Обученная модель
-• Загруженные фотографии  
+🗂️ Будет удалено:
+• {total_photos} фотографий
+• Все сгенерированные изображения  
 • История генераций
 
 🤔 Подумайте ещё раз перед удалением."""
             
             keyboard = self.keyboards.get_delete_confirmation_keyboard(str(avatar_id))
             
-            try:
-                # Уровень 1: Попытка с Markdown
-                await callback.message.edit_text(
-                    text=text,
-                    reply_markup=keyboard,
-                    parse_mode="Markdown"
-                )
-            except TelegramBadRequest as markdown_error:
-                if "parse entities" in str(markdown_error):
-                    # Уровень 2: Проблема с Markdown - отправляем без форматирования
-                    logger.warning(f"Проблема с Markdown в подтверждении удаления аватара: {markdown_error}")
-                    text_plain = text.replace('**', '')
-                    
-                    try:
+            # Проверяем тип сообщения и выбираем правильный метод отправки
+            if callback.message.photo:
+                # Если сообщение содержит фото, удаляем его и отправляем новое текстовое
+                try:
+                    await callback.message.delete()
+                except Exception:
+                    pass  # Игнорируем ошибки удаления
+                
+                # Отправляем новое сообщение
+                try:
+                    await callback.message.answer(
+                        text=text,
+                        reply_markup=keyboard,
+                        parse_mode="Markdown"
+                    )
+                except TelegramBadRequest as markdown_error:
+                    if "parse entities" in str(markdown_error):
+                        # Проблема с Markdown - отправляем без форматирования
+                        logger.warning(f"Проблема с Markdown в подтверждении удаления аватара (новое сообщение): {markdown_error}")
+                        text_plain = text.replace('**', '')
+                        await callback.message.answer(
+                            text=text_plain,
+                            reply_markup=keyboard,
+                            parse_mode=None
+                        )
+                    else:
+                        logger.exception(f"Ошибка при отправке подтверждения удаления: {markdown_error}")
+                        await callback.answer("❌ Ошибка отображения", show_alert=True)
+                        return
+            else:
+                # Если сообщение текстовое, просто редактируем
+                try:
+                    await callback.message.edit_text(
+                        text=text,
+                        reply_markup=keyboard,
+                        parse_mode="Markdown"
+                    )
+                except TelegramBadRequest as markdown_error:
+                    if "parse entities" in str(markdown_error):
+                        # Проблема с Markdown - редактируем без форматирования
+                        logger.warning(f"Проблема с Markdown в подтверждении удаления аватара (редактирование): {markdown_error}")
+                        text_plain = text.replace('**', '')
                         await callback.message.edit_text(
                             text=text_plain,
                             reply_markup=keyboard,
                             parse_mode=None
                         )
-                    except Exception as fallback_error:
-                        logger.exception(f"Критическая ошибка при fallback удаления аватара: {fallback_error}")
+                    else:
+                        logger.exception(f"Ошибка при редактировании подтверждения удаления: {markdown_error}")
                         await callback.answer("❌ Ошибка отображения", show_alert=True)
                         return
-                else:
-                    # Другая ошибка Telegram
-                    logger.exception(f"Другая ошибка Telegram при подтверждении удаления: {markdown_error}")
-                    await callback.answer("❌ Ошибка отображения", show_alert=True)
-                    return
             
             logger.info(f"Пользователь {user_telegram_id} запросил удаление аватара {avatar_id}")
             

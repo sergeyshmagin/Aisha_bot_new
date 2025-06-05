@@ -129,7 +129,7 @@ class TrainingHandler:
                 fal_client = FalAIClient()
                 
                 # Скачиваем фотографии и создаем архив
-                training_data_url = await fal_client._download_and_create_archive(photo_urls, avatar_id)
+                training_data_url = await fal_client.download_and_create_archive(photo_urls, avatar_id)
                 if not training_data_url:
                     raise RuntimeError("Не удалось скачать фотографии для создания архива")
                 

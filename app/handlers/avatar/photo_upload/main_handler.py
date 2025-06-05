@@ -184,8 +184,9 @@ class PhotoUploadHandler:
     async def handle_delete_photo_callback(self, callback: CallbackQuery):
         """Делегирует удаление фото к GalleryHandler"""
         try:
-            # Извлекаем photo_index из callback_data
-            photo_index = int(callback.data.split("_")[-1])
+            # Извлекаем photo_id из callback_data
+            photo_id_str = callback.data.split("_")[-1]
+            photo_id = UUID(photo_id_str)
             
             # Получаем avatar_id из кэша галереи
             user_id = callback.from_user.id
@@ -196,7 +197,17 @@ class PhotoUploadHandler:
                 return
             
             avatar_id = UUID(cache_data["avatar_id"])
-            await self.gallery_handler.handle_delete_photo(callback, avatar_id, photo_index)
+            
+            # Находим индекс удаляемого фото в кэше
+            current_index = cache_data.get("current_index", 0)
+            photos = cache_data["photos"]
+            
+            # Находим текущее фото для проверки
+            if current_index < len(photos) and photos[current_index]["id"] == photo_id_str:
+                # Удаляем фото по правильному ID
+                await self.gallery_handler.handle_delete_photo_by_id(callback, avatar_id, photo_id, current_index)
+            else:
+                await callback.answer("❌ Ошибка: фото не соответствует отображаемому", show_alert=True)
             
         except Exception as e:
             logger.exception(f"Ошибка при удалении фото: {e}")
@@ -211,7 +222,25 @@ class PhotoUploadHandler:
             
             # Получаем данные из состояния
             data = await state.get_data()
-            avatar_id = UUID(data.get("avatar_id"))
+            avatar_id_str = data.get("avatar_id")
+            
+            if not avatar_id_str:
+                # Если нет avatar_id в состоянии, пытаемся получить из кэша галереи
+                cache_data = await self.gallery_handler._get_gallery_cache(user_id)
+                if cache_data and "avatar_id" in cache_data:
+                    avatar_id_str = cache_data["avatar_id"]
+                else:
+                    await callback.answer("❌ Данные аватара не найдены", show_alert=True)
+                    # Возвращаем в главное меню
+                    from app.keyboards.main import get_main_menu
+                    keyboard = get_main_menu()
+                    await callback.message.edit_text(
+                        "❌ Данные аватара потеряны. Вернитесь в главное меню.",
+                        reply_markup=keyboard
+                    )
+                    return
+            
+            avatar_id = UUID(avatar_id_str)  # ✅ ИСПРАВЛЕНО: теперь с проверкой на None
             
             # Получаем текущее количество фото
             async with get_avatar_service() as avatar_service:
@@ -330,4 +359,25 @@ class PhotoUploadHandler:
         from app.keyboards.photo_upload import get_photo_upload_keyboard
         keyboard = get_photo_upload_keyboard(existing_count, self.config.MIN_PHOTOS, self.config.MAX_PHOTOS)
         
-        await callback.message.edit_text(text=text, reply_markup=keyboard) 
+        try:
+            # Проверяем тип сообщения и выбираем правильный метод
+            if callback.message.photo:
+                # Если сообщение содержит фото, удаляем его и отправляем текстовое
+                try:
+                    await callback.message.delete()
+                except Exception:
+                    pass  # Игнорируем ошибки удаления
+                
+                # Отправляем новое текстовое сообщение
+                await callback.message.answer(text, reply_markup=keyboard)
+            else:
+                # Если сообщение текстовое, просто редактируем
+                await callback.message.edit_text(text=text, reply_markup=keyboard)
+        except Exception as e:
+            logger.exception(f"Ошибка при показе продолжения черновика: {e}")
+            # Fallback - отправляем новое сообщение
+            try:
+                await callback.message.answer(text, reply_markup=keyboard)
+            except Exception as fallback_error:
+                logger.exception(f"Критическая ошибка в fallback продолжения черновика: {fallback_error}")
+                await callback.answer("❌ Ошибка отображения. Попробуйте снова.", show_alert=True) 
