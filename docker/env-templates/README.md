@@ -31,8 +31,8 @@ TELEGRAM_WEBHOOK_SECRET=your_production_webhook_secret_here
 FAL_WEBHOOK_SECRET=your_production_fal_webhook_secret_here
 
 # SSL сертификаты
-SSL_CERT_PATH=/etc/nginx/ssl/cert.pem
-SSL_KEY_PATH=/etc/nginx/ssl/key.pem
+SSL_CERT_PATH=/etc/nginx/ssl/aibots_kz.crt
+SSL_KEY_PATH=/etc/nginx/ssl/aibots.kz.key
 ```
 
 **Важно**: Dev шаблон уже содержит рабочие API ключи для разработки!
