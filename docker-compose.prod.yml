@@ -96,26 +96,45 @@ services:
       context: ./docker/nginx
       dockerfile: Dockerfile
     container_name: aisha-nginx-prod
-    restart: always
+    restart: unless-stopped
     ports:
       - "80:80"
-      - "443:443"
+      - "8443:8443"
     volumes:
       - ./ssl_certificate:/etc/nginx/ssl:ro
       - ./logs/nginx:/var/log/nginx
+      - nginx_cache:/var/cache/nginx
     depends_on:
       - aisha-api
     networks:
       - aisha-prod-network
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.5'
+        reservations:
+          memory: 128M
+          cpus: '0.25'
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost/health"]
-      interval: 30s
-      timeout: 10s
+      test: ["/usr/local/bin/healthcheck.sh"]
+      interval: 15s
+      timeout: 5s
       retries: 3
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   aisha-prod-network:
     driver: bridge
     ipam:
       config:
-        - subnet: 172.21.0.0/16 
+        - subnet: 172.21.0.0/16
+
+volumes:
+  nginx_cache:
+    driver: local 
