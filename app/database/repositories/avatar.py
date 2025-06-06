@@ -37,10 +37,17 @@ class AvatarRepository(BaseRepository[Avatar]):
         return avatar
 
     async def get_user_avatars(self, user_id: UUID) -> List[Avatar]:
-        """Получить все аватары пользователя (с фотографиями, отсортированными по порядку загрузки)"""
+        """Получить все аватары пользователя (с фотографиями, отсортированными по порядку загрузки)
+        ИСКЛЮЧАЕТ STYLE аватары (LEGACY)"""
+        from ..models import AvatarTrainingType
+        
         stmt = (
             select(self.model)
-            .where(self.model.user_id == user_id)
+            .where(
+                self.model.user_id == user_id,
+                # Исключаем STYLE аватары (LEGACY)
+                self.model.training_type != AvatarTrainingType.STYLE
+            )
             .options(selectinload(self.model.photos))
         )
         result = await self.session.execute(stmt)
@@ -123,12 +130,17 @@ class AvatarRepository(BaseRepository[Avatar]):
         return result.scalar() or 0
 
     async def get_user_avatars_with_photos(self, user_id: UUID) -> List[Avatar]:
-        """Получить все завершенные аватары пользователя с фотографиями (отсортированными по порядку загрузки)"""
+        """Получить все завершенные аватары пользователя с фотографиями (отсортированными по порядку загрузки)
+        ИСКЛЮЧАЕТ STYLE аватары (LEGACY)"""
+        from ..models import AvatarTrainingType
+        
         stmt = (
             select(self.model)
             .where(
                 self.model.user_id == user_id,
-                cast(self.model.status, String) != "draft"
+                cast(self.model.status, String) != "draft",
+                # Исключаем STYLE аватары (LEGACY)
+                self.model.training_type != AvatarTrainingType.STYLE
             )
             .options(selectinload(self.model.photos))
             .order_by(self.model.is_main.desc(), self.model.created_at.desc())

@@ -71,7 +71,9 @@ async def _debug_avatars_logic(message: Message):
                 
                 debug_text += f"   • Прогресс: {avatar.training_progress}%\n"
                 debug_text += f"   • Основной: {'✅' if avatar.is_main else '❌'}\n"
-                debug_text += f"   • Создан: {avatar.created_at.strftime('%d.%m %H:%M') if avatar.created_at else 'N/A'}\n\n"
+                from app.utils.datetime_utils import format_created_at
+                created_str = await format_created_at(avatar, user.telegram_id)
+                debug_text += f"   • Создан: {created_str}\n\n"
             
             # Рекомендации
             ready_avatars = [a for a in avatars if a.status.value == "completed"]

@@ -143,6 +143,18 @@ class BaseHandler:
                                 await message.reply(error_msg)
                         return None
                 
+                # Проверяем что аватар не STYLE (LEGACY)
+                from app.database.models import AvatarTrainingType
+                if avatar.training_type == AvatarTrainingType.STYLE:
+                    logger.warning(f"[BaseHandler] STYLE аватар {avatar_id} больше не поддерживается (LEGACY)")
+                    if show_error:
+                        error_msg = "❌ Этот аватар больше не поддерживается. Пожалуйста, создайте новый портретный аватар."
+                        if callback:
+                            await callback.answer(error_msg, show_alert=True)
+                        elif message:
+                            await message.reply(error_msg)
+                    return None
+                
                 logger.info(f"[BaseHandler] Ownership check passed, returning avatar")
                 return avatar
                 
@@ -184,6 +196,17 @@ class BaseHandler:
                 if not avatar:
                     if show_error:
                         error_msg = "❌ У вас нет основного аватара. Создайте аватар сначала!"
+                        if callback:
+                            await callback.answer(error_msg, show_alert=True)
+                        elif message:
+                            await message.reply(error_msg)
+                    return None
+                
+                # Проверяем что аватар не STYLE (LEGACY)
+                from app.database.models import AvatarTrainingType
+                if avatar.training_type == AvatarTrainingType.STYLE:
+                    if show_error:
+                        error_msg = "❌ Ваш основной аватар больше не поддерживается. Пожалуйста, создайте новый портретный аватар."
                         if callback:
                             await callback.answer(error_msg, show_alert=True)
                         elif message:

@@ -17,8 +17,8 @@ RUN addgroup -g 101 -S nginx && \
     adduser -S -D -H -u 101 -h /var/cache/nginx -s /sbin/nologin -G nginx -g nginx nginx
 
 # Создаем необходимые директории
-RUN mkdir -p /var/log/nginx /var/cache/nginx /var/run/nginx && \
-    chown -R nginx:nginx /var/log/nginx /var/cache/nginx /var/run/nginx
+RUN mkdir -p /var/log/nginx /var/cache/nginx/proxy_temp \
+    && chown -R nginx:nginx /var/log/nginx /var/cache/nginx
 
 # Копируем конфигурацию nginx
 COPY nginx.conf /etc/nginx/nginx.conf
@@ -39,9 +39,13 @@ LABEL description="Production Nginx reverse proxy for Aisha Bot v2"
 # Переключаемся на непривилегированного пользователя
 USER nginx
 
-EXPOSE 80 443
+EXPOSE 8443
 
 # Создаем healthcheck скрипт
 COPY --chown=nginx:nginx healthcheck.sh /usr/local/bin/healthcheck.sh
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD curl -k -f https://localhost:8443/health || exit 1
 
 CMD ["nginx", "-g", "daemon off;"] 

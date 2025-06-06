@@ -11,6 +11,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from app.utils.timezone import TimezoneUtils
 from app.utils.uuid_utils import safe_uuid
+from app.utils.datetime_utils import format_datetime_for_user
 
 
 def get_transcript_menu_keyboard() -> InlineKeyboardMarkup:
@@ -31,7 +32,7 @@ def get_transcript_menu_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def get_transcripts_keyboard(transcripts: List[Dict], telegram_id: int) -> InlineKeyboardMarkup:
+async def get_transcripts_keyboard(transcripts: List[Dict], telegram_id: int) -> InlineKeyboardMarkup:
     """
     Клавиатура списка транскриптов
     
@@ -45,33 +46,9 @@ def get_transcripts_keyboard(transcripts: List[Dict], telegram_id: int) -> Inlin
     builder = InlineKeyboardBuilder()
     
     for transcript in transcripts:
-        # Получаем created_at
+        # Получаем created_at и форматируем с учетом часового пояса пользователя
         created_at = transcript.get("created_at")
-        
-        # Форматируем дату для отображения
-        date_str = "неизвестно"
-        try:
-            # Используем простое форматирование даты
-            if isinstance(created_at, int):
-                # Если это timestamp (целое число), преобразуем в datetime
-                dt = datetime.fromtimestamp(created_at)
-                date_str = dt.strftime("%d.%m.%Y %H:%M")
-            elif isinstance(created_at, datetime):
-                # Если это datetime
-                date_str = created_at.strftime("%d.%m.%Y %H:%M")
-            elif isinstance(created_at, str):
-                # Если это строка, пробуем преобразовать в datetime
-                try:
-                    dt = datetime.fromisoformat(created_at.replace('Z', '+00:00'))
-                    date_str = dt.strftime("%d.%m.%Y %H:%M")
-                except ValueError:
-                    date_str = created_at
-            else:
-                # В остальных случаях используем строковое представление
-                date_str = str(created_at) if created_at is not None else "неизвестно"
-        except Exception as e:
-            logging.error(f"Error formatting date in get_transcripts_keyboard: {e}, type: {type(created_at)}, value: {created_at}")
-            date_str = str(created_at) if created_at is not None else "неизвестно"
+        date_str = await format_datetime_for_user(created_at, telegram_id)
         
         source = transcript["metadata"].get("source", "unknown") if transcript.get("metadata") else "unknown"
         label = f"{'🎤' if source == 'audio' else '📄'} {date_str}"

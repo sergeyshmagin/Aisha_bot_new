@@ -2,20 +2,20 @@
 # Только то что нужно для работы FAL AI webhook
 
 # FastAPI и сервер
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
+fastapi==0.115.5
+uvicorn[standard]==0.32.1
 
 # Pydantic для валидации
-pydantic==2.5.0
-pydantic-settings==2.1.0
+pydantic==2.10.3
+pydantic-settings==2.7.0
 
 # HTTP клиенты
-aiohttp==3.9.1
-httpx==0.25.2
+aiohttp==3.11.11
+httpx==0.28.1
 
 # FAL AI клиент
-fal-client==0.2.8
+fal-client==0.7.0
 
 # Утилиты
-python-multipart==0.0.6
-python-dotenv==1.0.0 
+python-multipart==0.0.18
+python-dotenv==1.0.1 

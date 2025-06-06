@@ -79,14 +79,18 @@ class FALGenerationService:
             if not self._is_avatar_trained(avatar):
                 raise ValueError(f"Аватар {avatar.id} не обучен или имеет неправильные данные")
             
-            # ✅ СТРОГОЕ РАЗДЕЛЕНИЕ ПО ТИПАМ АВАТАРОВ - теперь только Portrait
+            # ✅ СТРОГОЕ РАЗДЕЛЕНИЕ ПО ТИПАМ АВАТАРОВ
             
             if avatar.training_type == AvatarTrainingType.PORTRAIT:
                 # Портретные аватары используют LoRA файлы + flux-lora API
                 logger.info(f"👤 Portrait аватар: используем flux-lora для {avatar.id}")
                 return await self._generate_with_lora_legacy(avatar, prompt, generation_config)
+            elif avatar.training_type == AvatarTrainingType.STYLE:
+                # STYLE аватары больше не поддерживаются (LEGACY)
+                logger.error(f"🚫 STYLE аватар {avatar.id} больше не поддерживается")
+                raise ValueError(f"STYLE аватары больше не поддерживаются. Пожалуйста, создайте новый портретный аватар.")
             else:
-                # Все остальные типы не поддерживаются (включая STYLE)
+                # Неизвестные типы не поддерживаются
                 raise ValueError(f"Неподдерживаемый тип аватара: {avatar.training_type}")
                 
         except Exception as e:
@@ -281,8 +285,12 @@ class FALGenerationService:
                 else:
                     logger.error(f"❌ Портретный аватар {avatar.id} имеет и LoRA и finetune - конфликт данных")
                 return False
+        elif avatar.training_type == AvatarTrainingType.STYLE:
+            # STYLE аватары - LEGACY, больше не поддерживаются
+            logger.error(f"❌ STYLE аватар {avatar.id} больше не поддерживается (LEGACY). Используйте только портретные аватары.")
+            return False
         else:
-            # Любой другой тип не поддерживается (включая STYLE)
+            # Любой другой тип не поддерживается
             logger.error(f"❌ Аватар {avatar.id} имеет неподдерживаемый тип обучения: {avatar.training_type}")
             return False
 

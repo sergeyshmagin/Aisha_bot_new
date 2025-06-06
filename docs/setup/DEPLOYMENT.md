@@ -1,746 +1,330 @@
-# 🚀 Руководство по развертыванию Aisha v2
+# 🚀 Руководство по развертыванию Aisha Bot v2
 
-**Обновлено:** 15.01.2025  
-**Статус:** ✅ Готово к продакшн развертыванию  
-**Версия:** v2.0 с FAL AI интеграцией
+> **Статус:** ✅ Production Ready  
+> **Обновлено:** Декабрь 2024
 
-## 📋 Обзор развертывания
+## 📋 Обзор
 
-Полное руководство по развертыванию Telegram-бота Aisha v2 в продакшн среде. Включает настройку всех компонентов, внешних сервисов и мониторинга.
+Полное руководство по развертыванию системы Aisha Bot в production окружении с использованием Docker и современных DevOps практик.
 
-### 🎯 Архитектура развертывания
+## 🏗️ Архитектура развертывания
+
+### Компоненты системы
+- **🤖 Telegram Bot** - Основной бот (Python/aiogram)
+- **🔗 Webhook API** - FastAPI сервер для обработки webhook'ов
+- **🗄️ PostgreSQL** - Основная база данных
+- **📦 Redis** - Кэширование и очереди
+- **💾 MinIO** - Объектное хранилище файлов
+- **🌐 Nginx** - Reverse proxy с SSL
+
+### Серверная архитектура
 ```
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Telegram Bot  │    │   API Server    │    │   Database      │
-│   (Port 8000)   │    │   (Port 8443)   │    │   PostgreSQL    │
+│   Redis Server  │    │ Infrastructure  │    │ Production      │
+│   192.168.0.3   │    │   192.168.0.4   │    │  192.168.0.10   │
+│                 │    │                 │    │                 │
+│ • Redis         │    │ • PostgreSQL    │    │ • Webhook API   │
+│ • Кэширование   │    │ • MinIO         │    │ • Nginx + SSL   │
+│ • Очереди       │    │ • Registry      │    │ • Мониторинг    │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
-         │                       │                       │
-         └───────────────────────┼───────────────────────┘
-                                 │
-         ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-         │     MinIO       │    │     Redis       │    │    FAL AI       │
-         │  (Port 9000)    │    │  (Port 6379)    │    │   (External)    │
-         └─────────────────┘    └─────────────────┘    └─────────────────┘
 ```
 
-## 🛠️ Предварительные требования
+## 🚀 Быстрое развертывание
 
-### Системные требования
-- **OS:** Ubuntu 20.04+ / CentOS 8+ / Debian 11+
-- **RAM:** Минимум 2GB, рекомендуется 4GB
-- **CPU:** 2+ ядра
-- **Диск:** 20GB+ свободного места
-- **Python:** 3.11+
+### Предварительные требования
+- Docker 20.10+
+- Docker Compose v2
+- SSH доступ к серверам
+- SSL сертификаты
+- Настроенные переменные окружения
 
-### Необходимые сервисы
-- **PostgreSQL 15+** - основная база данных
-- **Redis 7+** - кэширование и сессии
-- **MinIO** - объектное хранилище файлов
-- **Nginx** - reverse proxy (опционально)
-
-## 📦 Установка зависимостей
-
-### 1. Системные пакеты
+### 1. Подготовка
 ```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install -y python3.11 python3.11-venv python3-pip git curl wget
+# Клонирование репозитория
+git clone <repo> && cd aisha-backend
 
-# CentOS/RHEL
-sudo dnf install -y python3.11 python3-pip git curl wget
+# Настройка скриптов
+chmod +x scripts/utils/make-executable.sh
+./scripts/utils/make-executable.sh
+
+# Проверка SSH доступа
+ssh aisha@192.168.0.3 "echo 'Redis OK'"
+ssh aisha@192.168.0.4 "echo 'Infrastructure OK'"
+ssh aisha@192.168.0.10 "echo 'Production OK'"
 ```
 
-### 2. PostgreSQL
+### 2. Настройка окружения
 ```bash
-# Ubuntu/Debian
-sudo apt install -y postgresql postgresql-contrib
-sudo systemctl start postgresql
-sudo systemctl enable postgresql
+# Копирование и настройка конфигурации
+cp prod.env.example prod.env
+# Отредактируйте prod.env с вашими настройками
 
-# Создание базы данных
-sudo -u postgres psql
-CREATE DATABASE aisha_v2;
-CREATE USER aisha_user WITH PASSWORD 'secure_password';
-GRANT ALL PRIVILEGES ON DATABASE aisha_v2 TO aisha_user;
-\q
+# Проверка SSL сертификатов
+ls -la ssl_certificate/
+# Должны быть: aibots.kz.crt, aibots.kz.key
 ```
 
-### 3. Redis
+### 3. Развертывание инфраструктуры
 ```bash
-# Ubuntu/Debian
-sudo apt install -y redis-server
-sudo systemctl start redis
-sudo systemctl enable redis
+# Настройка Docker Registry
+./scripts/deploy/setup-registry.sh
 
-# Проверка
-redis-cli ping
+# Настройка production сервера
+./scripts/infrastructure/production-setup.sh
+
+# Настройка автозапуска
+./scripts/deploy/setup-autostart.sh
 ```
 
-### 4. MinIO
+### 4. Развертывание приложения
 ```bash
-# Скачивание и установка
-wget https://dl.min.io/server/minio/release/linux-amd64/minio
-chmod +x minio
-sudo mv minio /usr/local/bin/
+# Проверка готовности системы
+./scripts/utils/health-check.sh
 
-# Создание пользователя и директорий
-sudo useradd -r minio-user -s /sbin/nologin
-sudo mkdir -p /opt/minio/data
-sudo chown minio-user:minio-user /opt/minio/data
-
-# Systemd сервис
-sudo tee /etc/systemd/system/minio.service > /dev/null <<EOF
-[Unit]
-Description=MinIO
-Documentation=https://docs.min.io
-Wants=network-online.target
-After=network-online.target
-AssertFileIsExecutable=/usr/local/bin/minio
-
-[Service]
-WorkingDirectory=/opt/minio
-User=minio-user
-Group=minio-user
-EnvironmentFile=-/etc/default/minio
-ExecStartPre=/bin/bash -c "if [ -z \"\${MINIO_VOLUMES}\" ]; then echo \"Variable MINIO_VOLUMES not set in /etc/default/minio\"; exit 1; fi"
-ExecStart=/usr/local/bin/minio server \$MINIO_OPTS \$MINIO_VOLUMES
-Restart=always
-LimitNOFILE=65536
-TasksMax=infinity
-TimeoutStopSec=infinity
-SendSIGKILL=no
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# Конфигурация MinIO
-sudo tee /etc/default/minio > /dev/null <<EOF
-MINIO_VOLUMES="/opt/minio/data"
-MINIO_OPTS="--console-address :9001"
-MINIO_ROOT_USER=minioadmin
-MINIO_ROOT_PASSWORD=minioadmin123
-EOF
-
-sudo systemctl daemon-reload
-sudo systemctl start minio
-sudo systemctl enable minio
+# Полное развертывание Webhook API
+./scripts/deploy/webhook-complete.sh
 ```
 
-## 🔧 Настройка приложения
-
-### 1. Клонирование репозитория
+### 5. Проверка
 ```bash
-cd /opt
-sudo git clone https://github.com/your-repo/aisha_v2.git
-sudo chown -R $USER:$USER /opt/aisha_v2
-cd /opt/aisha_v2
+# Проверка endpoints
+curl -k https://aibots.kz:8443/health
+curl -k https://aibots.kz:8443/webhook/fal
+
+# Проверка сервисов
+docker ps
+sudo systemctl status webhook-api
 ```
 
-### 2. Виртуальное окружение
+## �� Управление системой
+
+### Ежедневные операции
+
+#### Мониторинг здоровья
 ```bash
-python3.11 -m venv venv
-source venv/bin/activate
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-### 3. Конфигурация окружения
-```bash
-cp .env.example .env
-nano .env
-```
-
-### 4. Основные переменные окружения
-```env
-# ==================== ОСНОВНЫЕ НАСТРОЙКИ ====================
-
-# База данных
-DATABASE_HOST=localhost
-DATABASE_PORT=5432
-DATABASE_NAME=aisha_v2
-DATABASE_USER=aisha_user
-DATABASE_PASSWORD=secure_password
-
-# Redis
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=
-
-# MinIO
-MINIO_ENDPOINT=localhost:9000
-MINIO_ACCESS_KEY=minioadmin
-MINIO_SECRET_KEY=minioadmin123
-MINIO_BUCKET_AVATARS=aisha-v2-avatars
-MINIO_BUCKET_TRANSCRIPTS=aisha-v2-transcripts
-
-# ==================== TELEGRAM BOT ====================
-
-TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
-
-# ==================== ВНЕШНИЕ API ====================
-
-# OpenAI
-OPENAI_API_KEY=sk-your_openai_api_key_here
-
-# FAL AI
-FAL_API_KEY=your_fal_api_key_here
-FAL_WEBHOOK_URL=https://yourdomain.com:8443/api/v1/avatar/status_update
-
-# ==================== РЕЖИМЫ РАБОТЫ ====================
-
-# Продакшн режим
-DEBUG=false
-ENVIRONMENT=production
-
-# FAL AI тестовый режим (установите false для продакшна)
-FAL_TRAINING_TEST_MODE=false
-
-# ==================== БЕЗОПАСНОСТЬ ====================
-
-# JWT секрет
-JWT_SECRET=your_jwt_secret_here
-
-# Разрешенные хосты
-ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com
-
-# ==================== ЛОГИРОВАНИЕ ====================
-
-LOG_LEVEL=INFO
-LOG_FILE=/var/log/aisha_v2/app.log
-```
-
-### 5. Применение миграций
-```bash
-source venv/bin/activate
-alembic upgrade head
-```
-
-### 6. Создание buckets в MinIO
-```bash
-# Установка MinIO клиента
-wget https://dl.min.io/client/mc/release/linux-amd64/mc
-chmod +x mc
-sudo mv mc /usr/local/bin/
-
-# Настройка алиаса
-mc alias set local http://localhost:9000 minioadmin minioadmin123
-
-# Создание buckets
-mc mb local/aisha-v2-avatars
-mc mb local/aisha-v2-transcripts
-
-# Настройка политик доступа
-mc policy set public local/aisha-v2-avatars
-mc policy set public local/aisha-v2-transcripts
-```
-
-## 🔐 Настройка внешних сервисов
-
-### 1. Telegram Bot Token
-
-#### Создание бота
-1. Найдите @BotFather в Telegram
-2. Отправьте `/newbot`
-3. Следуйте инструкциям для создания бота
-4. Получите токен и добавьте в `.env`
-
-#### Настройка webhook (опционально)
-```bash
-curl -X POST "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/setWebhook" \
-     -H "Content-Type: application/json" \
-     -d '{"url": "https://yourdomain.com:8443/webhook/telegram"}'
-```
-
-### 2. OpenAI API
-
-#### Получение ключа
-1. Зарегистрируйтесь на https://platform.openai.com
-2. Создайте API ключ в разделе API Keys
-3. Добавьте ключ в `.env` как `OPENAI_API_KEY`
-
-#### Настройка лимитов
-- Установите месячные лимиты расходов
-- Настройте уведомления о превышении
-- Мониторьте использование через dashboard
-
-### 3. FAL AI
-
-#### Получение ключа
-1. Зарегистрируйтесь на https://fal.ai
-2. Получите API ключ в настройках аккаунта
-3. Добавьте ключ в `.env` как `FAL_API_KEY`
-
-#### Настройка webhook
-```bash
-# Webhook URL для уведомлений о статусе обучения
-FAL_WEBHOOK_URL=https://yourdomain.com:8443/api/v1/avatar/status_update
-```
-
-## 🌐 Настройка SSL и домена
-
-### 1. Получение SSL сертификата
-```bash
-# Установка Certbot
-sudo apt install -y certbot
-
-# Получение сертификата
-sudo certbot certonly --standalone -d yourdomain.com
-
-# Копирование сертификатов для API сервера
-sudo cp /etc/letsencrypt/live/yourdomain.com/fullchain.pem /opt/aisha_v2/api_server/ssl/
-sudo cp /etc/letsencrypt/live/yourdomain.com/privkey.pem /opt/aisha_v2/api_server/ssl/
-sudo chown $USER:$USER /opt/aisha_v2/api_server/ssl/*
-```
-
-### 2. Настройка автообновления сертификатов
-```bash
-# Добавление в crontab
-sudo crontab -e
-
-# Добавить строку:
-0 12 * * * /usr/bin/certbot renew --quiet && systemctl restart aisha-api-server
-```
-
-## 🚀 Запуск сервисов
-
-### 1. Создание systemd сервисов
-
-#### Основной Telegram бот
-```bash
-sudo tee /etc/systemd/system/aisha-bot.service > /dev/null <<EOF
-[Unit]
-Description=Aisha v2 Telegram Bot
-After=network.target postgresql.service redis.service
-
-[Service]
-Type=simple
-User=$USER
-WorkingDirectory=/opt/aisha_v2
-Environment=PATH=/opt/aisha_v2/venv/bin
-ExecStart=/opt/aisha_v2/venv/bin/python -m app.main
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOF
-```
-
-#### API сервер для webhook
-```bash
-sudo tee /etc/systemd/system/aisha-api-server.service > /dev/null <<EOF
-[Unit]
-Description=Aisha v2 API Server
-After=network.target
-
-[Service]
-Type=simple
-User=$USER
-WorkingDirectory=/opt/aisha_v2/api_server
-Environment=PATH=/opt/aisha_v2/venv/bin
-ExecStart=/opt/aisha_v2/venv/bin/python run_api_server.py
-Restart=always
-RestartSec=10
-
-[Install]
-WantedBy=multi-user.target
-EOF
-```
-
-### 2. Запуск сервисов
-```bash
-sudo systemctl daemon-reload
-sudo systemctl start aisha-bot
-sudo systemctl start aisha-api-server
-sudo systemctl enable aisha-bot
-sudo systemctl enable aisha-api-server
-```
-
-### 3. Проверка статуса
-```bash
-sudo systemctl status aisha-bot
-sudo systemctl status aisha-api-server
-```
-
-## 📊 Мониторинг и логирование
-
-### 1. Настройка логирования
-```bash
-# Создание директории для логов
-sudo mkdir -p /var/log/aisha_v2
-sudo chown $USER:$USER /var/log/aisha_v2
-
-# Настройка ротации логов
-sudo tee /etc/logrotate.d/aisha_v2 > /dev/null <<EOF
-/var/log/aisha_v2/*.log {
-    daily
-    missingok
-    rotate 30
-    compress
-    delaycompress
-    notifempty
-    create 644 $USER $USER
-    postrotate
-        systemctl reload aisha-bot
-        systemctl reload aisha-api-server
-    endscript
-}
-EOF
-```
-
-### 2. Health check endpoints
-```bash
-# Проверка основного бота
-curl http://localhost:8000/health
-
-# Проверка API сервера
-curl https://localhost:8443/health
-
-# Проверка webhook статуса
-curl https://localhost:8443/api/v1/webhook/status
-```
-
-### 3. Мониторинг ресурсов
-```bash
-# Использование памяти и CPU
-htop
-
-# Логи сервисов
-sudo journalctl -u aisha-bot -f
-sudo journalctl -u aisha-api-server -f
-
-# Логи приложения
-tail -f /var/log/aisha_v2/app.log
-```
-
-## 🔧 Настройка Nginx (опционально)
-
-### 1. Установка и конфигурация
-```bash
-sudo apt install -y nginx
-
-sudo tee /etc/nginx/sites-available/aisha_v2 > /dev/null <<EOF
-server {
-    listen 80;
-    server_name yourdomain.com;
-    return 301 https://\$server_name\$request_uri;
-}
-
-server {
-    listen 443 ssl http2;
-    server_name yourdomain.com;
-
-    ssl_certificate /etc/letsencrypt/live/yourdomain.com/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/yourdomain.com/privkey.pem;
-
-    # API сервер
-    location /api/ {
-        proxy_pass https://localhost:8443;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-
-    # MinIO консоль
-    location /minio/ {
-        proxy_pass http://localhost:9001;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-    }
-}
-EOF
-
-sudo ln -s /etc/nginx/sites-available/aisha_v2 /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
-```
-
-## 🧪 Тестирование развертывания
-
-### 1. Проверка компонентов
-```bash
-# База данных
-psql -h localhost -U aisha_user -d aisha_v2 -c "SELECT version();"
-
-# Redis
-redis-cli ping
-
-# MinIO
-mc admin info local
-
-# Сервисы
-systemctl is-active aisha-bot
-systemctl is-active aisha-api-server
-```
-
-### 2. Функциональное тестирование
-```bash
-# Отправка тестового сообщения боту
-# Проверка создания аватара
-# Тестирование webhook
-curl -X POST https://yourdomain.com:8443/api/v1/avatar/status_update \
-  -H "Content-Type: application/json" \
-  -d '{
-    "request_id": "test_123",
-    "status": "completed",
-    "training_type": "portrait"
-  }'
-```
-
-## 🚨 Решение проблем
-
-### Частые проблемы и решения
-
-#### Бот не отвечает
-```bash
-# Проверка статуса
-sudo systemctl status aisha-bot
+# Комплексная проверка
+./scripts/utils/health-check.sh
 
 # Проверка логов
-sudo journalctl -u aisha-bot -n 50
+./scripts/utils/log-analyzer.sh
 
-# Проверка токена
-curl "https://api.telegram.org/bot<TOKEN>/getMe"
+# Метрики системы
+docker stats
 ```
 
-#### Ошибки базы данных
+#### Управление сервисами
+```bash
+# Nginx
+./scripts/infrastructure/nginx-management.sh status
+./scripts/infrastructure/nginx-management.sh restart
+./scripts/infrastructure/nginx-management.sh logs
+
+# Webhook API
+ssh aisha@192.168.0.10 'sudo systemctl status webhook-api'
+ssh aisha@192.168.0.10 'sudo systemctl restart webhook-api'
+```
+
+#### База данных
+```bash
+# Проверка состояния
+python scripts/maintenance/check_db_status.py
+
+# Миграции
+alembic upgrade head
+python scripts/maintenance/check_migration_status.py
+
+# Бэкап
+pg_dump aisha_v2 > backup_$(date +%Y%m%d).sql
+```
+
+### Обновление системы
+
+#### Обновление кода
+```bash
+# Получение изменений
+git pull origin main
+
+# Пересборка и развертывание
+./scripts/deploy/webhook-complete.sh
+
+# Применение миграций
+alembic upgrade head
+```
+
+#### Обновление зависимостей
+```bash
+# Обновление Python пакетов
+pip install -r requirements.txt --upgrade
+
+# Пересборка Docker образов
+docker build --no-cache -f docker/Dockerfile.webhook -t aisha-webhook:latest .
+```
+
+## 🚨 Устранение неполадок
+
+### Частые проблемы
+
+#### 1. Registry недоступен
+```bash
+# Диагностика
+curl http://192.168.0.4:5000/v2/_catalog
+
+# Исправление
+./scripts/deploy/fix-registry.sh
+
+# Проверка логов
+ssh aisha@192.168.0.4 'sudo docker logs registry-server'
+```
+
+#### 2. Webhook API не отвечает
+```bash
+# Проверка статуса
+ssh aisha@192.168.0.10 'sudo systemctl status webhook-api'
+
+# Перезапуск
+ssh aisha@192.168.0.10 'sudo systemctl restart webhook-api'
+
+# Логи
+ssh aisha@192.168.0.10 'sudo journalctl -u webhook-api -f'
+```
+
+#### 3. SSL проблемы
+```bash
+# Проверка сертификата
+openssl x509 -in ssl_certificate/aibots.kz.crt -text -noout
+
+# Тест соединения
+openssl s_client -connect aibots.kz:8443 -servername aibots.kz
+
+# Обновление nginx конфигурации
+./scripts/infrastructure/nginx-management.sh reload
+```
+
+#### 4. База данных недоступна
 ```bash
 # Проверка подключения
-psql -h localhost -U aisha_user -d aisha_v2
+python scripts/maintenance/check_db.py
+
+# Проверка PostgreSQL
+ssh aisha@192.168.0.4 'sudo systemctl status postgresql'
 
 # Проверка миграций
-cd /opt/aisha_v2
-source venv/bin/activate
-alembic current
-alembic history
+python scripts/maintenance/check_migration_status.py
 ```
 
-#### Проблемы с SSL
+### Логи и диагностика
+
+#### Основные логи
 ```bash
-# Проверка сертификатов
-sudo certbot certificates
+# Системные логи
+sudo journalctl -u webhook-api -f
+sudo journalctl -u nginx -f
 
-# Тестирование SSL
-openssl s_client -connect yourdomain.com:8443
+# Docker логи
+docker-compose -f docker-compose.webhook.prod.yml logs -f
 
-# Обновление сертификатов
-sudo certbot renew
+# Логи приложения
+tail -f /var/log/aisha/app.log
+tail -f /var/log/aisha/webhook.log
 ```
 
-#### Ошибки FAL AI
+#### Анализ производительности
 ```bash
-# Проверка API ключа
-curl -H "Authorization: Key YOUR_FAL_API_KEY" https://fal.run/fal-ai/fast-sdxl
+# Метрики Docker
+docker stats
 
-# Проверка webhook
-curl -X POST https://yourdomain.com:8443/api/v1/avatar/status_update \
-  -H "Content-Type: application/json" \
-  -d '{"test": true}'
-```
-
-## 📈 Оптимизация производительности
-
-### 1. Настройка PostgreSQL
-```sql
--- /etc/postgresql/15/main/postgresql.conf
-shared_buffers = 256MB
-effective_cache_size = 1GB
-maintenance_work_mem = 64MB
-checkpoint_completion_target = 0.9
-wal_buffers = 16MB
-default_statistics_target = 100
-random_page_cost = 1.1
-effective_io_concurrency = 200
-```
-
-### 2. Настройка Redis
-```bash
-# /etc/redis/redis.conf
-maxmemory 512mb
-maxmemory-policy allkeys-lru
-save 900 1
-save 300 10
-save 60 10000
-```
-
-### 3. Мониторинг производительности
-```bash
-# Установка monitoring tools
-sudo apt install -y htop iotop nethogs
-
-# Мониторинг в реальном времени
+# Системные ресурсы
 htop
-iotop
-nethogs
+df -h
+free -h
+
+# Сетевые соединения
+netstat -tulpn | grep :8443
 ```
 
-## 🔄 Обновление системы
+## 🔐 Безопасность
 
-### 1. Обновление кода
+### SSL/TLS
+- Использование валидных SSL сертификатов
+- Принудительное HTTPS перенаправление
+- Современные TLS протоколы
+
+### Сетевая безопасность
+- Firewall настройки
+- Ограничение доступа по IP
+- Безопасные SSH ключи
+
+### Мониторинг безопасности
 ```bash
-cd /opt/aisha_v2
-git pull origin main
-source venv/bin/activate
-pip install -r requirements.txt
-alembic upgrade head
-sudo systemctl restart aisha-bot
-sudo systemctl restart aisha-api-server
+# Проверка открытых портов
+nmap -sT -O localhost
+
+# Анализ логов безопасности
+sudo grep "Failed password" /var/log/auth.log
+
+# Проверка SSL конфигурации
+./scripts/utils/ssl-check.sh
 ```
 
-### 2. Резервное копирование
+## 📊 Мониторинг и метрики
+
+### Ключевые метрики
+- **Время отклика API**: < 500ms
+- **Доступность**: > 99.9%
+- **Использование памяти**: < 80%
+- **Использование диска**: < 85%
+
+### Настройка мониторинга
 ```bash
-# База данных
-pg_dump -h localhost -U aisha_user aisha_v2 > backup_$(date +%Y%m%d).sql
+# Healthcheck endpoints
+curl -k https://aibots.kz:8443/health
 
-# MinIO данные
-mc mirror local/aisha-v2-avatars /backup/minio/avatars/
-mc mirror local/aisha-v2-transcripts /backup/minio/transcripts/
+# Метрики Docker
+docker stats --format "table {{.Container}}\t{{.CPUPerc}}\t{{.MemUsage}}"
 
-# Конфигурация
-cp .env /backup/config/env_$(date +%Y%m%d)
+# Системные метрики
+./scripts/utils/system-metrics.sh
+```
+
+## 🔄 Резервное копирование
+
+### Автоматическое резервное копирование
+```bash
+# Настройка cron задач
+./scripts/utils/setup-backup.sh
+
+# Ручное создание бэкапа
+./scripts/utils/backup.sh
+```
+
+### Восстановление из бэкапа
+```bash
+# Восстановление базы данных
+psql aisha_v2 < backup_20241201.sql
+
+# Восстановление конфигураций
+./scripts/utils/restore-config.sh
+```
+
+## 📚 Дополнительные ресурсы
+
+### Документация
+- [Архитектура системы](../architecture.md)
+- [Best Practices](../best_practices.md)
+- [Troubleshooting](../reference/troubleshooting.md)
+
+### Полезные команды
+```bash
+# Быстрая диагностика
+./scripts/utils/quick-check.sh
+
+# Полная проверка системы
+./scripts/utils/full-system-check.sh
+
+# Обновление всей системы
+./scripts/deploy/full-update.sh
 ```
 
 ---
 
-**🎉 Развертывание завершено! Система готова к продакшн использованию.**
-
-### 📞 Поддержка
-- Логи: `/var/log/aisha_v2/`
-- Статус сервисов: `systemctl status aisha-*`
-- Мониторинг: Health check endpoints
-- Документация: `/opt/aisha_v2/docs/`
-
-# Развертывание AISHA Backend
-
-## Обзор
-
-Этот документ описывает процесс развертывания AISHA Backend в различных окружениях.
-
-## Требования
-
-### Системные требования
-- Python 3.11+
-- Redis 7.0+
-- PostgreSQL 14+
-- MinIO для хранения файлов
-- Достаточно места для моделей LoRA
-
-### Переменные окружения
-Скопируйте и настройте файл окружения:
-```bash
-cp env.example .env
-```
-
-Основные переменные:
-```bash
-# База данных
-DATABASE_URL=postgresql://user:password@localhost:5432/aisha_db
-
-# Redis
-REDIS_URL=redis://localhost:6379/0
-
-# MinIO
-MINIO_ENDPOINT=localhost:9000
-MINIO_ACCESS_KEY=your_access_key
-MINIO_SECRET_KEY=your_secret_key
-
-# Telegram Bot
-TELEGRAM_BOT_TOKEN=your_bot_token
-
-# FAL AI
-FAL_KEY=your_fal_key
-```
-
-## Способы развертывания
-
-### 1. Локальная разработка
-
-```bash
-# Активируйте виртуальное окружение
-source .venv/bin/activate
-
-# Установите зависимости
-pip install -r requirements.txt
-
-# Выполните миграции
-alembic upgrade head
-
-# Запустите приложение
-python3 -m app.main
-```
-
-### 2. Docker (рекомендуется)
-
-См. [DOCKER_SETUP.md](DOCKER_SETUP.md) для подробной инструкции.
-
-```bash
-# Разработка
-docker-compose up -d
-
-# Продакшн
-docker-compose -f docker-compose.prod.yml up -d
-```
-
-### 3. Продакшн
-
-Для продакшн развертывания рекомендуется:
-
-1. **Настройка сервера:**
-   - Ubuntu 22.04 LTS или новее
-   - Nginx как reverse proxy
-   - Systemd для управления сервисами
-   - SSL сертификаты
-
-2. **Безопасность:**
-   - Настройте firewall
-   - Используйте secrets management
-   - Настройте мониторинг
-
-3. **Мониторинг:**
-   - Логирование в structured format
-   - Health check endpoints
-   - Метрики производительности
-
-## Проверка развертывания
-
-```bash
-# Проверьте подключения
-python3 test_connections.py
-
-# Проверьте здоровье приложения
-curl http://localhost:8000/health
-```
-
-## Устранение неполадок
-
-### Частые проблемы
-
-1. **Ошибки подключения к БД:**
-   - Проверьте DATABASE_URL
-   - Убедитесь что PostgreSQL запущен
-
-2. **Проблемы с Redis:**
-   - Проверьте REDIS_URL
-   - Убедитесь что Redis доступен
-
-3. **Ошибки MinIO:**
-   - Проверьте endpoint и credentials
-   - Убедитесь что bucket существует
-
-### Логи
-
-```bash
-# Просмотр логов
-docker-compose logs -f app
-
-# Логи конкретного сервиса
-docker-compose logs redis
-```
-
-## См. также
-
-- [DOCKER_SETUP.md](DOCKER_SETUP.md) - Настройка Docker
-- [../development/PERFORMANCE.md](../development/PERFORMANCE.md) - Оптимизация производительности
-- [../architecture.md](../architecture.md) - Архитектура системы 
+**🎯 Результат:** Полностью функциональная production система Aisha Bot готова к использованию! 

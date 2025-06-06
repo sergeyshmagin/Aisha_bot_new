@@ -21,7 +21,7 @@ if project_root not in sys.path:
 # Проверяем что можем импортировать основные модули
 try:
     # ИСПРАВЛЕНИЕ: Используем существующий app/core/database.py
-    from app.core.database import get_session, get_db_session
+    from app.core.database import get_session
     from app.services.avatar.training_service.main_service import AvatarTrainingService
     from app.core.di import get_user_service_with_session  # ИСПРАВЛЕНО: правильный импорт
     from app.core.config import settings as main_settings
@@ -41,8 +41,7 @@ router = APIRouter(prefix="/api/v1/avatar", tags=["avatar"])
 @router.post("/status_update")
 async def handle_fal_webhook(
     request: Request,
-    background_tasks: BackgroundTasks,
-    session: AsyncSession = Depends(get_db_session)
+    background_tasks: BackgroundTasks
 ):
     """
     Обработчик webhook от FAL AI для обновления статуса обучения аватаров

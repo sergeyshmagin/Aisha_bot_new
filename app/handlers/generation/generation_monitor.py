@@ -429,26 +429,37 @@ class GenerationMonitor(BaseHandler):
             data_parts = callback.data.split(":")
             generation_id = UUID(data_parts[1])
 
+            logger.info(f"Показ промпта: generation_id={generation_id}")
+
             # Получаем генерацию
             generation = await self.generation_service.get_generation_by_id(generation_id)
             if not generation:
+                logger.warning(f"Генерация {generation_id} не найдена")
                 await callback.answer("❌ Генерация не найдена", show_alert=True)
                 return
 
+            logger.info(f"Генерация найдена: id={generation.id}, user_id={generation.user_id}, type={type(generation.user_id)}")
+
             # Проверяем принадлежность пользователю
             user = await self.get_user_from_callback(callback)
-            if not user or generation.user_id != user.id:
+            if not user:
+                logger.warning("Пользователь не найден в callback")
+                await callback.answer("❌ Пользователь не найден", show_alert=True)
+                return
+
+            logger.info(f"Пользователь найден: id={user.id}, type={type(user.id)}")
+            logger.info(f"Проверка владельца: generation.user_id={generation.user_id} == user.id={user.id} ? {generation.user_id == user.id}")
+
+            if generation.user_id != user.id:
+                logger.error(f"Генерация не принадлежит пользователю! generation.user_id={generation.user_id}, user.id={user.id}")
                 await callback.answer("❌ Генерация не принадлежит вам", show_alert=True)
                 return
 
             # Показываем полный промпт
-            async with get_user_service() as user_service:
-                from app.utils.timezone_handler import TimezoneHandler
-
-                tz_handler = TimezoneHandler(user_service)
-                date_str = await tz_handler.format_date(
-                    generation.created_at, callback.from_user.id
-                )
+            from app.utils.datetime_utils import format_datetime_for_user
+            date_str = await format_datetime_for_user(
+                generation.created_at, user.id
+            )
 
             text = f"""📝 <b>Полный промпт генерации</b>
 

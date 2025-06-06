@@ -75,8 +75,14 @@ class PhotoGalleryHandler:
                 await callback.answer("❌ Не удалось загрузить фото", show_alert=True)
                 return
             
+            # Получаем user_id для форматирования даты
+            from app.core.di import get_user_service
+            async with get_user_service() as user_service:
+                user = await user_service.get_user_by_telegram_id(callback.from_user.id)
+                user_id = user.id if user else callback.from_user.id
+            
             # Формируем информацию о фото
-            text = self._format_photo_text(avatar, photo_idx, photo)
+            text = await self._format_photo_text(avatar, photo_idx, photo, user_id)
             
             keyboard = self.keyboards.get_avatar_photo_gallery_keyboard(
                 photo_idx, 
@@ -195,10 +201,12 @@ class PhotoGalleryHandler:
             logger.exception(f"Ошибка при возврате к карточке аватара: {e}")
             await callback.answer("❌ Произошла ошибка", show_alert=True)
 
-    def _format_photo_text(self, avatar, photo_idx: int, photo) -> str:
+    async def _format_photo_text(self, avatar, photo_idx: int, photo, user_id: int) -> str:
         """Форматирует текст для фото"""
+        from app.utils.datetime_utils import format_created_at
+        created_str = await format_created_at(photo, user_id)
         return f"""🎭 **{avatar.name or 'Без имени'}**
 
 📸 Фото {photo_idx + 1} из {len(avatar.photos)}
 
-📅 Загружено: {photo.created_at.strftime("%d.%m.%Y %H:%M") if photo.created_at else "—"}""" 
+📅 Загружено: {created_str}""" 

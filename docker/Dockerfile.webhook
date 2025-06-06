@@ -1,0 +1,113 @@
+# ======================== BASE STAGE ========================
+FROM python:3.11-slim as base
+
+# Системные зависимости
+RUN apt-get update && apt-get install -y \
+    curl \
+    netcat-openbsd \
+    procps \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
+
+# Создание пользователя приложения
+RUN groupadd -r aisha && useradd -r -g aisha aisha
+
+WORKDIR /app
+
+# ======================== BUILDER STAGE ========================
+FROM base as builder
+
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Копируем requirements для API сервера
+COPY requirements_api.txt ./api_requirements.txt
+COPY requirements.txt ./main_requirements.txt
+
+# Устанавливаем зависимости в wheels для оптимизации
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels \
+    -r api_requirements.txt -r main_requirements.txt
+
+# ======================== DEVELOPMENT STAGE ========================
+FROM base as development
+
+# Копирование wheels и установка
+COPY --from=builder /app/wheels /wheels
+COPY requirements_api.txt ./api_requirements.txt
+COPY requirements.txt ./main_requirements.txt
+
+RUN pip install --no-cache /wheels/* && rm -rf /wheels
+
+# Копирование всего кода для development
+COPY --chown=aisha:aisha . .
+
+# Переключение на пользователя приложения
+USER aisha
+
+# Переменные окружения для development
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV DEBUG=true
+ENV API_HOST=0.0.0.0
+ENV API_PORT=8001
+ENV SSL_ENABLED=false
+
+EXPOSE 8001
+
+CMD ["python", "-m", "api_server.main"]
+
+# ======================== PRODUCTION STAGE ========================
+FROM base as production
+
+# Копирование wheels и установка
+COPY --from=builder /app/wheels /wheels
+COPY requirements_api.txt ./api_requirements.txt
+COPY requirements.txt ./main_requirements.txt
+
+RUN pip install --no-cache /wheels/* && rm -rf /wheels
+
+# Копирование только необходимого кода
+COPY --chown=aisha:aisha app/ ./app/
+COPY --chown=aisha:aisha api_server/ ./api_server/
+COPY --chown=aisha:aisha scripts/ ./scripts/
+COPY --chown=aisha:aisha alembic/ ./alembic/
+COPY --chown=aisha:aisha alembic.ini ./alembic.ini
+
+# Создание директорий для логов
+RUN mkdir -p /app/logs /app/tmp && chown -R aisha:aisha /app/logs /app/tmp
+
+# Переключение на пользователя приложения
+USER aisha
+
+# Переменные окружения для production
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV DEBUG=false
+ENV API_HOST=0.0.0.0
+ENV API_PORT=8001
+ENV SSL_ENABLED=false
+ENV API_RELOAD=false
+
+# Healthcheck для webhook API
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8001/health || exit 1
+
+# Метаданные
+LABEL maintainer="Aisha Bot Team"
+LABEL version="2.0"
+LABEL environment="production"
+LABEL description="Aisha Webhook API Server"
+LABEL service="webhook-api"
+
+EXPOSE 8001
+
+# Запуск с uvicorn и оптимальными настройками для webhook
+CMD ["uvicorn", "api_server.main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8001", \
+     "--workers", "2", \
+     "--worker-class", "uvicorn.workers.UvicornWorker", \
+     "--access-log", \
+     "--log-level", "info", \
+     "--no-server-header"] 

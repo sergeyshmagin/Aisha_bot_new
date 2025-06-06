@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
     environment:
       # Подключение к внешним сервисам проекта
-      - DATABASE_URL=postgresql+asyncpg://aisha:${POSTGRES_PASSWORD}@${DATABASE_HOST}:5432/aisha_v2
+      - DATABASE_URL=postgresql+asyncpg://aisha:${POSTGRES_PASSWORD}@${DATABASE_HOST}:5432/aisha
       - REDIS_URL=redis://${REDIS_HOST}:6379/0
       - MINIO_ENDPOINT=${MINIO_ENDPOINT}
       - DEBUG=true

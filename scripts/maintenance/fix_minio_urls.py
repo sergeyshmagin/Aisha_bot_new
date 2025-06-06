@@ -20,7 +20,7 @@ import logging
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from app.core.database import get_db_session
+from app.core.database import get_session
 from app.core.config import settings
 from app.services.storage.minio import MinioStorage
 from app.repositories.generation_repository import ImageGenerationRepository
@@ -52,7 +52,7 @@ class MinioUrlFixer:
         """
         logger.info(f"🔍 Запуск {'исправления' if fix_mode else 'проверки'} URL изображений в MinIO...")
         
-        async with get_db_session() as session:
+        async with get_session() as session:
             # Получаем все генерации с result_urls
             query = select(ImageGeneration).where(
                 ImageGeneration.result_urls.isnot(None),

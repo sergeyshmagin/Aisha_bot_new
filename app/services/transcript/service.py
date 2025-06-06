@@ -1,5 +1,4 @@
 from app.services.storage.minio import MinioStorage
-from app.core.database import get_db_session
 
 class TranscriptService:
     def __init__(self, minio_storage: MinioStorage, db_session):

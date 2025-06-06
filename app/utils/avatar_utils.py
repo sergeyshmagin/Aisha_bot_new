@@ -87,7 +87,8 @@ def format_finetune_comment_debug(
         Комментарий с датой и ID для отладки
     """
     basic_comment = format_finetune_comment(avatar_name, telegram_username)
-    date = datetime.now().strftime("%d.%m")
+    from app.utils.datetime_utils import now_utc
+    date = now_utc().strftime("%d.%m")
     short_id = str(avatar_id).replace('-', '')[:8]
     
     return f"{basic_comment} ({date}, {short_id})"

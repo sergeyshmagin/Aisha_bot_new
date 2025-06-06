@@ -25,10 +25,11 @@ from app.services.text_processing import TextProcessingService
 from app.services.transcript import TranscriptService
 from app.services.user import UserService
 from app.services.audio_processing.factory import get_audio_service
-from app.core.database import get_db_session as db_get_db_session
+# Убрано неправильный импорт get_db_session
 from app.services.generation.generation_service import ImageGenerationService
 from app.core.logger import get_logger
 from app.utils.timezone_handler import TimezoneHandler
+from app.utils.datetime_utils import set_global_datetime_manager
 
 logger = get_logger(__name__)
 
@@ -39,9 +40,7 @@ _state_storage: Optional[RedisStorage] = None
 _engine = None
 _async_session = None
 
-def get_db_session() -> AsyncSession:
-    """Получить сессию БД"""
-    return db_get_db_session()
+# Убрано: get_db_session() - использовать get_session() из database.py как контекстный менеджер
 
 
 def get_redis_client() -> Redis:
@@ -101,24 +100,22 @@ async def get_user_service():
     """
     Контекстный менеджер для получения сервиса пользователей с автоматическим управлением сессией
     """
-    session = get_db_session()
-    try:
+    from app.core.database import get_session
+    async with get_session() as session:
         user_service = UserService(session)
+        # Инициализируем глобальный DateTimeManager
+        set_global_datetime_manager(user_service)
         yield user_service
-        # Если дошли до этой точки без исключений, выполняем commit
-        await session.commit()
-    except Exception as e:
-        await session.rollback()
-        raise
-    finally:
-        await session.close()
 
 
 def get_user_service_with_session(session: AsyncSession) -> UserService:
     """
     Получение сервиса для работы с пользователями с переданной сессией
     """
-    return UserService(session)
+    user_service = UserService(session)
+    # Инициализируем глобальный DateTimeManager
+    set_global_datetime_manager(user_service)
+    return user_service
 
 
 def get_timezone_handler_with_session(session: AsyncSession) -> TimezoneHandler:
@@ -132,19 +129,11 @@ async def get_avatar_service():
     """
     Контекстный менеджер для получения сервиса аватаров с автоматическим управлением сессией
     """
-    session = get_db_session()
-    try:
+    from app.core.database import get_session
+    async with get_session() as session:
         from app.services.avatar_db import AvatarService
-
         avatar_service = AvatarService(session)
         yield avatar_service
-        # Если дошли до этой точки без исключений, выполняем commit
-        await session.commit()
-    except Exception as e:
-        await session.rollback()
-        raise
-    finally:
-        await session.close()
 
 
 @asynccontextmanager

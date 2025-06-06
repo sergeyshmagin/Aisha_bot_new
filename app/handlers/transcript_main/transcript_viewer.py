@@ -139,7 +139,7 @@ class TranscriptViewer:
 
         Args:
             call: Callback-запрос
-            user_id: ID пользователя
+            user_id: ID пользователя (UUID строка)
 
         Returns:
             True если транскрипт успешно открыт, False иначе
@@ -157,8 +157,9 @@ class TranscriptViewer:
                 await call.answer("❌ Транскрипт не найден", show_alert=True)
                 return False
 
-            # Рендерим карточку
-            card_text = await self.render_transcript_card(transcript, int(user_id))
+            # Рендерим карточку (используем telegram_id из call)
+            telegram_id = call.from_user.id
+            card_text = await self.render_transcript_card(transcript, telegram_id)
             keyboard = get_transcript_actions_keyboard(str(transcript["id"]))
 
             # Отправляем карточку
@@ -180,7 +181,7 @@ class TranscriptViewer:
 
         Args:
             message: Сообщение с командой
-            user_id: ID пользователя
+            user_id: ID пользователя (UUID строка)
 
         Returns:
             True если транскрипт успешно открыт, False иначе
@@ -203,8 +204,9 @@ class TranscriptViewer:
                 await message.answer("❌ Транскрипт не найден")
                 return False
 
-            # Рендерим карточку
-            card_text = await self.render_transcript_card(transcript, int(user_id))
+            # Рендерим карточку (используем telegram_id из message)
+            telegram_id = message.from_user.id
+            card_text = await self.render_transcript_card(transcript, telegram_id)
             keyboard = get_transcript_actions_keyboard(str(transcript["id"]))
 
             # Отправляем карточку

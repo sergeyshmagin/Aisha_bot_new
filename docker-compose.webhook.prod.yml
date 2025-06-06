@@ -1,0 +1,250 @@
+version: '3.8'
+
+# Docker Compose для продакшн развертывания Webhook API
+# Оптимизировано для сервера 192.168.0.10 (aibots.kz)
+
+networks:
+  webhook_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  nginx_cache:
+    driver: local
+  nginx_logs:
+    driver: local
+  webhook_logs:
+    driver: local
+  ssl_certs:
+    driver: local
+
+services:
+  # Nginx reverse proxy с SSL и кешированием
+  nginx:
+    build:
+      context: ./docker/nginx
+      dockerfile: Dockerfile
+    container_name: aisha-nginx-webhook
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "8443:8443"
+    volumes:
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+      - nginx_cache:/tmp/nginx_cache
+      - nginx_cache:/tmp/nginx_webhook
+    networks:
+      webhook_network:
+        ipv4_address: 172.20.0.10
+    depends_on:
+      - webhook-api-1
+      - webhook-api-2
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    environment:
+      - NGINX_WORKER_PROCESSES=auto
+      - NGINX_WORKER_CONNECTIONS=2048
+    labels:
+      - "traefik.enable=false"
+      - "com.docker.compose.service=nginx"
+
+  # Первичный экземпляр Webhook API
+  webhook-api-1:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.webhook
+      target: production
+    container_name: aisha-webhook-api-1
+    restart: unless-stopped
+    expose:
+      - "8001"
+    volumes:
+      - webhook_logs:/app/logs
+    networks:
+      webhook_network:
+        ipv4_address: 172.20.0.20
+    env_file:
+      - ./prod.env
+    environment:
+      # Application settings
+      - PYTHONPATH=/app
+      - DEBUG=false
+      - API_HOST=0.0.0.0
+      - API_PORT=8001
+      - SSL_ENABLED=false
+      
+      # Database (используем внешний PostgreSQL)
+      - POSTGRES_HOST=192.168.0.4
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=aisha
+      - POSTGRES_USER=aisha_user
+      - POSTGRES_PASSWORD=KbZZGJHX09KSH7r9ev4m
+      
+      # Redis (используем внешний Redis)
+      - REDIS_HOST=192.168.0.3
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=wd7QuwAbG0wtyoOOw3Sm
+      - REDIS_SSL=false
+      - REDIS_POOL_SIZE=5
+      
+      # MinIO (используем внешний MinIO)
+      - MINIO_ENDPOINT=192.168.0.4:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=74rSbw9asQ1uMzcFeM5G
+      - MINIO_SECURE=false
+      
+      # Webhook settings
+      - FAL_WEBHOOK_URL=https://aibots.kz:8443/api/v1/avatar/status_update
+      - WEBHOOK_TIMEOUT=30
+      - WEBHOOK_RETRY_ATTEMPTS=3
+      
+      # Performance tuning
+      - UVICORN_WORKERS=2
+      - UVICORN_WORKER_CLASS=uvicorn.workers.UvicornWorker
+      - UVICORN_BACKLOG=2048
+      - UVICORN_ACCESS_LOG=true
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+    labels:
+      - "com.docker.compose.service=webhook-api-primary"
+
+  # Вторичный экземпляр Webhook API (backup)
+  webhook-api-2:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.webhook
+      target: production
+    container_name: aisha-webhook-api-2
+    restart: unless-stopped
+    expose:
+      - "8001"
+    volumes:
+      - webhook_logs:/app/logs
+    networks:
+      webhook_network:
+        ipv4_address: 172.20.0.21
+    env_file:
+      - ./prod.env
+    environment:
+      # Те же настройки, что и у первичного экземпляра
+      - PYTHONPATH=/app
+      - DEBUG=false
+      - API_HOST=0.0.0.0
+      - API_PORT=8001
+      - SSL_ENABLED=false
+      
+      # Database
+      - POSTGRES_HOST=192.168.0.4
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=aisha
+      - POSTGRES_USER=aisha_user
+      - POSTGRES_PASSWORD=KbZZGJHX09KSH7r9ev4m
+      
+      # Redis
+      - REDIS_HOST=192.168.0.3
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=wd7QuwAbG0wtyoOOw3Sm
+      - REDIS_SSL=false
+      - REDIS_POOL_SIZE=5
+      
+      # MinIO
+      - MINIO_ENDPOINT=192.168.0.4:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=74rSbw9asQ1uMzcFeM5G
+      - MINIO_SECURE=false
+      
+      # Webhook settings
+      - FAL_WEBHOOK_URL=https://aibots.kz:8443/api/v1/avatar/status_update
+      - WEBHOOK_TIMEOUT=30
+      - WEBHOOK_RETRY_ATTEMPTS=3
+      
+      # Performance tuning (меньше ресурсов для backup)
+      - UVICORN_WORKERS=1
+      - UVICORN_WORKER_CLASS=uvicorn.workers.UvicornWorker
+      - UVICORN_BACKLOG=1024
+      - UVICORN_ACCESS_LOG=true
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    labels:
+      - "com.docker.compose.service=webhook-api-backup"
+
+  # Мониторинг и логирование (опционально)
+  webhook-monitor:
+    image: nginx:alpine
+    container_name: aisha-webhook-monitor
+    restart: unless-stopped
+    ports:
+      - "9090:80"
+    volumes:
+      - webhook_logs:/usr/share/nginx/html/logs:ro
+      - nginx_logs:/usr/share/nginx/html/nginx_logs:ro
+    networks:
+      webhook_network:
+        ipv4_address: 172.20.0.30
+    command: |
+      sh -c "
+      echo '<h1>Webhook API Logs</h1>' > /usr/share/nginx/html/index.html &&
+      echo '<a href=\"/logs/\">Application Logs</a><br>' >> /usr/share/nginx/html/index.html &&
+      echo '<a href=\"/nginx_logs/\">Nginx Logs</a>' >> /usr/share/nginx/html/index.html &&
+      nginx -g 'daemon off;'
+      "
+    labels:
+      - "com.docker.compose.service=monitor"
+
+  # Утилита для проверки подключений
+  health-checker:
+    image: curlimages/curl:latest
+    container_name: aisha-webhook-healthcheck
+    restart: "no"
+    networks:
+      - webhook_network
+    command: |
+      sh -c "
+      echo '🔍 Проверка подключений к внешним сервисам...' &&
+      echo '📊 Redis (192.168.0.3:6379)...' &&
+      nc -zv 192.168.0.3 6379 || echo '❌ Redis недоступен' &&
+      echo '🗄️ PostgreSQL (192.168.0.4:5432)...' &&
+      nc -zv 192.168.0.4 5432 || echo '❌ PostgreSQL недоступен' &&
+      echo '📦 MinIO (192.168.0.4:9000)...' &&
+      nc -zv 192.168.0.4 9000 || echo '❌ MinIO недоступен' &&
+      echo '✅ Проверка завершена'
+      "
+    depends_on:
+      - webhook-api-1
+    labels:
+      - "com.docker.compose.service=healthcheck" 

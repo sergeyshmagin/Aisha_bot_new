@@ -42,7 +42,7 @@ class AvatarCardsHandler:
         avatar = avatars[avatar_idx]
         
         # Формируем информацию об аватаре
-        text = self._format_avatar_card_text(avatar, avatar_idx, len(avatars))
+        text = await self._format_avatar_card_text(avatar, avatar_idx, len(avatars), user_id)
         
         keyboard = self.keyboards.get_avatar_card_keyboard(
             avatar_idx, 
@@ -101,7 +101,7 @@ class AvatarCardsHandler:
             logger.exception(f"Ошибка при навигации по аватарам: {e}")
             await callback.answer("❌ Произошла ошибка", show_alert=True)
 
-    def _format_avatar_card_text(self, avatar, avatar_idx: int, total_avatars: int) -> str:
+    async def _format_avatar_card_text(self, avatar, avatar_idx: int, total_avatars: int, user_id: UUID) -> str:
         """Форматирует текст карточки аватара"""
         name = avatar.name or "Без имени"
         
@@ -128,7 +128,8 @@ class AvatarCardsHandler:
         type_str = type_map.get(avatar.training_type, str(avatar.training_type))
         
         # Дата создания
-        created_str = avatar.created_at.strftime("%d.%m.%Y %H:%M") if avatar.created_at else "—"
+        from app.utils.datetime_utils import format_created_at
+        created_str = await format_created_at(avatar, user_id)
         
         # Количество фотографий
         photos_count = len(avatar.photos) if avatar.photos else 0
