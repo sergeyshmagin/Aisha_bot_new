@@ -9,7 +9,7 @@ from .management.favorites import FavoritesManager
 from .management.deletion import DeletionManager
 from .management.regeneration import RegenerationManager
 from .management.stats import GalleryStatsManager
-from .management.prompt_viewer import PromptViewer
+# from .management.prompt_viewer import PromptViewer  # LEGACY - заменен на PromptDisplayService
 
 # Создаем основной класс с делегированием к модулям
 class GalleryManager(GalleryManagerMain):
@@ -40,5 +40,5 @@ __all__ = [
     "DeletionManager", 
     "RegenerationManager",
     "GalleryStatsManager",
-    "PromptViewer"
+    # "PromptViewer"  # LEGACY - заменен на PromptDisplayService
 ] 

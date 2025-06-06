@@ -2,6 +2,7 @@
 Управление удалением изображений
 Безопасное удаление с подтверждением
 """
+import re
 from uuid import UUID
 
 from aiogram.types import CallbackQuery
@@ -15,6 +16,14 @@ logger = get_logger(__name__)
 
 class DeletionManager(BaseHandler):
     """Менеджер удаления изображений"""
+    
+    def _escape_markdown(self, text: str) -> str:
+        """Экранирует специальные символы Markdown"""
+        if not text:
+            return text
+        # Экранируем основные символы Markdown
+        text = re.sub(r'([*_`\[\]()])', r'\\\1', text)
+        return text
     
     async def request_delete_confirmation(self, callback: CallbackQuery):
         """Запрашивает подтверждение удаления изображения"""
@@ -40,11 +49,20 @@ class DeletionManager(BaseHandler):
             # Формируем сообщение с подтверждением
             from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
             
+            # БЕЗОПАСНО обрабатываем промпт
+            prompt_text = generation.final_prompt or generation.original_prompt or 'Без промпта'
+            truncated_prompt = prompt_text[:100]
+            if len(prompt_text) > 100:
+                truncated_prompt += '...'
+            
+            # Экранируем Markdown-символы
+            escaped_prompt = self._escape_markdown(truncated_prompt)
+            
             text = f"""⚠️ **Подтверждение удаления**
 
 🖼️ **Изображение:** {generation.id}
 
-📝 **Промпт:** {(generation.final_prompt or generation.original_prompt or 'Без промпта')[:100]}{'...' if len(generation.final_prompt or generation.original_prompt or '') > 100 else ''}
+📝 **Промпт:** {escaped_prompt}
 
 ❓ **Вы уверены что хотите удалить это изображение?**
 
@@ -75,17 +93,37 @@ class DeletionManager(BaseHandler):
                         parse_mode="Markdown"
                     )
             except Exception as msg_error:
-                # Fallback: всегда удаляем и отправляем новое
+                # Fallback: отправляем без форматирования
+                logger.warning(f"Ошибка Markdown в подтверждении удаления, отправляю без форматирования: {msg_error}")
+                
+                plain_text = f"""⚠️ Подтверждение удаления
+
+🖼️ Изображение: {generation.id}
+
+📝 Промпт: {truncated_prompt}
+
+❓ Вы уверены что хотите удалить это изображение?
+
+⚠️ Это действие нельзя отменить!"""
+                
                 try:
-                    await callback.message.delete()
+                    if callback.message.photo:
+                        await callback.message.delete()
+                        await callback.message.answer(
+                            text=plain_text,
+                            reply_markup=keyboard,
+                            parse_mode=None
+                        )
+                    else:
+                        await callback.message.edit_text(
+                            text=plain_text,
+                            reply_markup=keyboard,
+                            parse_mode=None
+                        )
                 except Exception:
-                    pass
-                    
-                await callback.message.answer(
-                    text=text,
-                    reply_markup=keyboard,
-                    parse_mode="Markdown"
-                )
+                    # Последний fallback
+                    await callback.answer("❌ Ошибка отображения", show_alert=True)
+                    return
             
         except Exception as e:
             logger.exception(f"Ошибка запроса подтверждения удаления: {e}")

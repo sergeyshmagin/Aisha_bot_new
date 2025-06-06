@@ -422,62 +422,12 @@ class GenerationMonitor(BaseHandler):
         await message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
 
     async def show_full_prompt(self, callback: CallbackQuery):
-        """Показывает полный промпт генерации"""
-
-        try:
-            # Извлекаем generation_id из callback_data (show_prompt:{generation_id})
-            data_parts = callback.data.split(":")
-            generation_id = UUID(data_parts[1])
-
-            logger.info(f"Показ промпта: generation_id={generation_id}")
-
-            # Получаем генерацию
-            generation = await self.generation_service.get_generation_by_id(generation_id)
-            if not generation:
-                logger.warning(f"Генерация {generation_id} не найдена")
-                await callback.answer("❌ Генерация не найдена", show_alert=True)
-                return
-
-            logger.info(f"Генерация найдена: id={generation.id}, user_id={generation.user_id}, type={type(generation.user_id)}")
-
-            # Проверяем принадлежность пользователю
-            user = await self.get_user_from_callback(callback)
-            if not user:
-                logger.warning("Пользователь не найден в callback")
-                await callback.answer("❌ Пользователь не найден", show_alert=True)
-                return
-
-            logger.info(f"Пользователь найден: id={user.id}, type={type(user.id)}")
-            logger.info(f"Проверка владельца: generation.user_id={generation.user_id} == user.id={user.id} ? {generation.user_id == user.id}")
-
-            if generation.user_id != user.id:
-                logger.error(f"Генерация не принадлежит пользователю! generation.user_id={generation.user_id}, user.id={user.id}")
-                await callback.answer("❌ Генерация не принадлежит вам", show_alert=True)
-                return
-
-            # Показываем полный промпт
-            from app.utils.datetime_utils import format_datetime_for_user
-            date_str = await format_datetime_for_user(
-                generation.created_at, user.id
-            )
-
-            text = f"""📝 <b>Полный промпт генерации</b>
-
-🆔 <b>ID:</b> {str(generation.id)[:8]}...
-📅 <b>Дата:</b> {date_str}
-
-<b>Промпт:</b>
-<code>{generation.final_prompt}</code>
-
-📐 <b>Формат:</b> {generation.aspect_ratio}
-⚡ <b>Модель:</b> FLUX 1.1 Ultra"""
-
-            keyboard = InlineKeyboardMarkup(
-                inline_keyboard=[[InlineKeyboardButton(text="🔙 Назад", callback_data="noop")]]
-            )
-
-            await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="HTML")
-
-        except Exception as e:
-            logger.exception(f"Ошибка показа полного промпта: {e}")
-            await callback.answer("❌ Произошла ошибка", show_alert=True)
+        """
+        LEGACY: Показывает полный промпт генерации
+        ⚠️ УСТАРЕЛО: Используйте app.utils.prompt_display.PromptDisplayService
+        """
+        logger.warning("[LEGACY] GenerationMonitor.show_full_prompt вызван! Используйте PromptDisplayService")
+        
+        # Делегируем к новому единому сервису
+        from app.utils.prompt_display import prompt_display_service
+        await prompt_display_service.show_full_prompt(callback, return_callback="my_gallery")

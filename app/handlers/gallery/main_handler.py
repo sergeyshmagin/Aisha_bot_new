@@ -92,8 +92,8 @@ async def handle_gallery_next(callback: CallbackQuery):
 @router.callback_query(F.data.startswith("gallery_full_prompt:"))
 async def handle_gallery_full_prompt(callback: CallbackQuery):
     """Обработчик показа полного промпта"""
-    gallery_viewer = GalleryViewer()
-    await gallery_viewer.show_full_prompt(callback)
+    from app.utils.prompt_display import prompt_display_service
+    await prompt_display_service.show_full_prompt(callback, return_callback="my_gallery")
 
 @router.callback_query(F.data.startswith("gallery_toggle_favorite:"))
 async def handle_gallery_toggle_favorite(callback: CallbackQuery):

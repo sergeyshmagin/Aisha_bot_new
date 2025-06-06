@@ -8,7 +8,7 @@ from .favorites import FavoritesManager
 from .deletion import DeletionManager
 from .regeneration import RegenerationManager
 from .stats import GalleryStatsManager
-from .prompt_viewer import PromptViewer
+# from .prompt_viewer import PromptViewer  # LEGACY - заменен на PromptDisplayService
 
 __all__ = [
     "GalleryManager",
@@ -16,5 +16,5 @@ __all__ = [
     "DeletionManager", 
     "RegenerationManager",
     "GalleryStatsManager",
-    "PromptViewer"
+    # "PromptViewer"  # LEGACY - заменен на PromptDisplayService
 ] 

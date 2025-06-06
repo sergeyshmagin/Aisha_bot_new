@@ -12,7 +12,7 @@ from .favorites import FavoritesManager
 from .deletion import DeletionManager 
 from .regeneration import RegenerationManager
 from .stats import GalleryStatsManager
-from .prompt_viewer import PromptViewer
+# from .prompt_viewer import PromptViewer  # LEGACY - заменен на единый PromptDisplayService
 
 logger = get_logger(__name__)
 
@@ -26,7 +26,7 @@ class GalleryManager(BaseHandler):
         self.deletion_manager = DeletionManager()
         self.regeneration_manager = RegenerationManager()
         self.stats_manager = GalleryStatsManager()
-        self.prompt_viewer = PromptViewer()
+        # self.prompt_viewer = PromptViewer()  # LEGACY - заменен на PromptDisplayService
     
     async def show_gallery(self, callback: CallbackQuery, state: FSMContext):
         """Показывает галерею (делегирует в GalleryViewer)"""
@@ -48,8 +48,9 @@ class GalleryManager(BaseHandler):
         await self.regeneration_manager.regenerate_image(callback)
     
     async def show_full_prompt(self, callback: CallbackQuery):
-        """Показ полного промпта (делегирует в PromptViewer)"""
-        await self.prompt_viewer.show_full_prompt(callback)
+        """Показ полного промпта (использует единый PromptDisplayService)"""
+        from app.utils.prompt_display import prompt_display_service
+        await prompt_display_service.show_full_prompt(callback, return_callback="my_gallery")
     
     async def show_gallery_stats(self, callback: CallbackQuery):
         """Показ статистики галереи (делегирует в GalleryStatsManager)"""

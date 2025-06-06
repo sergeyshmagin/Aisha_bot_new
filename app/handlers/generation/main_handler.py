@@ -216,7 +216,8 @@ async def handle_aspect_ratio_selection(callback: CallbackQuery, state: FSMConte
 @router.callback_query(F.data.startswith("show_prompt:"))
 async def handle_show_full_prompt(callback: CallbackQuery):
     """Обработчик показа полного промпта"""
-    await generation_handler.generation_monitor.show_full_prompt(callback)
+    from app.utils.prompt_display import prompt_display_service
+    await prompt_display_service.show_full_prompt(callback, return_callback="my_gallery")
 
 # ==================== ОБРАБОТЧИКИ ОШИБОК ====================
 
