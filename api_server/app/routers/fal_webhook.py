@@ -21,9 +21,9 @@ if project_root not in sys.path:
 # Проверяем что можем импортировать основные модули
 try:
     # ИСПРАВЛЕНИЕ: Используем существующий app/core/database.py
-    from app.core.database import get_session  # Используем get_session вместо get_async_session
+    from app.core.database import get_session, get_db_session
     from app.services.avatar.training_service.main_service import AvatarTrainingService
-    from app.core.di import get_user_service_with_session  # ИСПРАВЛЕНИЕ: Правильный импорт
+    from app.core.di import get_user_service_with_session  # ИСПРАВЛЕНО: правильный импорт
     from app.core.config import settings as main_settings
 except ImportError as e:
     print(f"❌ Ошибка импорта основных модулей: {e}")
@@ -37,12 +37,6 @@ from ..core.logger import get_webhook_logger
 logger = get_webhook_logger()
 
 router = APIRouter(prefix="/api/v1/avatar", tags=["avatar"])
-
-# Используем реальную сессию БД из основного приложения
-async def get_db_session() -> AsyncSession:
-    """Получение сессии БД из основного приложения"""
-    async with get_session() as session:
-        yield session
 
 @router.post("/status_update")
 async def handle_fal_webhook(
