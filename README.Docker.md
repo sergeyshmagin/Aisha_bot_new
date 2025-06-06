@@ -33,6 +33,11 @@ git clone <repo-url> . # или git pull
 cp env.docker.prod.template .env.docker.prod
 nano .env.docker.prod
 
+# 3.1 Подготавливаем SSL сертификаты
+mkdir -p ssl_certificate
+cp /path/to/aibots_kz.crt ssl_certificate/
+cp /path/to/aibots.kz.key ssl_certificate/
+
 # 4. Автоматическое развертывание
 ./docker/scripts/health-check.sh
 chmod +x docker/scripts/deploy-prod.sh

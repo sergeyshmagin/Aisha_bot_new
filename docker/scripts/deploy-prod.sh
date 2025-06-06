@@ -39,6 +39,12 @@ if [ ! -f ".env.docker.prod" ]; then
     exit 1
 fi
 
+# Проверка SSL сертификатов
+if [ ! -f "ssl_certificate/aibots_kz.crt" ] || [ ! -f "ssl_certificate/aibots.kz.key" ]; then
+    log_error "SSL сертификаты не найдены. Поместите aibots_kz.crt и aibots.kz.key в папку ssl_certificate/"
+    exit 1
+fi
+
 log "🚀 Начинаем развертывание Aisha Bot v2 в продакшн..."
 
 # 1. Проверка внешних сервисов
