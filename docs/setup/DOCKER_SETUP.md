@@ -50,6 +50,10 @@ cd C:\dev\Aisha_bot_new
 
 ### 2. Конфигурация
 
+Файлы шаблонов окружения располагаются в директории
+`docker/env-templates/`. Используйте `dev.env.template` для разработки и
+`prod.env.template` для продакшена.
+
 #### Копирование шаблона переменных
 ```bash
 cp env.docker.dev.template .env.docker.dev

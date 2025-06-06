@@ -88,11 +88,13 @@ python scripts/testing/check_avatars.py
 ### 🚀 Развертывание
 - **[setup/DEPLOYMENT.md](setup/DEPLOYMENT.md)** - Полное руководство по развертыванию
 - **[setup/DOCKER_SETUP.md](setup/DOCKER_SETUP.md)** - Настройка Docker
+- **[api_server.md](api_server.md)** - Webhook API сервер
 
 ### 🔧 Разработка
 - **[development/FIXES.md](development/FIXES.md)** - Общие исправления и решения
 - **[development/AVATAR_SYSTEM_FIXES.md](development/AVATAR_SYSTEM_FIXES.md)** - Исправления системы аватаров
 - **[development/PERFORMANCE.md](development/PERFORMANCE.md)** - Оптимизация производительности
+- **[scripts.md](scripts.md)** - Системные скрипты
 
 ### ✨ Функциональность
 - **[features/PHOTO_PROMPT_FEATURE.md](features/PHOTO_PROMPT_FEATURE.md)** - Генерация промптов по фото
