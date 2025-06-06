@@ -13,8 +13,8 @@ from minio import Minio
 from redis.asyncio import Redis
 from redis.backoff import ExponentialBackoff
 from redis.retry import Retry
+from minio import Minio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.core.logger import get_logger
@@ -24,6 +24,10 @@ from app.services.generation.generation_service import ImageGenerationService
 from app.services.text_processing import TextProcessingService
 from app.services.transcript import TranscriptService
 from app.services.user import UserService
+from app.services.audio_processing.factory import get_audio_service
+from app.core.database import get_db_session as db_get_db_session
+from app.services.generation.generation_service import ImageGenerationService
+from app.core.logger import get_logger
 from app.utils.timezone_handler import TimezoneHandler
 
 logger = get_logger(__name__)
@@ -31,32 +35,13 @@ logger = get_logger(__name__)
 # Глобальные экземпляры сервисов
 _redis_client: Optional[Redis] = None
 _state_storage: Optional[RedisStorage] = None
+
 _engine = None
 _async_session = None
 
-
 def get_db_session() -> AsyncSession:
-    """
-    Получить сессию БД
-    """
-    global _engine, _async_session
-    if _engine is None:
-        _engine = create_async_engine(
-            settings.DATABASE_URL,
-            echo=settings.DB_ECHO,
-            pool_size=settings.DB_POOL_SIZE,
-            max_overflow=settings.DB_MAX_OVERFLOW,
-            pool_timeout=settings.DB_POOL_TIMEOUT,
-            pool_recycle=settings.DB_POOL_RECYCLE,
-        )
-        _async_session = async_sessionmaker(
-            _engine,
-            class_=AsyncSession,
-            expire_on_commit=False,
-            autocommit=False,
-            autoflush=False,
-        )
-    return _async_session()
+    """Получить сессию БД"""
+    return db_get_db_session()
 
 
 def get_redis_client() -> Redis:

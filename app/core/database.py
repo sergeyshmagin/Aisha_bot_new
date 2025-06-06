@@ -3,9 +3,11 @@
 """
 from contextlib import asynccontextmanager
 
-from sqlalchemy import create_engine
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.ext.asyncio import (
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
 from app.core.config import settings
 from app.database.base import Base
@@ -17,27 +19,25 @@ registry = init_models()
 # Создаем асинхронный движок
 async_engine = create_async_engine(
     settings.DATABASE_URL,
-    pool_size=5,
-    max_overflow=10,
-    pool_timeout=30,
-    pool_recycle=1800,
-    echo=settings.DEBUG
+    echo=settings.DB_ECHO,
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
+    pool_timeout=settings.DB_POOL_TIMEOUT,
+    pool_recycle=settings.DB_POOL_RECYCLE,
 )
-
-# Создаем фабрику сессий
 
 # Создаем фабрику сессий для асинхронных операций
-AsyncSessionLocal = sessionmaker(
+AsyncSessionLocal = async_sessionmaker(
     async_engine,
     class_=AsyncSession,
-    expire_on_commit=False
+    expire_on_commit=False,
+    autocommit=False,
+    autoflush=False,
 )
 
 
-async def get_db() -> AsyncSession:
-    """
-    Получить асинхронную сессию БД для FastAPI
-    """
+async def get_db_session() -> AsyncSession:
+    """Dependency для FastAPI"""
     async with AsyncSessionLocal() as session:
         try:
             yield session

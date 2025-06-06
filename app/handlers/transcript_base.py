@@ -8,9 +8,9 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, User as TelegramUser
 from abc import ABC, abstractmethod
 
-from app.core.database import get_session
+from app.core.database import get_session, get_db_session
 from app.utils.uuid_utils import safe_uuid
-from app.core.di import get_db_session, get_user_service_with_session
+from app.core.di import get_user_service_with_session
 from app.services.user import UserService
 from app.database.models import User
 
