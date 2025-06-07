@@ -214,7 +214,8 @@ class PaidTranscriptionHandler(BaseHandler):
                     # Создаем краткое превью текста
                     text_preview = result["text"][:200] + "..." if len(result["text"]) > 200 else result["text"]
                     
-                    success_text = f"""✅ <b>Транскрибация завершена!</b>
+                    # Объединяем информацию о результате с описанием файла
+                    combined_caption = f"""✅ <b>Транскрибация завершена!</b>
 
 💳 <b>Списано:</b> {payment_info['cost']:.0f} монет
 💰 <b>Баланс:</b> {payment_info['new_balance']:.0f} монет
@@ -223,9 +224,10 @@ class PaidTranscriptionHandler(BaseHandler):
 📝 <b>Превью:</b>
 {text_preview}
 
-📎 Полный текст отправлен файлом"""
+📎 <b>Полный текст транскрипции</b>
+🔧 <b>Выберите действие для обработки:</b>"""
                     
-                    # Отправляем результат с файлом
+                    # Отправляем файл с объединенным текстом и меню
                     from aiogram.types import BufferedInputFile
                     from app.keyboards.transcript import get_transcript_actions_keyboard
                     
@@ -238,20 +240,23 @@ class PaidTranscriptionHandler(BaseHandler):
                         filename=file_name
                     )
                     
-                    await callback.message.edit_text(success_text, parse_mode="HTML")
-                    
-                    # Добавляем inline кнопки для обработки транскрипта
+                    # Определяем клавиатуру и caption
                     if transcript_id:
                         keyboard = get_transcript_actions_keyboard(transcript_id)
-                        caption = "📄 Полный текст транскрипции\n\n🔧 Выберите действие для обработки:"
                     else:
                         keyboard = None
-                        caption = "📄 Полный текст транскрипции"
+                        # Если нет transcript_id, убираем строку про выбор действия
+                        combined_caption = combined_caption.replace(
+                            "\n🔧 <b>Выберите действие для обработки:</b>", ""
+                        )
                     
+                    # Удаляем сообщение с расценками и отправляем файл с полной информацией
+                    await callback.message.delete()
                     await callback.message.answer_document(
                         document=input_file,
-                        caption=caption,
-                        reply_markup=keyboard
+                        caption=combined_caption,
+                        reply_markup=keyboard,
+                        parse_mode="HTML"
                     )
                     
                 else:
