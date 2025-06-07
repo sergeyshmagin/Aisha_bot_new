@@ -135,11 +135,11 @@ def get_transcript_actions_keyboard(transcript_id: str | UUID) -> InlineKeyboard
     builder.row(
         InlineKeyboardButton(
             text="⬅️ Назад",
-            callback_data="transcribe_history"
+            callback_data="transcribe_back_to_menu"
         ),
         InlineKeyboardButton(
-            text="🏠 В меню",
-            callback_data="transcribe_back_to_menu"
+            text="📜 История",
+            callback_data="transcribe_history"
         )
     )
     return builder.as_markup()
