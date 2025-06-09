@@ -52,8 +52,8 @@ class GenerationMainHandler(BaseHandler):
             
             text = f"""🎨 <b>Создание изображения</b>
 👤 Основной аватар: {main_avatar.name} ({avatar_type_text})
-💰 Баланс: {user_balance:.0f} единиц
-💎 Стоимость: {GENERATION_COST:.0f} единиц за изображение
+💰 Баланс: {user_balance:.0f} монет
+💎 Стоимость: {GENERATION_COST:.0f} монет за изображение
 
 🔥 <b>Популярные стили</b>"""
             

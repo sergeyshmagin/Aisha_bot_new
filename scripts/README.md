@@ -225,4 +225,219 @@ journalctl -u webhook-api.service -f
 
 ---
 
-*Обновлено автоматически скриптом `scripts/utils/make-executable.sh`* 
+*Обновлено автоматически скриптом `scripts/utils/make-executable.sh`*
+
+# 🛠️ Скрипты инфраструктуры Aisha Bot
+
+Набор скриптов для автоматизации развертывания, мониторинга и обслуживания кластера Aisha Bot.
+
+## 📁 Структура директорий
+
+```
+scripts/
+├── deployment/     # Скрипты развертывания
+├── cleanup/        # Скрипты очистки системы
+├── monitoring/     # Скрипты мониторинга
+└── README.md       # Эта документация
+```
+
+## 🚀 Развертывание (`deployment/`)
+
+### `deploy-cluster.sh`
+Основной скрипт развертывания кластера с локальными образами
+
+### `push-images.sh`
+Скрипт сборки и пуша образов в Docker Registry (192.168.0.4:5000)
+
+### `deploy-production.sh`
+Скрипт развертывания на продакшн сервере 192.168.0.10 с использованием образов из registry
+
+**Использование deploy-cluster.sh:**
+```bash
+./scripts/deployment/deploy-cluster.sh [опции]
+```
+
+**Использование push-images.sh:**
+```bash
+./scripts/deployment/push-images.sh [версия] [опции]
+```
+
+**Использование deploy-production.sh:**
+```bash
+./scripts/deployment/deploy-production.sh [версия] [опции]
+```
+
+**Опции:**
+- `--clean-aggressive` - Агрессивная очистка Docker (удаление всех неиспользуемых ресурсов)
+- `--skip-build` - Пропустить сборку образов (использовать существующие)
+- `--verbose` - Подробный вывод команд Docker
+- `--help` - Показать справку
+
+**Примеры:**
+```bash
+# Обычное развертывание
+./scripts/deployment/deploy-cluster.sh
+
+# Развертывание с полной очисткой Docker
+./scripts/deployment/deploy-cluster.sh --clean-aggressive
+
+# Быстрое развертывание без пересборки образов
+./scripts/deployment/deploy-cluster.sh --skip-build
+
+# Развертывание с подробным выводом
+./scripts/deployment/deploy-cluster.sh --verbose --clean-aggressive
+```
+
+**Что делает:**
+1. ✅ Проверяет предварительные условия
+2. 🔐 Подготавливает SSL сертификаты
+3. 🏗️ Собирает Docker образы (опционально)
+4. 🌐 Проверяет внешние сервисы
+5. 🛑 Останавливает старые контейнеры
+6. 🌐 Создает Docker сети
+7. 🚀 Разворачивает Webhook API кластер
+8. 🤖 Разворачивает Bot кластер
+9. 🔍 Проводит финальную проверку
+
+## 🧹 Очистка (`cleanup/`)
+
+### `cleanup-docker.sh`
+Утилита для очистки Docker окружения от старых образов и контейнеров
+
+**Использование:**
+```bash
+./scripts/cleanup/cleanup-docker.sh [режим]
+```
+
+**Режимы:**
+- `safe` (по умолчанию) - Безопасная очистка (только Aisha ресурсы)
+- `aggressive` - Агрессивная очистка (все неиспользуемые ресурсы кроме томов)
+- `full` - Полная очистка (ВСЕ неиспользуемые ресурсы ВКЛЮЧАЯ ТОМА!)
+
+**Примеры:**
+```bash
+# Безопасная очистка
+./scripts/cleanup/cleanup-docker.sh
+
+# Агрессивная очистка
+./scripts/cleanup/cleanup-docker.sh aggressive
+
+# Полная очистка (ОПАСНО!)
+./scripts/cleanup/cleanup-docker.sh full
+```
+
+## 📊 Мониторинг (`monitoring/`)
+
+### `monitor-cluster.sh`
+Интерактивная утилита мониторинга состояния кластера
+
+**Использование:**
+```bash
+./scripts/monitoring/monitor-cluster.sh [команда]
+```
+
+**Команды:**
+- `status` - Показать текущий статус кластера
+- `logs` - Показать логи всех сервисов
+- `health` - Проверить здоровье сервисов
+- `interactive` - Интерактивный режим мониторинга
+
+**Примеры:**
+```bash
+# Быстрая проверка статуса
+./scripts/monitoring/monitor-cluster.sh status
+
+# Просмотр логов
+./scripts/monitoring/monitor-cluster.sh logs
+
+# Интерактивный мониторинг
+./scripts/monitoring/monitor-cluster.sh
+```
+
+## 🌐 Архитектура развернутого кластера
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Сервер 192.168.0.10 (aibots.kz)         │
+├─────────────────────────────────────────────────────────────┤
+│  ┌─────────────────┐                                        │
+│  │ Nginx LB        │  :80, :8443                           │
+│  │ (SSL Termination)│                                       │
+│  └─────────┬───────┘                                        │
+│            │                                                │
+│  ┌─────────▼───────┬─────────────────┐                     │
+│  │ Webhook API     │ Webhook API     │                     │
+│  │ Instance 1      │ Instance 2      │                     │
+│  │ (Primary)       │ (Secondary)     │                     │
+│  └─────────────────┴─────────────────┘                     │
+│                                                             │
+│  ┌─────────────────┬─────────────────┬─────────────────┐   │
+│  │ Bot Polling 1   │ Bot Polling 2   │ Background      │   │
+│  │ (Primary)       │ (Standby)       │ Worker          │   │
+│  └─────────────────┴─────────────────┴─────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────┐  ┌─────────────────┐  ┌─────────────────┐
+│ Redis           │  │ PostgreSQL      │  │ MinIO           │
+│ 192.168.0.3     │  │ 192.168.0.4     │  │ 192.168.0.4     │
+│ (Sessions/Cache)│  │ (Database)      │  │ (Files)         │
+└─────────────────┘  └─────────────────┘  └─────────────────┘
+```
+
+## 🔧 Конфигурация
+
+### Переменные окружения
+Все конфигурации хранятся в файле `cluster.env` в корне проекта.
+
+### SSL сертификаты
+Сертификаты должны находиться в директории `ssl/`:
+- `aibots_kz.crt` - Основной сертификат
+- `aibots_kz.key` - Приватный ключ
+
+### Docker Compose файлы
+- `docker-compose.prod.yml` - Webhook API кластер и Nginx
+- `docker-compose.bot.prod.yml` - Bot кластер
+
+## 🚨 Устранение неполадок
+
+### Проблемы с сетями
+```bash
+# Очистка конфликтующих сетей
+docker network rm aisha_cluster aisha_bot_cluster
+./scripts/deployment/deploy-cluster.sh
+```
+
+### Проблемы с образами
+```bash
+# Полная пересборка образов
+./scripts/cleanup/cleanup-docker.sh aggressive
+./scripts/deployment/deploy-cluster.sh --clean-aggressive
+```
+
+### Проверка логов
+```bash
+# Логи конкретного сервиса
+docker logs aisha-nginx-prod
+docker logs aisha-webhook-api-1
+docker logs aisha-bot-polling-1
+
+# Или через мониторинг
+./scripts/monitoring/monitor-cluster.sh logs
+```
+
+## 📋 Чек-лист развертывания
+
+- [ ] Сервер 192.168.0.10 настроен и доступен
+- [ ] Docker и Docker Compose установлены
+- [ ] SSL сертификаты размещены в `ssl/`
+- [ ] Файл `cluster.env` заполнен правильными значениями
+- [ ] Внешние сервисы (Redis, PostgreSQL, MinIO) доступны
+- [ ] Порты 80 и 8443 открыты в файрволле
+- [ ] DNS записи для aibots.kz настроены
+
+## 🔗 Связанные файлы
+
+- [`../docs/CLUSTER_DEPLOYMENT.md`](../docs/CLUSTER_DEPLOYMENT.md) - Подробная документация по развертыванию
+- [`../cluster.env`](../cluster.env) - Конфигурация кластера
+- [`../docker-compose.prod.yml`](../docker-compose.prod.yml) - API кластер
+- [`../docker-compose.bot.prod.yml`](../docker-compose.bot.prod.yml) - Bot кластер 

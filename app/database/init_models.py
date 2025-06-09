@@ -5,9 +5,13 @@ from app.database.base import Base, mapper_registry
 
 # Импортируем все модели для регистрации
 from app.database.models.models import (
-    User, UserBalance, UserState, Avatar, AvatarPhoto,
+    User, UserState, Avatar, AvatarPhoto,
     UserTranscript, UserProfile, UserTranscriptCache
 )
+
+# Импортируем модели промо-кодов и баланса
+from app.database.models.promokode import Promokode
+from app.database.models.user_balance import UserBalance
 
 # Импортируем модели генерации
 from app.database.models.generation import (

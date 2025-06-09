@@ -71,17 +71,21 @@ class ImageAnalysisService:
             base_description = analysis_result.get("analysis", "")
             vision_prompt = analysis_result.get("prompt", "")
             
+            # Извлекаем информацию об окружении из анализа
+            environment_text = self._extract_environment_from_analysis(base_description, vision_prompt)
+            
             # Интегрируем пользовательский промпт если есть
             if user_prompt:
                 integrated_prompt = f"{vision_prompt}, {user_prompt}"
             else:
                 integrated_prompt = vision_prompt
             
-            # 6. Применяем кинематографические улучшения
+            # 6. Применяем кинематографические улучшения с environment_text
             cinematic_result = await self.cinematic_service.create_cinematic_prompt(
                 user_prompt=integrated_prompt,
                 avatar_type=avatar_type,
-                style_preset="photorealistic"
+                style_preset="photorealistic",
+                environment_text=environment_text
             )
             
             logger.info(f"[Image Analysis] Создан кинематографический промпт: {len(cinematic_result['processed'])} символов")
@@ -105,79 +109,80 @@ class ImageAnalysisService:
         user_integration = ""
         if user_prompt:
             user_integration = f"""
-🎯 ИНТЕГРАЦИЯ ПОЛЬЗОВАТЕЛЬСКОГО ЗАПРОСА:
-Пользователь добавил текстовый запрос: "{user_prompt}"
+🎯 USER REQUEST INTEGRATION:
+User added text request: "{user_prompt}"
 
-ВАЖНО: Объедини визуальную композицию фото с содержанием пользовательского запроса.
-- СОХРАНЯЙ: тип кадра, позу, освещение, атмосферу с фото
-- ИНТЕГРИРУЙ: содержание запроса (костюм, сцена, персонаж, стиль)"""
+IMPORTANT: Combine visual composition from photo with user request content.
+- PRESERVE: shot type, pose, lighting, atmosphere from photo
+- INTEGRATE: request content (suit, scene, character, style)"""
         
-        return f"""Ты эксперт по анализу изображений для создания КИНЕМАТОГРАФИЧЕСКИХ промптов в стиле профессиональной фотографии 8K качества.
+        return f"""You are an expert in image analysis for creating CINEMATIC prompts in professional 8K photography style.
 
-ЗАДАЧА: Проанализируй изображение и создай промпт в стиле ваших примеров с максимальной детализацией.{user_integration}
+TASK: Analyze the image and create a prompt in example style with maximum detail.{user_integration}
 
-🎬 СТИЛЬ ПРОМПТА (как в примерах):
-Должен включать ВСЕ элементы:
-1. **Технические характеристики**: "high-quality, cinematic, ultra-realistic", "8K resolution", "professional camera"
-2. **Тип кадра**: "close-up portrait"/"full-body portrait"/"medium portrait" 
-3. **Освещение**: "warm directional side lighting during golden hour" / "professional studio lighting"
-4. **Композицию**: "expertly framed with subject positioned centrally"
-5. **Детальное описание субъекта**: внешность, одежда, стиль, выражение
-6. **Позу и ракурс**: точное описание положения тела, взгляда, жестов
-7. **Окружение**: детальное описание фона, атмосферы, контекста
-8. **Технические параметры**: "shot with 85mm lens", "depth of field", "razor-sharp focus"
-9. **Цветовую палитру**: "rich warm tones, deep golds, luxurious ambers"
-10. **Качество**: "natural skin texture", "well-defined eyes", "authentic detail"
+🎬 PROMPT STYLE (like examples):
+Must include ALL elements:
+1. **Technical specs**: "high-quality, cinematic, ultra-realistic", "8K resolution", "professional camera"
+2. **Shot type**: "close-up portrait"/"full-body portrait"/"medium portrait" 
+3. **Lighting**: "warm directional side lighting during golden hour" / "professional studio lighting"
+4. **Composition**: "expertly framed with subject positioned centrally"
+5. **Detailed subject description**: appearance, clothing, style, expression
+6. **Pose and angle**: exact body position, gaze direction, gestures
+7. **Environment**: detailed background description, atmosphere, context
+8. **Technical parameters**: "shot with 85mm lens", "depth of field", "razor-sharp focus"
+9. **Color palette**: "rich warm tones, deep golds, luxurious ambers"
+10. **Quality**: "natural skin texture", "well-defined eyes", "authentic detail"
 
-📐 ОПРЕДЕЛЕНИЕ ТИПА КАДРА (КРИТИЧЕСКИ ВАЖНО):
-- Видны ли ноги человека? → FULL-BODY PORTRAIT
-- Видно туловище до пояса? → HALF-BODY PORTRAIT  
-- Только голова и плечи? → CLOSE-UP PORTRAIT
+📐 SHOT TYPE DETERMINATION (CRITICALLY IMPORTANT):
+- Are person's legs visible? → FULL-BODY PORTRAIT
+- Torso visible to waist? → HALF-BODY PORTRAIT  
+- Only head and shoulders? → CLOSE-UP PORTRAIT
 
-🔍 АНАЛИЗ ПО БЛОКАМ:
+🔍 ANALYSIS BY BLOCKS:
 
-**КОМПОЗИЦИЯ И КАДР:**
-- Какой точно тип кадра (полный рост/по пояс/крупный план)?
-- Как расположен субъект в кадре?
-- Углы съемки и перспектива
+**COMPOSITION AND FRAME:**
+- What exact shot type (full body/half body/close-up)?
+- How is subject positioned in frame?
+- Shooting angles and perspective
 
-**ОСВЕЩЕНИЕ:**
-- Тип освещения (студийное/естественное/золотой час/драматическое)
-- Направление света и тени
-- Атмосфера и настроение
+**LIGHTING:**
+- Lighting type (studio/natural/golden hour/dramatic)
+- Light direction and shadows
+- Atmosphere and mood
 
-**СУБЪЕКТ:**
-- Детальное описание внешности
-- Одежда и стиль (цвета, фактуры, детали)
-- Выражение лица и эмоции
+**SUBJECT:**
+- Detailed appearance description
+- Clothing and style (colors, textures, details)
+- Facial expression and emotions
 
-**ПОЗА И ЯЗЫК ТЕЛА:**
-- Точное положение тела
-- Направление взгляда
-- Жесты и положение рук
+**POSE AND BODY LANGUAGE:**
+- Exact body position
+- Gaze direction
+- Gestures and hand positions
 
-**ОКРУЖЕНИЕ:**
-- Детальное описание фона
-- Контекст и локация
-- Элементы интерьера/экстерьера
+**ENVIRONMENT:**
+- Detailed background description
+- Context and location
+- Interior/exterior elements
+- Identify recognizable cities or landmarks if possible, specify them in analysis
 
-**ТЕХНИЧЕСКИЕ ДЕТАЛИ:**
-- Глубина резкости
-- Фокусировка
-- Качество изображения
+**TECHNICAL DETAILS:**
+- Depth of field
+- Focus
+- Image quality
 
-ФОРМАТ ОТВЕТА JSON:
+JSON RESPONSE FORMAT:
 ```json
 {{
-  "analysis": "Детальный анализ каждого блока композиции",
-  "prompt": "Готовый кинематографический промпт в стиле примеров"
+  "analysis": "Detailed analysis of each composition block",
+  "prompt": "Ready cinematic prompt in example style"
 }}
 ```
 
-ПРИМЕР СТИЛЯ ПРОМПТА:
+EXAMPLE PROMPT STYLE:
 "A high-quality, cinematic, ultra-realistic close-up portrait photograph, captured by professional medium-format digital camera, in style of super-detailed 8K resolution imagery, featuring warm directional side lighting during golden hour. The composition is expertly framed with subject positioned centrally, featuring a confident man with contemporary styling, positioned with natural elegance and authentic body language, gazing directly at camera with engaging intensity. Set in sophisticated modern environment with clean architectural lines, captured by professional medium-format digital camera, shot with 85mm portrait lens at f/2.8 for optimal sharpness, The depth of field is exceptional ensuring razor-sharp focus on subject, professional bokeh with smooth background transition. The color palette emphasizes rich warm tones and deep golds creating sophisticated atmospheric mood, well-defined eyes with natural catchlight and authentic iris detail, natural skin texture with fine detail and visible pores, sharp focus with optimal detail retention, high-end editorial photography style with cinematic quality."
 
-Создай промпт ТОЧНО в таком стиле с максимальной детализацией!"""
+Create prompt EXACTLY in this style with maximum detail!"""
     
     async def _prepare_image(self, image_data: bytes) -> Optional[bytes]:
         """Подготавливает изображение для анализа"""
@@ -211,13 +216,13 @@ class ImageAnalysisService:
             url = "https://api.openai.com/v1/chat/completions"
             headers = get_openai_headers(self.openai_api_key)
             
-            user_message_text = "Проанализируй это изображение и создай кинематографический промпт в стиле примеров. Ответ в JSON формате."
+            user_message_text = "Analyze this image and create cinematic prompt in example style. Response in JSON format."
             if user_prompt:
-                user_message_text = f"""Проанализируй изображение и создай кинематографический промпт, ИНТЕГРИРУЯ пользовательский запрос.
+                user_message_text = f"""Analyze image and create cinematic prompt, INTEGRATING user request.
 
-ПОЛЬЗОВАТЕЛЬСКИЙ ЗАПРОС: "{user_prompt}"
+USER REQUEST: "{user_prompt}"
 
-Объедини ТОЧНУЮ композицию фото с СОДЕРЖАНИЕМ запроса. Ответ в JSON формате."""
+Combine EXACT photo composition with REQUEST content. Response in JSON format."""
             
             data = {
                 "model": self.model,
@@ -301,7 +306,8 @@ class ImageAnalysisService:
             cinematic_result = await self.cinematic_service.create_cinematic_prompt(
                 user_prompt=user_prompt,
                 avatar_type=avatar_type,
-                style_preset="photorealistic"
+                style_preset="photorealistic",
+                environment_text=None  # В fallback режиме environment_text недоступен
             )
             
             return {
@@ -316,7 +322,8 @@ class ImageAnalysisService:
             cinematic_result = await self.cinematic_service.create_cinematic_prompt(
                 user_prompt=base_prompt,
                 avatar_type=avatar_type,
-                style_preset="photorealistic"
+                style_preset="photorealistic",
+                environment_text=None  # В fallback режиме environment_text недоступен
             )
             
             return {
@@ -324,7 +331,7 @@ class ImageAnalysisService:
                 "prompt": cinematic_result["processed"],
                 "cinematic_enhancement": True,
                 "style": "cinematic_default"
-            } 
+            }
 
     def is_available(self) -> bool:
         """
@@ -342,3 +349,76 @@ class ImageAnalysisService:
             logger.debug("[Image Analysis] Сервис доступен в fallback режиме (без Vision API)")
         
         return True  # Сервис всегда доступен (fallback в случае отсутствия API ключа) 
+
+    def _extract_environment_from_analysis(self, analysis: str, prompt: str) -> Optional[str]:
+        """Извлекает информацию об окружении из анализа GPT Vision"""
+        import re
+        
+        # Объединяем анализ и промпт для поиска
+        combined_text = f"{analysis} {prompt}".lower()
+        
+        # Паттерны для поиска описаний окружения
+        environment_patterns = [
+            # Ищем упоминания известных мест
+            r'(?:dubai|burj khalifa|дубай|бурдж халифа)',
+            r'(?:moscow|red square|москва|красная площадь)',
+            r'(?:new york|times square|нью[-\s]?йорк|таймс[-\s]?сквер)',
+            r'(?:london|big ben|лондон|биг[-\s]?бен)',
+            r'(?:paris|eiffel tower|париж|эйфелева башня)',
+            
+            # Ищем описания типов локаций
+            r'(?:office|офис|business|деловой)',
+            r'(?:studio|студия|photography studio)',
+            r'(?:restaurant|cafe|ресторан|кафе)',
+            r'(?:urban|city|городской|город)',
+            r'(?:nature|forest|park|природа|лес|парк)',
+            r'(?:modern architecture|современная архитектура)',
+            r'(?:skyscraper|небоскреб)',
+            r'(?:interior|интерьер)',
+            r'(?:exterior|экстерьер)',
+        ]
+        
+        found_environments = []
+        
+        for pattern in environment_patterns:
+            matches = re.findall(pattern, combined_text, re.IGNORECASE)
+            if matches:
+                found_environments.extend(matches)
+        
+        # Если найдены упоминания окружения, создаем описание
+        if found_environments:
+            # Удаляем дубликаты и сортируем
+            unique_environments = list(set(found_environments))
+            
+            # Специальная обработка для известных мест
+            if any('dubai' in env.lower() or 'дубай' in env.lower() for env in unique_environments):
+                return ("Set against the iconic Dubai skyline with the magnificent Burj Khalifa towering in the background, "
+                       "featuring the architectural marvel rendered with atmospheric perspective and soft focus, "
+                       "showcasing the grandeur of modern urban achievement with warm desert lighting")
+                       
+            elif any('office' in env.lower() or 'офис' in env.lower() for env in unique_environments):
+                return ("Set in a sophisticated modern office environment with clean architectural lines, "
+                       "contemporary interior design elements visible in the professionally blurred background, "
+                       "featuring warm ambient lighting and luxurious furnishings that convey success and professionalism")
+                       
+            elif any('studio' in env.lower() or 'студия' in env.lower() for env in unique_environments):
+                return ("In a professional photography studio setting with seamless backdrop and controlled environment, "
+                       "featuring expertly positioned lighting equipment and neutral tones, "
+                       "creating optimal conditions for maximum image quality and focus on the subject")
+                       
+            elif any(env.lower() in ['urban', 'city', 'городской', 'город'] for env in unique_environments):
+                return ("Against an urban landscape backdrop with sophisticated architectural elements softly blurred, "
+                       "featuring metropolitan atmosphere with natural depth and environmental context, "
+                       "showcasing the dynamic relationship between subject and contemporary cityscape")
+                       
+            elif any(env.lower() in ['nature', 'forest', 'park', 'природа', 'лес', 'парк'] for env in unique_environments):
+                return ("Surrounded by natural landscape with organic textures and soft environmental elements, "
+                       "featuring lush background with perfect depth of field and natural color harmony, "
+                       "creating serene connection with the natural world and organic beauty")
+                       
+            elif any(env.lower() in ['restaurant', 'cafe', 'ресторан', 'кафе'] for env in unique_environments):
+                return ("Set in an elegant dining establishment with sophisticated interior design, "
+                       "featuring warm ambient lighting and luxurious decor elements softly blurred in the background, "
+                       "conveying refined taste and upscale lifestyle atmosphere")
+        
+        return None 

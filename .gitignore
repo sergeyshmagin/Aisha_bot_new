@@ -199,3 +199,20 @@ WINSCP_*.md
 nginx_*.conf
 env_example_*.txt
 /archive/
+
+# Временные файлы развертывания
+*.tar
+*.tar.gz
+*-temp.sh
+deploy-production.sh
+remote-deploy.sh
+push-images*.sh
+deploy-cluster.sh
+cleanup-docker.sh
+monitor-cluster.sh
+bot.log
+DEDUPLICATION_REPORT.md
+README.Docker.md
+Makefile.webhook
+start_bot.sh
+create_env_file.sh

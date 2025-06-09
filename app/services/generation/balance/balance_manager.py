@@ -59,7 +59,7 @@ class BalanceManager:
             if remaining_balance is None:
                 raise ValueError("Ошибка списания баланса")
             
-            logger.info(f"Списано {cost} единиц баланса. Остаток: {remaining_balance}")
+            logger.info(f"Списано {cost} монет баланса. Остаток: {remaining_balance}")
             return remaining_balance
     
     async def refund_balance(self, user_id: UUID, cost: float):
@@ -74,7 +74,7 @@ class BalanceManager:
             async with self._get_user_service() as user_service:
                 await user_service.add_coins(user_id, cost)
             
-            logger.info(f"Возвращено {cost} единиц баланса пользователю {user_id}")
+            logger.info(f"Возвращено {cost} монет баланса пользователю {user_id}")
             
         except Exception as e:
             logger.exception(f"Ошибка возврата баланса: {e}") 

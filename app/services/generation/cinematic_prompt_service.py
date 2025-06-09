@@ -33,7 +33,8 @@ class CinematicPromptService:
         self, 
         user_prompt: str, 
         avatar_type: str = "portrait",
-        style_preset: str = "photorealistic"
+        style_preset: str = "photorealistic",
+        environment_text: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Создает кинематографический детальный промпт
@@ -42,6 +43,7 @@ class CinematicPromptService:
             user_prompt: Исходный промпт от пользователя
             avatar_type: Тип аватара ("portrait")
             style_preset: Стилевая предустановка
+            environment_text: Текст описания окружения (извлеченный из анализа)
             
         Returns:
             Dict с обработанным промптом и метаданными
@@ -67,8 +69,8 @@ class CinematicPromptService:
                     "style": "already_detailed"
                 }
             
-            # 3. Создаем кинематографический промпт
-            cinematic_prompt = await self._build_cinematic_prompt(translated_prompt, avatar_type)
+            # 3. Создаем кинематографический промпт с environment_text
+            cinematic_prompt = await self._build_cinematic_prompt(translated_prompt, avatar_type, environment_text)
             
             # 4. Финальная оптимизация
             optimized_prompt = self._optimize_prompt(cinematic_prompt)
@@ -94,7 +96,7 @@ class CinematicPromptService:
                 "style": "fallback"
             }
     
-    async def _build_cinematic_prompt(self, base_prompt: str, avatar_type: str) -> str:
+    async def _build_cinematic_prompt(self, base_prompt: str, avatar_type: str, environment_text: Optional[str] = None) -> str:
         """Строит кинематографический промпт по блокам"""
         
         prompt_lower = base_prompt.lower()
@@ -128,8 +130,8 @@ class CinematicPromptService:
         pose_description = self._create_pose_description(prompt_lower)
         components.append(pose_description)
         
-        # 8. Окружение и фон
-        environment = self._create_environment_description(prompt_lower)
+        # 8. Окружение и фон (с поддержкой переданного environment_text)
+        environment = self._create_environment_description(prompt_lower, environment_text)
         if environment:
             components.append(environment)
         
@@ -260,8 +262,11 @@ class CinematicPromptService:
         
         return random.choice(poses)
     
-    def _create_environment_description(self, prompt_lower: str) -> Optional[str]:
+    def _create_environment_description(self, prompt_lower: str, environment_text: Optional[str] = None) -> Optional[str]:
         """Создает детальное описание окружения"""
+        if environment_text:
+            return environment_text
+        
         if any(word in prompt_lower for word in ['dubai', 'burj khalifa', 'дубай']):
             return ("Set against the iconic Dubai skyline with the magnificent Burj Khalifa towering in the background, "
                    "featuring the architectural marvel rendered with atmospheric perspective and soft focus, "
@@ -349,23 +354,23 @@ class CinematicPromptService:
             logger.warning("[Translation] Нет API ключа OpenAI, используем локальный перевод")
             return self._simple_translate(russian_text)
         
-        system_prompt = """Ты профессиональный переводчик промптов для AI-генерации изображений.
+        system_prompt = """You are a professional prompt translator for AI image generation.
 
-ЗАДАЧА: Точно переведи русский/казахский промпт на английский для создания фотореалистичных изображений.
+TASK: Accurately translate Russian/Kazakh prompts to English for creating photorealistic images.
 
-ПРАВИЛА:
-1. Сохраняй все технические термины фотографии
-2. Переводи названия мест точно (Дубай → Dubai, Бурдж Халифа → Burj Khalifa)
-3. Сохраняй структуру и смысл
-4. НЕ добавляй лишних деталей, только точный перевод
-5. Сохраняй стиль и эмоциональность
+RULES:
+1. Preserve all photography technical terms
+2. Translate place names accurately (Дубай → Dubai, Бурдж Халифа → Burj Khalifa)
+3. Maintain structure and meaning
+4. DO NOT add extra details, only accurate translation
+5. Preserve style and emotionality
 
-ПРИМЕРЫ:
+EXAMPLES:
 • "мужчина в костюме на фоне Бурдж Халифа" → "man in suit against Burj Khalifa backdrop"
 • "деловой портрет в офисе" → "business portrait in office"
 • "уверенный вид" → "confident appearance"
 
-ОТВЕТ: только переведенный промпт без объяснений."""
+RESPONSE: only translated prompt without explanations."""
 
         try:
             url = "https://api.openai.com/v1/chat/completions"

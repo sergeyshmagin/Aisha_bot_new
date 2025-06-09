@@ -18,9 +18,7 @@ def get_main_menu() -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text="🎭 Мои аватары",
                 callback_data="avatar_menu"
-            )
-        ],
-        [
+            ),
             InlineKeyboardButton(
                 text="🖼️ Моя галерея",
                 callback_data="my_gallery"
@@ -28,11 +26,15 @@ def get_main_menu() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                text="🎤 Транскрибация",
-                callback_data="transcribe_menu"
+                text="🏠 Личный кабинет",
+                callback_data="profile_menu"
             )
         ],
         [
+            InlineKeyboardButton(
+                text="🎤 Транскрибация",
+                callback_data="transcribe_menu"
+            ),
             InlineKeyboardButton(
                 text="❓ Помощь",
                 callback_data="main_help"

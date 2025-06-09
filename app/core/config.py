@@ -98,9 +98,26 @@ class Settings(BaseSettings):
     QUALITY_THRESHOLD: float = Field(0.5, env="QUALITY_THRESHOLD")  # минимальная оценка качества
     
     # Стоимость сервисов (в кредитах)
-    AVATAR_CREATION_COST: float = Field(10.0, env="AVATAR_CREATION_COST")
-    AVATAR_GENERATION_COST: float = Field(1.0, env="AVATAR_GENERATION_COST")
-    IMAGE_GENERATION_COST: float = Field(50.0, env="IMAGE_GENERATION_COST")  # Стоимость генерации изображения
+    AVATAR_CREATION_COST: float = Field(150.0, env="AVATAR_CREATION_COST")  # Создание аватара
+    IMAGE_GENERATION_COST: float = Field(5.0, env="IMAGE_GENERATION_COST")  # Генерация фото
+    VIDEO_5S_GENERATION_COST: float = Field(20.0, env="VIDEO_5S_GENERATION_COST")  # Видео 5 сек
+    VIDEO_10S_GENERATION_COST: float = Field(40.0, env="VIDEO_10S_GENERATION_COST")  # Видео 10 сек
+    VIDEO_PRO_5S_GENERATION_COST: float = Field(30.0, env="VIDEO_PRO_5S_GENERATION_COST")  # Видео PRO 5 сек
+    VIDEO_PRO_10S_GENERATION_COST: float = Field(60.0, env="VIDEO_PRO_10S_GENERATION_COST")  # Видео PRO 10 сек
+    PORN_VIDEO_5S_GENERATION_COST: float = Field(30.0, env="PORN_VIDEO_5S_GENERATION_COST")  # Парное видео 5 сек
+    PORN_VIDEO_10S_GENERATION_COST: float = Field(60.0, env="PORN_VIDEO_10S_GENERATION_COST")  # Парное видео 10 сек
+    TRANSCRIPTION_COST_PER_MINUTE: float = Field(10.0, env="TRANSCRIPTION_COST_PER_MINUTE")  # Транскрибация за минуту
+    
+    # Пакеты пополнения баланса
+    TOPUP_PACKAGES: dict = Field(default={
+        "small": {"coins": 250, "price_rub": 490, "price_kzt": 2500, "popular": False},
+        "medium": {"coins": 500, "price_rub": 870, "price_kzt": 4900, "popular": True},
+        "large": {"coins": 1000, "price_rub": 1540, "price_kzt": 8800, "popular": False}
+    }, env="TOPUP_PACKAGES")
+    
+    # Ссылки на документы
+    OFFER_URL: str = Field("https://telegra.ph/Dogovor-publichnoj-oferty-06-06-2", env="OFFER_URL")
+    PRIVACY_URL: str = Field("https://telegra.ph/Politika-konfidencialnosti-i-obrabotki-personalnyh-dannyh-06-06-2", env="PRIVACY_URL")
     
     # Управление хранением фотографий
     DELETE_PHOTOS_AFTER_TRAINING: bool = Field(True, env="DELETE_PHOTOS_AFTER_TRAINING")  # Удалять фото после обучения
@@ -213,6 +230,3 @@ class Settings(BaseSettings):
 
 # Создаем экземпляр настроек
 settings = Settings()
-
-# Создаем директории, если они не существуют
-settings.AUDIO_STORAGE_PATH.mkdir(parents=True, exist_ok=True)

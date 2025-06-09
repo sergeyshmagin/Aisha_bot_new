@@ -53,7 +53,7 @@ class CustomPromptHandler(BaseHandler):
             text = f"""📝 <b>Свой промпт</b>
 
 🎭 <b>Аватар:</b> {main_avatar.name}
-💰 <b>Стоимость:</b> {GENERATION_COST:.0f} единиц
+💰 <b>Стоимость:</b> {GENERATION_COST:.0f} монет
 
 ✍️ <b>Напишите описание изображения:</b>
 

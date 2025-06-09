@@ -1,140 +1,183 @@
 version: '3.8'
 
+# ============================================================================
+# ПРОДАКШН КОНФИГУРАЦИЯ для горизонтального масштабирования
+# Сервер: 192.168.0.10 (aibots.kz)
+# Redis: 192.168.0.3 (сессии и кеш)
+# PostgreSQL/MinIO/Registry: 192.168.0.4
+# ============================================================================
+
+networks:
+  aisha_cluster:
+    external: true
+
+volumes:
+  bot_logs:
+    driver: local
+  webhook_logs:
+    driver: local
+  nginx_logs:
+    driver: local
+  nginx_cache:
+    driver: local
+
 services:
-  # ======================== APPLICATION SERVICES ========================
-  
-  aisha-bot:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.bot
-      target: production
-    container_name: aisha-bot-prod
-    restart: always
-    environment:
-      # Подключение к внешним сервисам
-      - DATABASE_URL=postgresql+asyncpg://aisha:${POSTGRES_PASSWORD}@${DATABASE_HOST}:5432/aisha_v2
-      - REDIS_URL=redis://${REDIS_HOST}:6379/0
-      - MINIO_ENDPOINT=${MINIO_ENDPOINT}
-      - DEBUG=false
-      - ENVIRONMENT=production
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - FAL_API_KEY=${FAL_API_KEY}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - PASSWORD_SALT=${PASSWORD_SALT}
-    env_file:
-      - .env.docker.prod
-    volumes:
-      - /opt/aisha-backend/logs:/app/logs
-      - /etc/localtime:/etc/localtime:ro
-    networks:
-      - aisha-prod-network
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
-          cpus: '0.25'
-    healthcheck:
-      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  aisha-api:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.api
-      target: production
-    container_name: aisha-api-prod
-    restart: always
-    ports:
-      - "127.0.0.1:8000:8000"  # Bind только на localhost для nginx upstream
-    environment:
-      # Подключение к внешним сервисам
-      - DATABASE_URL=postgresql+asyncpg://aisha:${POSTGRES_PASSWORD}@${DATABASE_HOST}:5432/aisha_v2
-      - REDIS_URL=redis://${REDIS_HOST}:6379/0
-      - DEBUG=false
-      - ENVIRONMENT=production
-      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - FAL_API_KEY=${FAL_API_KEY}
-      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
-      - PASSWORD_SALT=${PASSWORD_SALT}
-      - WEBHOOK_HOST=aibots.kz
-      - WEBHOOK_PORT=8443
-      - FAL_WEBHOOK_URL=https://aibots.kz:8443/api/v1/avatar/status_update
-    env_file:
-      - .env.docker.prod
-    volumes:
-      - /opt/aisha-backend/logs:/app/logs
-      - /etc/localtime:/etc/localtime:ro
-    networks:
-      - aisha-prod-network
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '0.5'
-        reservations:
-          memory: 128M
-          cpus: '0.25'
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
-  # ======================== REVERSE PROXY (только в prod) ========================
-
+  # ==================== NGINX LOAD BALANCER ====================
   nginx:
-    build:
-      context: ./docker/nginx
-      dockerfile: Dockerfile
+    image: aisha-nginx:latest
     container_name: aisha-nginx-prod
     restart: unless-stopped
     ports:
       - "80:80"
       - "8443:8443"
     volumes:
-      - ./ssl_certificate:/etc/nginx/ssl:ro
-      - ./logs/nginx:/var/log/nginx
-      - nginx_cache:/var/cache/nginx
-    depends_on:
-      - aisha-api
+      - ./ssl:/etc/nginx/ssl:ro
+      - nginx_logs:/var/log/nginx
+      - nginx_cache:/tmp/nginx_cache
     networks:
-      - aisha-prod-network
+      aisha_cluster:
+        ipv4_address: 172.25.0.10
+    depends_on:
+      - webhook-api-1
+      - webhook-api-2
+    environment:
+      - NGINX_WORKER_PROCESSES=auto
+      - NGINX_WORKER_CONNECTIONS=2048
+    labels:
+      - "com.aisha.service=nginx"
+      - "com.aisha.environment=production"
+
+  # ==================== WEBHOOK API CLUSTER ====================
+  webhook-api-1:
+    image: aisha-webhook:latest
+    container_name: aisha-webhook-api-1
+    restart: unless-stopped
+    expose:
+      - "8001"
+    volumes:
+      - webhook_logs:/app/logs
+    networks:
+      aisha_cluster:
+        ipv4_address: 172.25.0.20
+    environment:
+      # Application
+      - PYTHONPATH=/app
+      - DEBUG=false
+      - API_HOST=0.0.0.0
+      - API_PORT=8001
+      - INSTANCE_ID=webhook-api-1
+      
+      # External PostgreSQL
+      - POSTGRES_HOST=192.168.0.4
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=aisha
+      - POSTGRES_USER=aisha_user
+      - POSTGRES_PASSWORD=KbZZGJHX09KSH7r9ev4m
+      
+      # External Redis (для кеша и координации)
+      - REDIS_HOST=192.168.0.3
+      - REDIS_PORT=6379
+      - REDIS_DB=1
+      - REDIS_PASSWORD=wd7QuwAbG0wtyoOOw3Sm
+      - REDIS_SSL=false
+      - REDIS_POOL_SIZE=10
+      
+      # External MinIO
+      - MINIO_ENDPOINT=192.168.0.4:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=74rSbw9asQ1uMzcFeM5G
+      - MINIO_SECURE=false
+      
+      # Webhook settings
+      - FAL_WEBHOOK_URL=https://aibots.kz:8443/api/v1/avatar/status_update
+      - WEBHOOK_TIMEOUT=30
+      - WEBHOOK_RETRY_ATTEMPTS=3
+      
+      # Performance
+      - UVICORN_WORKERS=2
+      - UVICORN_WORKER_CLASS=uvicorn.workers.UvicornWorker
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
     deploy:
       resources:
         limits:
-          memory: 256M
-          cpus: '0.5'
+          cpus: '1.0'
+          memory: 512M
         reservations:
-          memory: 128M
-          cpus: '0.25'
+          cpus: '0.5'
+          memory: 256M
+    labels:
+      - "com.aisha.service=webhook-api"
+      - "com.aisha.instance=primary"
+
+  webhook-api-2:
+    image: aisha-webhook:latest
+    container_name: aisha-webhook-api-2
+    restart: unless-stopped
+    expose:
+      - "8001"
+    volumes:
+      - webhook_logs:/app/logs
+    networks:
+      aisha_cluster:
+        ipv4_address: 172.25.0.21
+    environment:
+      # Application
+      - PYTHONPATH=/app
+      - DEBUG=false
+      - API_HOST=0.0.0.0
+      - API_PORT=8001
+      - INSTANCE_ID=webhook-api-2
+      
+      # External PostgreSQL
+      - POSTGRES_HOST=192.168.0.4
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=aisha
+      - POSTGRES_USER=aisha_user
+      - POSTGRES_PASSWORD=KbZZGJHX09KSH7r9ev4m
+      
+      # External Redis
+      - REDIS_HOST=192.168.0.3
+      - REDIS_PORT=6379
+      - REDIS_DB=1
+      - REDIS_PASSWORD=wd7QuwAbG0wtyoOOw3Sm
+      - REDIS_SSL=false
+      - REDIS_POOL_SIZE=10
+      
+      # External MinIO
+      - MINIO_ENDPOINT=192.168.0.4:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=74rSbw9asQ1uMzcFeM5G
+      - MINIO_SECURE=false
+      
+      # Webhook settings
+      - FAL_WEBHOOK_URL=https://aibots.kz:8443/api/v1/avatar/status_update
+      - WEBHOOK_TIMEOUT=30
+      - WEBHOOK_RETRY_ATTEMPTS=3
+      
+      # Performance (меньше для backup)
+      - UVICORN_WORKERS=1
+      - UVICORN_WORKER_CLASS=uvicorn.workers.UvicornWorker
+      
     healthcheck:
-      test: ["/usr/local/bin/healthcheck.sh"]
-      interval: 15s
-      timeout: 5s
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
       retries: 3
-      start_period: 30s
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-networks:
-  aisha-prod-network:
-    driver: bridge
-    ipam:
-      config:
-        - subnet: 172.21.0.0/16
-
-volumes:
-  nginx_cache:
-    driver: local 
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+    labels:
+      - "com.aisha.service=webhook-api"
+      - "com.aisha.instance=secondary" 

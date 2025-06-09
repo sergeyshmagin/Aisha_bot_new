@@ -12,6 +12,18 @@ class TranscribeStates(StatesGroup):
     result = State()  # Показ результата
     format_selection = State()  # Выбор формата
     error = State()  # Состояние ошибки
+    
+    # Состояния платной транскрипции
+    showing_quote = State()  # Показ расценок
+    waiting_payment_confirmation = State()  # Ожидание подтверждения оплаты
+    payment_processing = State()  # Обработка платежа
+    payment_success = State()  # Успешная оплата
+    payment_failed = State()  # Неудачная оплата
+    
+    # Состояния промо-кодов
+    waiting_promo_code = State()  # Ожидание ввода промо-кода
+    promo_processing = State()  # Обработка промо-кода
+    promo_applied = State()  # Промо-код применен
 
 
 class AvatarStates(StatesGroup):

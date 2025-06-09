@@ -1,86 +1,77 @@
-# ======================== BASE STAGE ========================
-FROM python:3.11-slim as base
+# ============================================================================
+# Multi-stage Dockerfile для масштабируемого Telegram бота
+# Поддержка Redis сессий для горизонтального масштабирования
+# ============================================================================
+
+# ==================== БАЗОВЫЙ ОБРАЗ ====================
+FROM python:3.12-slim as base
 
 # Системные зависимости
 RUN apt-get update && apt-get install -y \
-    curl \
-    netcat-openbsd \
-    && rm -rf /var/lib/apt/lists/* \
-    && apt-get clean
-
-# Создание пользователя приложения
-RUN groupadd -r aisha && useradd -r -g aisha aisha
-
-WORKDIR /app
-
-# ======================== BUILDER STAGE ========================
-FROM base as builder
-
-RUN apt-get update && apt-get install -y \
-    build-essential \
     gcc \
+    g++ \
+    curl \
+    wget \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# Копирование requirements и создание wheels
-COPY requirements.txt .
-RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
+# Рабочая директория
+WORKDIR /app
 
-# ======================== DEVELOPMENT STAGE ========================
+# Копируем requirements
+COPY requirements.txt .
+
+# Устанавливаем Python зависимости
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
+
+# ==================== DEVELOPMENT STAGE ====================
 FROM base as development
 
-# Копирование wheels и установка
-COPY --from=builder /app/wheels /wheels
-COPY requirements.txt .
-RUN pip install --no-cache /wheels/*
+# Development зависимости
+RUN pip install --no-cache-dir pytest pytest-asyncio black isort mypy
 
-# Установка dev зависимостей (если есть)
-# COPY requirements-test.txt .
-# RUN pip install -r requirements-test.txt
+# Копируем весь код
+COPY . .
 
-# Переключение на пользователя приложения
-USER aisha
+# Development команда
+CMD ["python", "main.py"]
 
-# Переменные окружения для development
-ENV PYTHONPATH=/app
-ENV PYTHONUNBUFFERED=1
-ENV DEBUG=true
-ENV PYTHONDONTWRITEBYTECODE=1
-
-EXPOSE 8000
-
-CMD ["python", "-m", "app.main"]
-
-# ======================== PRODUCTION STAGE ========================
+# ==================== PRODUCTION STAGE ====================
 FROM base as production
 
-# Копирование wheels и установка (только prod зависимости)
-COPY --from=builder /app/wheels /wheels
-COPY requirements.txt .
-RUN pip install --no-cache /wheels/* \
-    && rm -rf /wheels
+# Создаем пользователя для безопасности
+RUN groupadd -r aisha && useradd -r -g aisha aisha
 
-# Копирование кода приложения
-COPY --chown=aisha:aisha . .
+# Создаем необходимые директории
+RUN mkdir -p /app/logs /app/storage /app/cache && \
+    chown -R aisha:aisha /app
 
-# Переключение на пользователя приложения
+# Копируем только необходимые файлы
+COPY --chown=aisha:aisha app/ ./app/
+COPY --chown=aisha:aisha main.py .
+COPY --chown=aisha:aisha alembic.ini .
+COPY --chown=aisha:aisha alembic/ ./alembic/
+
+# Настройки окружения для продакшна
+ENV PYTHONPATH=/app \
+    PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Переключаемся на непривилегированного пользователя
 USER aisha
 
-# Переменные окружения для production
-ENV PYTHONPATH=/app
-ENV PYTHONUNBUFFERED=1
-ENV DEBUG=false
-ENV PYTHONDONTWRITEBYTECODE=1
+# Health check
+HEALTHCHECK --interval=60s --timeout=15s --start-period=30s --retries=3 \
+    CMD python -c "import asyncio; print('Bot healthy')" || exit 1
 
-# Healthcheck
-HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
-    CMD python -c "import sys; sys.exit(0)"
+# Entrypoint с поддержкой разных режимов
+COPY --chown=aisha:aisha docker/bot-entrypoint.sh /entrypoint.sh
+USER root
+RUN chmod +x /entrypoint.sh
+USER aisha
 
-# Метаданные
-LABEL maintainer="Aisha Bot Team"
-LABEL version="2.0"
-LABEL environment="production"
-LABEL description="Aisha Telegram Bot v2"
-
-EXPOSE 8000
-
-CMD ["python", "-m", "app.main"] 
+ENTRYPOINT ["/entrypoint.sh"]
+CMD ["polling"] 

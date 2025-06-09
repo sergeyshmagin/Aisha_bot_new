@@ -286,4 +286,44 @@ class BaseHandler:
         try:
             await state.clear()
         except Exception as e:
-            logger.warning(f"Ошибка очистки состояния: {e}") 
+            logger.warning(f"Ошибка очистки состояния: {e}")
+    
+    async def safe_edit_message(
+        self,
+        callback: CallbackQuery,
+        text: str,
+        reply_markup = None,
+        parse_mode: str = "HTML"
+    ) -> None:
+        """
+        Безопасное редактирование сообщения с fallback на новое сообщение
+        
+        Args:
+            callback: Callback query
+            text: Новый текст сообщения
+            reply_markup: Клавиатура
+            parse_mode: Режим парсинга
+        """
+        try:
+            await callback.message.edit_text(
+                text=text,
+                reply_markup=reply_markup,
+                parse_mode=parse_mode
+            )
+        except Exception as edit_error:
+            # Если не удается отредактировать (например, сообщение без текста), удаляем и отправляем новое
+            logger.warning(f"Не удалось отредактировать сообщение: {edit_error}")
+            try:
+                await callback.message.delete()
+            except Exception as delete_error:
+                logger.warning(f"Не удалось удалить сообщение: {delete_error}")
+            
+            try:
+                await callback.message.answer(
+                    text=text,
+                    reply_markup=reply_markup,
+                    parse_mode=parse_mode
+                )
+            except Exception as send_error:
+                logger.error(f"Не удалось отправить новое сообщение: {send_error}")
+                await callback.answer("❌ Произошла ошибка", show_alert=True)

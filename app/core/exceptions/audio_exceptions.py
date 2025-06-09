@@ -4,9 +4,10 @@
 """
 from typing import Optional, Dict, Any
 from .base_exceptions import BaseServiceError
+from app.core.exceptions.base import AishaBaseException
 
 
-class AudioProcessingError(BaseServiceError):
+class AudioProcessingError(AishaBaseException):
     """
     Ошибка обработки аудио
     
@@ -27,15 +28,23 @@ class AudioProcessingError(BaseServiceError):
         details: Optional[Dict[str, Any]] = None,
         cause: Optional[Exception] = None
     ):
+        # Добавляем информацию о сервисе в детали
+        service_details = details or {}
+        service_details.update({
+            "service_name": "AudioProcessing",
+            "audio_file": audio_file,
+            "processing_stage": processing_stage,
+            "cause": str(cause) if cause else None
+        })
+        
         super().__init__(
-            service_name="AudioProcessing",
             message=message,
-            error_code=error_code,
-            details=details,
-            cause=cause
+            code=error_code,
+            details=service_details
         )
         self.audio_file = audio_file
         self.processing_stage = processing_stage
+        self.cause = cause
     
     def __str__(self) -> str:
         parts = [super().__str__()]
@@ -168,4 +177,19 @@ class AudioValidationError(AudioProcessingError):
         if self.expected_value is not None and self.actual_value is not None:
             parts.append(f"Expected: {self.expected_value}, Got: {self.actual_value}")
         
-        return " | ".join(parts) 
+        return " | ".join(parts)
+
+
+class AudioDurationError(AudioProcessingError):
+    """Ошибка определения длительности аудио"""
+    pass
+
+
+class FFmpegNotAvailableError(AudioProcessingError):
+    """FFmpeg недоступен в системе"""
+    pass
+
+
+class InsufficientBalanceError(AishaBaseException):
+    """Недостаточно средств на балансе"""
+    pass 

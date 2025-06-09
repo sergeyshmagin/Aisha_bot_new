@@ -18,6 +18,7 @@ from app.handlers import (
 from app.handlers.avatar import router as avatar_router
 from app.handlers.generation.main_handler import router as generation_router
 from app.handlers.gallery import main_router as gallery_main_router, filter_router as gallery_filter_router
+from app.handlers.profile.router import profile_router
 from app.handlers.fallback import fallback_router
 
 # Настройка логирования
@@ -136,12 +137,21 @@ async def main():
     dp.include_router(gallery_main_router)
     dp.include_router(gallery_filter_router)
     
+    # Регистрируем личный кабинет пользователя
+    dp.include_router(profile_router)
+    
     # Регистрация обработчиков транскриптов
     await transcript_main_handler.register_handlers()
     await transcript_processing_handler.register_handlers()
     
     dp.include_router(transcript_main_handler.router)
     dp.include_router(transcript_processing_handler.router)
+    
+    # Регистрация роутеров платной транскрипции и промо-кодов
+    from app.handlers.transcript_processing.paid_transcription_handler import router as paid_transcription_router
+    from app.handlers.transcript_processing.promo_handler import router as promo_router
+    dp.include_router(paid_transcription_router)
+    dp.include_router(promo_router)
 
     # Регистрируем fallback_router последним для ловли необработанных сообщений
     dp.include_router(fallback_router)

@@ -74,8 +74,8 @@ COPY --chown=aisha:aisha scripts/ ./scripts/
 COPY --chown=aisha:aisha alembic/ ./alembic/
 COPY --chown=aisha:aisha alembic.ini ./alembic.ini
 
-# Создание директорий для логов
-RUN mkdir -p /app/logs /app/tmp && chown -R aisha:aisha /app/logs /app/tmp
+# Создание директорий для логов и storage
+RUN mkdir -p /app/logs /app/tmp /app/storage /app/storage/audio && chown -R aisha:aisha /app/logs /app/tmp /app/storage
 
 # Переключение на пользователя приложения
 USER aisha
@@ -107,7 +107,6 @@ CMD ["uvicorn", "api_server.main:app", \
      "--host", "0.0.0.0", \
      "--port", "8001", \
      "--workers", "2", \
-     "--worker-class", "uvicorn.workers.UvicornWorker", \
      "--access-log", \
      "--log-level", "info", \
      "--no-server-header"] 

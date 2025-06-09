@@ -49,7 +49,7 @@ class AudioHandler:
         
         # Выполняем обработку аудио напрямую
         try:
-            processing_msg = await message.answer("🎵 Начинаю обработку аудио...")
+            processing_msg = await message.answer("🎵 Анализирую аудио...")
             await state.set_state(TranscribeStates.processing)
 
             # Извлекаем информацию о файле
@@ -58,6 +58,10 @@ class AudioHandler:
             # Проверяем размер файла
             if not await self._validate_file_size(message, file_info, processing_msg, state):
                 return
+            
+            # Проверяем требуется ли платная транскрибация
+            if await self._should_use_paid_transcription(message, file_info, processing_msg, state):
+                return  # Платная транскрибация перехватила обработку
             
             # Обрабатываем файл
             transcript_text = await self._process_audio_file(message, file_info, processing_msg)
@@ -375,4 +379,82 @@ class AudioHandler:
             if original_audio:
                 message.audio = original_audio
             else:
-                delattr(message, 'audio') 
+                delattr(message, 'audio')
+    
+    async def _should_use_paid_transcription(
+        self, 
+        message: Message, 
+        file_info: dict, 
+        processing_msg: Message,
+        state: FSMContext
+    ) -> bool:
+        """
+        Проверяет, требуется ли платная транскрибация
+        
+        Returns:
+            bool: True если платная транскрибация перехватила обработку
+        """
+        try:
+            # Получаем пользователя
+            async with self.get_session() as session:
+                user_service = get_user_service_with_session(session)
+                user = await user_service.get_user_by_telegram_id(message.from_user.id)
+                
+                if not user:
+                    # Если пользователь не найден, регистрируем его и продолжаем бесплатную транскрипцию
+                    logger.info(f"Пользователь {message.from_user.id} не найден, используем бесплатную транскрипцию")
+                    return False
+                
+                # Скачиваем аудио для анализа
+                file = await message.bot.get_file(file_info["file_id"])
+                file_content = await message.bot.download_file(file.file_path)
+                audio_data = file_content.read()
+                
+                # Импортируем сервис платной транскрипции
+                from app.services.transcription_service import PaidTranscriptionService
+                transcription_service = PaidTranscriptionService(session)
+                
+                # Проверяем доступность сервиса
+                if not await transcription_service.is_service_available():
+                    logger.warning("Сервис платной транскрибации недоступен, используем бесплатную")
+                    return False
+                
+                # Получаем расценки
+                try:
+                    quote = await transcription_service.get_transcription_quote(audio_data)
+                    
+                    # Если аудио короче 1 минуты, используем бесплатную транскрипцию
+                    if quote['duration_seconds'] < 60:
+                        logger.info(f"Аудио короче 1 минуты ({quote['duration_seconds']}с), используем бесплатную транскрипцию")
+                        return False
+                    
+                    # Удаляем сообщение о начале анализа
+                    await processing_msg.delete()
+                    
+                    # Переходим к платной транскрибации
+                    from .paid_transcription_handler import PaidTranscriptionHandler
+                    paid_handler = PaidTranscriptionHandler()
+                    
+                    await paid_handler.show_transcription_quote(
+                        message=message,
+                        audio_data=audio_data,
+                        file_info=file_info,
+                        user_id=user.id,
+                        state=state
+                    )
+                    
+                    # Очищаем состояние
+                    await state.clear()
+                    
+                    logger.info(f"Переход к платной транскрибации для аудио {quote['duration_seconds']}с")
+                    return True
+                    
+                except Exception as quote_error:
+                    logger.exception(f"Ошибка получения расценок: {quote_error}")
+                    # При ошибке используем бесплатную транскрибацию
+                    return False
+                
+        except Exception as e:
+            logger.exception(f"Ошибка проверки платной транскрибации: {e}")
+            # При ошибке продолжаем бесплатную транскрибацию
+            return False 

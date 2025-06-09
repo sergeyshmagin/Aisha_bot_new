@@ -500,9 +500,8 @@ async def handle_transcription_cancel(callback: CallbackQuery, state: FSMContext
         logger.exception(f"Ошибка очистки данных при отмене: {e}")
     
     # Показываем главное меню
-    from app.handlers.main_menu import MainMenuHandler
-    menu_handler = MainMenuHandler()
-    await menu_handler.show_main_menu(callback, state)
+    from app.handlers.main_menu import show_main_menu
+    await show_main_menu(callback, state)
     
     await state.clear()
     await callback.answer("Транскрибация отменена")
