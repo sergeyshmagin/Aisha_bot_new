@@ -230,26 +230,42 @@ class AudioHandler:
     async def _process_regular_audio(self, message: Message, file_info: dict) -> Optional[str]:
         """Обрабатывает обычные аудио файлы (≤20MB)"""
         try:
+            logger.info(f"🎵 [TRANSCRIPTION] Начинаем обработку аудио от пользователя {message.from_user.id}")
+            logger.info(f"📁 [TRANSCRIPTION] Файл: {file_info['file_name']} ({file_info['file_format']})")
+            logger.info(f"📊 [TRANSCRIPTION] Размер: {file_info.get('file_size', 0)} байт")
+            logger.info(f"⏱️ [TRANSCRIPTION] Длительность: {file_info.get('duration', 'неизвестно')} сек")
+            
             # Обычное скачивание для файлов <= 20MB
+            logger.info(f"📥 [TRANSCRIPTION] Скачиваем файл из Telegram...")
             file = await message.bot.get_file(file_info["file_id"])
             downloaded_file = await message.bot.download_file(file.file_path)
+            audio_data = downloaded_file.getvalue()
+            logger.info(f"✅ [TRANSCRIPTION] Файл скачан, размер: {len(audio_data)} байт")
 
             # Транскрибируем
             async with self.get_session() as session:
                 audio_service = get_audio_processing_service(session)
-                logger.info(f"[AUDIO_UNIVERSAL] Обрабатываем {file_info['file_format']} файл: {file_info['file_name']}")
-                result = await audio_service.process_audio(downloaded_file.getvalue())
+                logger.info(f"🤖 [TRANSCRIPTION] Запускаем процесс транскрибации...")
+                
+                result = await audio_service.process_audio(audio_data)
                 
                 if not result.success:
-                    logger.error(f"[AUDIO_UNIVERSAL] Ошибка транскрибации: {result.error}")
+                    logger.error(f"❌ [TRANSCRIPTION] Ошибка транскрибации: {result.error}")
+                    logger.error(f"❌ [TRANSCRIPTION] Детали файла: {file_info}")
                     return None
                 
                 text = result.text
-                logger.info(f"[AUDIO_UNIVERSAL] Получен текст транскрипта, длина: {len(text)}")
+                word_count = len(text.split()) if text else 0
+                logger.info(f"✅ [TRANSCRIPTION] Транскрибация завершена успешно!")
+                logger.info(f"📝 [TRANSCRIPTION] Длина текста: {len(text)} символов")
+                logger.info(f"📖 [TRANSCRIPTION] Количество слов: {word_count}")
+                logger.info(f"📄 [TRANSCRIPTION] Первые 100 символов: {text[:100]}...")
                 return text
                 
         except Exception as e:
-            logger.exception(f"[AUDIO_UNIVERSAL] Ошибка обработки обычного аудио: {e}")
+            logger.error(f"❌ [TRANSCRIPTION] Критическая ошибка обработки аудио: {e}")
+            logger.error(f"❌ [TRANSCRIPTION] Файл: {file_info}")
+            logger.exception(f"❌ [TRANSCRIPTION] Полная трассировка ошибки:")
             return None
 
     async def _save_transcript(self, message: Message, transcript_text: str, file_info: dict) -> Optional[dict]:

@@ -103,8 +103,14 @@ class AudioService:
                         logger.warning(f"[AudioService] Ошибка транскрибации чанка {idx+1}: {result.error}")
                 final_text = "\n".join(texts)
                 success = bool(texts)
-                logger.info(f"[AudioService] Итоговая транскрибация: success={success}, чанков={len(chunks)}")
-                return TranscribeResult(success=success, text=final_text, error=None if success else "transcribe_error")
+                
+                if success:
+                    logger.info(f"[AudioService] ✅ Транскрибация успешна: {len(texts)} чанков, общая длина текста: {len(final_text)} символов")
+                    return TranscribeResult(success=True, text=final_text, error=None)
+                else:
+                    error_msg = f"Не удалось транскрибировать ни одного чанка из {len(chunks)}"
+                    logger.error(f"[AudioService] ❌ {error_msg}")
+                    return TranscribeResult(success=False, text="", error=error_msg)
             finally:
                 if os.path.exists(ogg_path):
                     os.unlink(ogg_path)

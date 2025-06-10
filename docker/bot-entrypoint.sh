@@ -107,6 +107,29 @@ asyncio.run(check_db())
 " || exit 1
 }
 
+# Настройка прав доступа к storage директориям
+setup_storage_permissions() {
+    log_info "🔧 Настройка прав доступа к storage директориям..."
+    
+    # Создаём директории если их нет
+    mkdir -p /app/storage/temp /app/storage/audio /app/logs
+    
+    # Для Docker volumes нужно изменить владельца
+    # Получаем ID пользователя aisha
+    AISHA_UID=$(id -u aisha 2>/dev/null || echo "999")
+    AISHA_GID=$(id -g aisha 2>/dev/null || echo "999")
+    
+    # Меняем владельца директорий на aisha
+    chown -R $AISHA_UID:$AISHA_GID /app/storage /app/logs 2>/dev/null || true
+    chmod -R 755 /app/storage /app/logs 2>/dev/null || true
+    
+    # Убеждаемся что пользователь может писать в директории
+    su aisha -c "touch /app/storage/temp/.test_write" 2>/dev/null && \
+    su aisha -c "rm /app/storage/temp/.test_write" 2>/dev/null && \
+    log_info "✅ Права доступа к storage настроены" || \
+    log_warn "⚠️ Возможны проблемы с правами доступа к storage"
+}
+
 # Выполнение миграций (только для основного экземпляра)
 run_migrations() {
     if [[ "${BOT_CLUSTER_NODE_ID:-1}" == "1" ]]; then
@@ -148,6 +171,9 @@ main() {
     # Проверки
     check_required_env
     
+    # Настройка storage
+    setup_storage_permissions
+    
     # Проверка подключений (без wait_for_service)
     check_redis
     check_postgres
@@ -160,7 +186,7 @@ main() {
         "polling")
             log_info "🤖 Запуск в режиме polling"
             export BOT_MODE="polling"
-            exec python3 main.py
+            exec su aisha -c "cd /app && python3 main.py"
             ;;
             
         "polling_standby")
@@ -168,13 +194,13 @@ main() {
             export BOT_MODE="polling_standby"
             # Задержка для standby экземпляра
             sleep 10
-            exec python3 main.py
+            exec su aisha -c "cd /app && python3 main.py"
             ;;
             
         "worker")
             log_info "⚙️ Запуск в режиме background worker"
             export BOT_MODE="worker"
-            exec python3 -c "
+            exec su aisha -c "cd /app && python3 -c \"
 import asyncio
 import sys
 sys.path.append('/app')
@@ -185,13 +211,13 @@ async def main():
     await worker.start()
 
 asyncio.run(main())
-"
+\""
             ;;
             
         "webhook")
             log_info "🌐 Запуск в режиме webhook"
             export BOT_MODE="webhook"
-            exec python3 main.py
+            exec su aisha -c "cd /app && python3 main.py"
             ;;
             
         *)

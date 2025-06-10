@@ -72,7 +72,7 @@ HEALTHCHECK --interval=60s --timeout=15s --start-period=30s --retries=3 \
 COPY --chown=aisha:aisha docker/bot-entrypoint.sh /entrypoint.sh
 USER root
 RUN chmod +x /entrypoint.sh
-USER aisha
 
+# Entrypoint запускается от root для настройки прав доступа
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["polling"] 

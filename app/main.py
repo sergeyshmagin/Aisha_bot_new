@@ -5,6 +5,7 @@ import asyncio
 import logging
 import signal
 import sys
+import os
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
@@ -33,6 +34,11 @@ logger = logging.getLogger(__name__)
 # Глобальные переменные для корректного завершения
 bot_instance = None
 background_tasks = set()
+
+# Проверка режима работы
+BOT_MODE = os.getenv("BOT_MODE", "polling")
+SET_POLLING = os.getenv("SET_POLLING", "true").lower() == "true"
+INSTANCE_ID = os.getenv("INSTANCE_ID", "unknown")
 
 
 async def startup_tasks():
@@ -116,7 +122,9 @@ async def main():
     """
     global bot_instance
     
-    logger.info("Запуск бота...")
+    logger.info(f"🚀 Запуск бота - Экземпляр: {INSTANCE_ID}")
+    logger.info(f"📋 Режим работы: {BOT_MODE}")
+    logger.info(f"📡 Polling разрешен: {SET_POLLING}")
 
     # Инициализация бота и диспетчера
     bot_instance = Bot(token=settings.TELEGRAM_TOKEN)
@@ -159,12 +167,44 @@ async def main():
     # Выполняем задачи запуска
     await startup_tasks()
 
-    # Запуск бота
+    # Запуск бота в зависимости от режима
     try:
-        logger.info("Запуск polling...")
-        await dp.start_polling(bot_instance)
+        if BOT_MODE == "worker":
+            logger.info("⚙️ Запуск в режиме background worker...")
+            # Запускаем только background worker без polling
+            from app.workers.background_worker import BackgroundWorker
+            worker = BackgroundWorker()
+            await worker.start()
+            
+        elif BOT_MODE == "polling_standby":
+            if SET_POLLING:
+                logger.warning("⚠️ STANDBY БОТ НЕ ДОЛЖЕН ДЕЛАТЬ POLLING!")
+                logger.info("💤 Standby бот переходит в режим ожидания...")
+                # Standby бот просто ждет и не делает polling
+                await asyncio.sleep(float('inf'))
+            else:
+                logger.info("💤 Standby бот в режиме ожидания...")
+                await asyncio.sleep(float('inf'))
+                
+        elif BOT_MODE == "webhook":
+            logger.info("🌐 Запуск в режиме webhook...")
+            # В режиме webhook не запускаем polling
+            logger.info("🌐 Webhook режим - polling отключен")
+            await asyncio.sleep(float('inf'))
+            
+        else:  # polling mode (default)
+            if SET_POLLING:
+                logger.info("📡 Запуск polling...")
+                await dp.start_polling(bot_instance)
+            else:
+                logger.info("❌ Polling отключен через SET_POLLING=false")
+                logger.info("⚙️ Переключение в worker режим...")
+                from app.workers.background_worker import BackgroundWorker
+                worker = BackgroundWorker()
+                await worker.start()
+                
     except Exception as e:
-        logger.error(f"Ошибка при запуске бота: {e}")
+        logger.error(f"❌ Ошибка при запуске бота: {e}")
         raise
     finally:
         # Корректное завершение

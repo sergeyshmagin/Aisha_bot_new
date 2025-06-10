@@ -1,0 +1,124 @@
+version: '3.8'
+
+networks:
+  aisha_local:
+    driver: bridge
+
+volumes:
+  bot_logs_local:
+    driver: local
+  bot_storage_temp_local:
+    driver: local
+  bot_storage_audio_local:
+    driver: local
+
+services:
+  # ============================================================================
+  # 🤖 ОСНОВНОЙ БОТ - ЕДИНСТВЕННЫЙ ДЕЛАЕТ POLLING (локальная версия)
+  # ============================================================================
+  bot-primary:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.bot
+      target: production
+    container_name: aisha-bot-primary-local
+    restart: unless-stopped
+    volumes:
+      - bot_logs_local:/app/logs
+      - bot_storage_temp_local:/app/storage/temp
+      - bot_storage_audio_local:/app/storage/audio
+    networks:
+      - aisha_local
+    environment:
+      - PYTHONPATH=/app
+      - INSTANCE_ID=bot-primary-local
+      - BOT_MODE=polling
+      - SET_POLLING=true
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_TOKEN=${TELEGRAM_BOT_TOKEN}
+      
+      # External services (прод сервисы)
+      - POSTGRES_HOST=192.168.0.4
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=aisha
+      - POSTGRES_USER=aisha_user
+      - POSTGRES_PASSWORD=KbZZGJHX09KSH7r9ev4m
+      
+      - REDIS_HOST=192.168.0.3
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=wd7QuwAbG0wtyoOOw3Sm
+      - REDIS_SSL=false
+      
+      - MINIO_ENDPOINT=192.168.0.4:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=74rSbw9asQ1uMzcFeM5G
+      - MINIO_SECURE=false
+      
+      # Storage
+      - AUDIO_STORAGE_PATH=/app/storage/temp
+      - TEMP_DIR=/app/storage/temp
+      
+    command: ["polling"]
+    
+    healthcheck:
+      test: ["CMD", "sh", "-c", "pgrep -f python3 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ============================================================================
+  # 🔄 BACKGROUND WORKER - НЕ ДЕЛАЕТ POLLING (локальная версия)
+  # ============================================================================
+  worker-1:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.bot
+      target: production
+    container_name: aisha-worker-1-local
+    restart: unless-stopped
+    volumes:
+      - bot_logs_local:/app/logs
+      - bot_storage_temp_local:/app/storage/temp
+      - bot_storage_audio_local:/app/storage/audio
+    networks:
+      - aisha_local
+    environment:
+      - PYTHONPATH=/app
+      - INSTANCE_ID=worker-1-local
+      - BOT_MODE=worker
+      - SET_POLLING=false
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_TOKEN=${TELEGRAM_BOT_TOKEN}
+      
+      # External services (прод сервисы)
+      - POSTGRES_HOST=192.168.0.4
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=aisha
+      - POSTGRES_USER=aisha_user
+      - POSTGRES_PASSWORD=KbZZGJHX09KSH7r9ev4m
+      
+      - REDIS_HOST=192.168.0.3
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=wd7QuwAbG0wtyoOOw3Sm
+      - REDIS_SSL=false
+      
+      - MINIO_ENDPOINT=192.168.0.4:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=74rSbw9asQ1uMzcFeM5G
+      - MINIO_SECURE=false
+      
+      # Storage
+      - AUDIO_STORAGE_PATH=/app/storage/temp
+      - TEMP_DIR=/app/storage/temp
+      
+    command: ["worker"]
+    
+    healthcheck:
+      test: ["CMD", "sh", "-c", "pgrep -f python3 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s 

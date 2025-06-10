@@ -14,9 +14,10 @@ class Settings(BaseSettings):
     # Основные настройки
     DEBUG: bool = True
     ENV: str = "development"
+    INSTANCE_ID: str = Field(default="aisha-bot", env="INSTANCE_ID")
     
     # Telegram
-    TELEGRAM_TOKEN: str = Field(default="test_token")
+    TELEGRAM_TOKEN: str = Field(default="test_token", env="TELEGRAM_BOT_TOKEN")
     # BACKEND_URL: str = "http://localhost:8000"  # LEGACY - удален
     
     # OpenAI
@@ -129,9 +130,20 @@ class Settings(BaseSettings):
     STORAGE_CLEANUP_DAYS: int = 7
     
     # Настройки логирования
-    LOG_LEVEL: str = "INFO"
+    LOG_LEVEL: str = Field(default="DEBUG", env="LOG_LEVEL")  # Изменено с INFO на DEBUG
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     LOG_FILE: Optional[str] = None
+    
+    # Детальное логирование
+    ENABLE_SQL_LOGGING: bool = Field(default=False, env="ENABLE_SQL_LOGGING")
+    ENABLE_TELEGRAM_LOGGING: bool = Field(default=True, env="ENABLE_TELEGRAM_LOGGING")
+    ENABLE_TRANSCRIPTION_LOGGING: bool = Field(default=True, env="ENABLE_TRANSCRIPTION_LOGGING")
+    LOG_TO_FILE: bool = Field(default=True, env="LOG_TO_FILE")
+    LOG_FILE_PATH: str = Field(default="/app/logs/aisha-bot.log", env="LOG_FILE_PATH")
+    
+    # Настройки детального логирования ошибок
+    ENABLE_DETAILED_ERROR_LOGGING: bool = Field(default=True, env="ENABLE_DETAILED_ERROR_LOGGING")
+    LOG_STACK_TRACES: bool = Field(default=True, env="LOG_STACK_TRACES")
     
     # Настройки метрик
     ENABLE_METRICS: bool = False

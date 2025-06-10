@@ -8,7 +8,7 @@ from typing import Optional
 from pathlib import Path
 
 # Базовая директория для временных файлов
-TEMP_BASE_DIR = "/opt/aisha-backend/storage/temp"
+TEMP_BASE_DIR = "/app/storage/temp"
 
 def ensure_temp_dir():
     """Создает директорию для временных файлов если её нет"""

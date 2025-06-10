@@ -1,0 +1,120 @@
+version: '3.8'
+
+networks:
+  aisha_bot_cluster:
+    external: true
+
+volumes:
+  bot_logs:
+    driver: local
+  bot_storage_temp:
+    driver: local
+  bot_storage_audio:
+    driver: local
+
+services:
+  # ============================================================================
+  # 🤖 ОСНОВНОЙ БОТ - ЕДИНСТВЕННЫЙ ДЕЛАЕТ POLLING
+  # ============================================================================
+  bot-primary:
+    image: 192.168.0.4:5000/aisha/bot:latest
+    container_name: aisha-bot-primary
+    restart: unless-stopped
+    volumes:
+      - bot_logs:/app/logs
+      - bot_storage_temp:/app/storage/temp
+      - bot_storage_audio:/app/storage/audio
+    networks:
+      aisha_bot_cluster:
+        ipv4_address: 172.26.0.10
+    environment:
+      - PYTHONPATH=/app
+      - INSTANCE_ID=bot-primary
+      - BOT_MODE=polling
+      - SET_POLLING=true
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_TOKEN=${TELEGRAM_BOT_TOKEN}
+      
+      # External services
+      - POSTGRES_HOST=192.168.0.4
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=aisha
+      - POSTGRES_USER=aisha_user
+      - POSTGRES_PASSWORD=KbZZGJHX09KSH7r9ev4m
+      
+      - REDIS_HOST=192.168.0.3
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=wd7QuwAbG0wtyoOOw3Sm
+      - REDIS_SSL=false
+      
+      - MINIO_ENDPOINT=192.168.0.4:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=74rSbw9asQ1uMzcFeM5G
+      - MINIO_SECURE=false
+      
+      # Storage
+      - AUDIO_STORAGE_PATH=/app/storage/temp
+      - TEMP_DIR=/app/storage/temp
+      
+    command: ["polling"]
+    
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "python3"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ============================================================================
+  # 🔄 BACKGROUND WORKER 1 - НЕ ДЕЛАЕТ POLLING
+  # ============================================================================
+  worker-1:
+    image: 192.168.0.4:5000/aisha/bot:latest
+    container_name: aisha-worker-1
+    restart: unless-stopped
+    volumes:
+      - bot_logs:/app/logs
+      - bot_storage_temp:/app/storage/temp
+      - bot_storage_audio:/app/storage/audio
+    networks:
+      aisha_bot_cluster:
+        ipv4_address: 172.26.0.20
+    environment:
+      - PYTHONPATH=/app
+      - INSTANCE_ID=worker-1
+      - BOT_MODE=worker
+      - SET_POLLING=false
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_TOKEN=${TELEGRAM_BOT_TOKEN}
+      
+      # External services
+      - POSTGRES_HOST=192.168.0.4
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=aisha
+      - POSTGRES_USER=aisha_user
+      - POSTGRES_PASSWORD=KbZZGJHX09KSH7r9ev4m
+      
+      - REDIS_HOST=192.168.0.3
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=wd7QuwAbG0wtyoOOw3Sm
+      - REDIS_SSL=false
+      
+      - MINIO_ENDPOINT=192.168.0.4:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=74rSbw9asQ1uMzcFeM5G
+      - MINIO_SECURE=false
+      
+      # Storage
+      - AUDIO_STORAGE_PATH=/app/storage/temp
+      - TEMP_DIR=/app/storage/temp
+      
+    command: ["worker"]
+    
+    healthcheck:
+      test: ["CMD", "pgrep", "-f", "python3"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s 
