@@ -51,7 +51,16 @@ def require_user(show_error: bool = True):
                         if show_error:
                             error_msg = "❌ Пользователь не найден"
                             if callback:
-                                await callback.answer(error_msg, show_alert=True)
+                                try:
+                                    await callback.answer(error_msg, show_alert=True)
+                                except Exception as callback_error:
+                                    # Если callback.answer() не работает (timeout/expired), логируем и игнорируем
+                                    logger.warning(f"Не удалось ответить на callback: {callback_error}")
+                                    # Пытаемся отправить сообщение в чат
+                                    try:
+                                        await callback.message.answer(error_msg)
+                                    except Exception:
+                                        pass  # Если и это не работает, просто игнорируем
                             else:
                                 await message.reply(error_msg)
                         return
@@ -65,7 +74,16 @@ def require_user(show_error: bool = True):
                 if show_error:
                     error_msg = "❌ Произошла ошибка"
                     if callback:
-                        await callback.answer(error_msg, show_alert=True)
+                        try:
+                            await callback.answer(error_msg, show_alert=True)
+                        except Exception as callback_error:
+                            # Если callback.answer() не работает (timeout/expired), логируем и игнорируем
+                            logger.warning(f"Не удалось ответить на callback: {callback_error}")
+                            # Пытаемся отправить сообщение в чат
+                            try:
+                                await callback.message.answer(error_msg)
+                            except Exception:
+                                pass  # Если и это не работает, просто игнорируем
                     else:
                         await message.reply(error_msg)
                 return

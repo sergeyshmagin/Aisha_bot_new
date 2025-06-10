@@ -171,11 +171,17 @@ class PaidTranscriptionHandler(BaseHandler):
             user_id: ID пользователя
         """
         try:
+            # ВАЖНО: Отвечаем на callback сразу, до длительной операции
+            await callback.answer()
+            
             # Извлекаем сохраненные данные аудио
             audio_data, file_info, quote = await self._retrieve_audio_data(callback.from_user.id)
             
             if not audio_data:
-                await callback.answer("❌ Данные аудио не найдены. Попробуйте снова.", show_alert=True)
+                await callback.message.edit_text(
+                    "❌ Данные аудио не найдены. Попробуйте снова.",
+                    reply_markup=None
+                )
                 return
             
             # Обновляем сообщение о начале транскрибации
@@ -465,7 +471,6 @@ async def handle_pay_transcription(callback: CallbackQuery, user=None):
     """Обработчик оплаты транскрибации"""
     handler = PaidTranscriptionHandler()
     await handler.process_paid_transcription(callback, user.id)
-    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("enter_promo_"))
