@@ -1,0 +1,153 @@
+version: '3.8'
+
+# ============================================================================
+# Docker Compose для WEBHOOK сервисов на продакшн
+# Только FAL AI webhook API, без bot контейнеров
+# ============================================================================
+
+services:
+  # Webhook API для FAL AI - экземпляр 1
+  aisha-webhook-api-1:
+    image: 192.168.0.4:5000/aisha/webhook:latest
+    container_name: aisha-webhook-api-1
+    restart: unless-stopped
+    environment:
+      # Database
+      - DATABASE_URL=postgresql://aisha_user:aisha_pass_2024@192.168.0.4:5432/aisha_db
+      
+      # Redis
+      - REDIS_URL=redis://192.168.0.3:6379/0
+      
+      # MinIO (S3 Compatible Storage)
+      - MINIO_ENDPOINT=192.168.0.4:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin123
+      - MINIO_BUCKET_NAME=aisha-files
+      - MINIO_SECURE=false
+      
+      # FAL AI
+      - FAL_API_KEY=${FAL_API_KEY}
+      - FAL_WEBHOOK_SECRET=${FAL_WEBHOOK_SECRET}
+      
+      # Server settings
+      - HOST=0.0.0.0
+      - PORT=8000
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=production
+      
+      # Instance identification
+      - INSTANCE_ID=webhook-api-1
+      
+    ports:
+      - "8001:8000"
+    
+    networks:
+      - aisha_webhook_cluster
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=aisha_webhook_cluster"
+      - "traefik.http.routers.webhook-api-1.rule=Host(`webhook.aisha.local`)"
+      - "traefik.http.services.webhook-api-1.loadbalancer.server.port=8000"
+
+  # Webhook API для FAL AI - экземпляр 2 (Load Balancing)
+  aisha-webhook-api-2:
+    image: 192.168.0.4:5000/aisha/webhook:latest
+    container_name: aisha-webhook-api-2
+    restart: unless-stopped
+    environment:
+      # Database
+      - DATABASE_URL=postgresql://aisha_user:aisha_pass_2024@192.168.0.4:5432/aisha_db
+      
+      # Redis
+      - REDIS_URL=redis://192.168.0.3:6379/0
+      
+      # MinIO (S3 Compatible Storage)
+      - MINIO_ENDPOINT=192.168.0.4:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=minioadmin123
+      - MINIO_BUCKET_NAME=aisha-files
+      - MINIO_SECURE=false
+      
+      # FAL AI
+      - FAL_API_KEY=${FAL_API_KEY}
+      - FAL_WEBHOOK_SECRET=${FAL_WEBHOOK_SECRET}
+      
+      # Server settings
+      - HOST=0.0.0.0
+      - PORT=8000
+      - LOG_LEVEL=INFO
+      - ENVIRONMENT=production
+      
+      # Instance identification
+      - INSTANCE_ID=webhook-api-2
+      
+    ports:
+      - "8002:8000"
+    
+    networks:
+      - aisha_webhook_cluster
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=aisha_webhook_cluster"
+      - "traefik.http.routers.webhook-api-2.rule=Host(`webhook.aisha.local`)"
+      - "traefik.http.services.webhook-api-2.loadbalancer.server.port=8000"
+
+  # Nginx для Load Balancing webhook'ов
+  aisha-nginx-webhook:
+    image: 192.168.0.4:5000/aisha/nginx:latest
+    container_name: aisha-nginx-webhook
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    
+    networks:
+      - aisha_webhook_cluster
+    
+    depends_on:
+      - aisha-webhook-api-1
+      - aisha-webhook-api-2
+    
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+networks:
+  aisha_webhook_cluster:
+    external: true
+
+# ============================================================================
+# Команды для управления:
+#
+# Запуск webhook сервисов:
+#   docker-compose -f docker-compose.webhook.prod.yml up -d
+#
+# Просмотр логов:
+#   docker-compose -f docker-compose.webhook.prod.yml logs -f
+#
+# Остановка:
+#   docker-compose -f docker-compose.webhook.prod.yml down
+#
+# Обновление образов:
+#   docker-compose -f docker-compose.webhook.prod.yml pull
+#   docker-compose -f docker-compose.webhook.prod.yml up -d
+# ============================================================================ 

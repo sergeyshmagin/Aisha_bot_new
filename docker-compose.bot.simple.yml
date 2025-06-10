@@ -35,6 +35,10 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_TOKEN=${TELEGRAM_BOT_TOKEN}
       
+      # AI APIs - КРИТИЧНО ДЛЯ ТРАНСКРИБАЦИИ!
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - FAL_API_KEY=${FAL_API_KEY}
+      
       # External services
       - POSTGRES_HOST=192.168.0.4
       - POSTGRES_PORT=5432
@@ -56,6 +60,9 @@ services:
       # Storage
       - AUDIO_STORAGE_PATH=/app/storage/temp
       - TEMP_DIR=/app/storage/temp
+      
+      # Logging
+      - LOG_LEVEL=DEBUG
       
     command: ["polling"]
     
@@ -88,6 +95,10 @@ services:
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_TOKEN=${TELEGRAM_BOT_TOKEN}
       
+      # AI APIs - КРИТИЧНО ДЛЯ ОБРАБОТКИ ЗАДАЧ!
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - FAL_API_KEY=${FAL_API_KEY}
+      
       # External services
       - POSTGRES_HOST=192.168.0.4
       - POSTGRES_PORT=5432
@@ -109,6 +120,9 @@ services:
       # Storage
       - AUDIO_STORAGE_PATH=/app/storage/temp
       - TEMP_DIR=/app/storage/temp
+      
+      # Logging
+      - LOG_LEVEL=DEBUG
       
     command: ["worker"]
     

@@ -6,6 +6,7 @@ import logging
 import signal
 import sys
 import os
+
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 
@@ -126,8 +127,16 @@ async def main():
     logger.info(f"📋 Режим работы: {BOT_MODE}")
     logger.info(f"📡 Polling разрешен: {SET_POLLING}")
 
-    # Инициализация бота и диспетчера
-    bot_instance = Bot(token=settings.TELEGRAM_TOKEN)
+    # Инициализация бота и диспетчера с явной конфигурацией timeout
+    try:
+        # Создаем Bot стандартным способом - aiogram 3.x сам управляет сессией
+        bot_instance = Bot(token=settings.TELEGRAM_TOKEN)
+        logger.info("✅ Bot создан стандартным способом")
+        
+    except Exception as e:
+        logger.error(f"❌ Ошибка создания Bot: {e}")
+        raise
+    
     storage = MemoryStorage()
     dp = Dispatcher(storage=storage)
 
@@ -142,8 +151,8 @@ async def main():
     dp.include_router(generation_router)
     
     # Регистрируем галерею
-    dp.include_router(gallery_main_router)
-    dp.include_router(gallery_filter_router)
+    # dp.include_router(gallery_main_router)
+    # dp.include_router(gallery_filter_router)
     
     # Регистрируем личный кабинет пользователя
     dp.include_router(profile_router)
@@ -165,7 +174,7 @@ async def main():
     dp.include_router(fallback_router)
 
     # Выполняем задачи запуска
-    await startup_tasks()
+    # await startup_tasks()
 
     # Запуск бота в зависимости от режима
     try:

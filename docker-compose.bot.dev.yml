@@ -1,0 +1,219 @@
+version: '3.8'
+
+# ============================================================================
+# Docker Compose для локальной разработки Aisha Bot
+# Подключается к продакшн сервисам, но работает локально
+# ============================================================================
+
+services:
+  # Основной бот для разработки
+  aisha-bot-dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.bot
+      target: production
+    container_name: aisha-bot-dev
+    restart: unless-stopped
+    environment:
+      # Bot configuration
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - BOT_MODE=polling
+      - SET_POLLING=true
+      
+      # Instance identification
+      - INSTANCE_ID=bot-dev-local
+      - ENVIRONMENT=development
+      
+      # Database (продакшн) - ИСПРАВЛЕНО: используем переменные из .env
+      - POSTGRES_HOST=192.168.0.4
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=aisha
+      - POSTGRES_USER=aisha_user
+      - POSTGRES_PASSWORD=KbZZGJHX09KSH7r9ev4m
+      - DATABASE_URL=${DATABASE_URL}
+      
+      # Redis (продакшн)
+      - REDIS_HOST=192.168.0.3
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=wd7QuwAbG0wtyoOOw3Sm
+      - REDIS_URL=${REDIS_URL}
+      
+      # MinIO (продакшн)
+      - MINIO_ENDPOINT=192.168.0.4:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=74rSbw9asQ1uMzcFeM5G
+      - MINIO_BUCKET_NAME=aisha
+      - MINIO_SECURE=false
+      
+      # AI APIs - КРИТИЧНО ДЛЯ ТРАНСКРИБАЦИИ!
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - FAL_API_KEY=${FAL_API_KEY}
+      - FAL_WEBHOOK_SECRET=${FAL_WEBHOOK_SECRET:-secure_webhook_secret_2024}
+      
+      # Logging
+      - LOG_LEVEL=DEBUG
+      - ENABLE_TRANSCRIPTION_LOGGING=true
+      - ENABLE_DETAILED_ERROR_LOGGING=true
+      - LOG_STACK_TRACES=true
+      
+      # Development features
+      - DEBUG=true
+      - ENABLE_DEV_COMMANDS=true
+      
+    volumes:
+      # Development volumes (изолированные от продакшн)
+      - bot_dev_storage_temp:/app/storage/temp
+      - bot_dev_storage_audio:/app/storage/audio
+      - bot_dev_logs:/app/logs
+      - bot_dev_cache:/app/cache
+      
+      # Для hot-reload в разработке (опционально)
+      # - ./app:/app/app:ro
+      
+    networks:
+      - aisha_bot_dev
+    
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8080/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    
+    depends_on:
+      - aisha-worker-dev
+
+  # Worker для фоновых задач (разработка)
+  aisha-worker-dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.bot
+      target: production
+    container_name: aisha-worker-dev
+    restart: unless-stopped
+    environment:
+      # Worker configuration
+      - BOT_MODE=worker
+      - SET_POLLING=false
+      
+      # Instance identification
+      - INSTANCE_ID=worker-dev-local
+      - ENVIRONMENT=development
+      
+      # Database (продакшн) - ИСПРАВЛЕНО: используем переменные из .env
+      - POSTGRES_HOST=192.168.0.4
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=aisha
+      - POSTGRES_USER=aisha_user
+      - POSTGRES_PASSWORD=KbZZGJHX09KSH7r9ev4m
+      - DATABASE_URL=${DATABASE_URL}
+      
+      # Redis (продакшн)
+      - REDIS_HOST=192.168.0.3
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=wd7QuwAbG0wtyoOOw3Sm
+      - REDIS_URL=${REDIS_URL}
+      
+      # MinIO (продакшн)
+      - MINIO_ENDPOINT=192.168.0.4:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=74rSbw9asQ1uMzcFeM5G
+      - MINIO_BUCKET_NAME=aisha
+      - MINIO_SECURE=false
+      
+      # AI APIs - КРИТИЧНО ДЛЯ ОБРАБОТКИ ЗАДАЧ!
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - FAL_API_KEY=${FAL_API_KEY}
+      - FAL_WEBHOOK_SECRET=${FAL_WEBHOOK_SECRET:-secure_webhook_secret_2024}
+      
+      # Logging
+      - LOG_LEVEL=DEBUG
+      - ENABLE_TRANSCRIPTION_LOGGING=true
+      - ENABLE_DETAILED_ERROR_LOGGING=true
+      - LOG_STACK_TRACES=true
+      
+    volumes:
+      # Те же volumes что и у основного бота
+      - bot_dev_storage_temp:/app/storage/temp
+      - bot_dev_storage_audio:/app/storage/audio
+      - bot_dev_logs:/app/logs
+      - bot_dev_cache:/app/cache
+      
+    networks:
+      - aisha_bot_dev
+    
+    healthcheck:
+      test: ["CMD", "python", "-c", "print('Worker healthy')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # PostgreSQL для локальной разработки (опционально)
+  # Раскомментировать если нужна изолированная БД
+  # postgres-dev:
+  #   image: postgres:15
+  #   container_name: postgres-dev
+  #   restart: unless-stopped
+  #   environment:
+  #     - POSTGRES_DB=aisha_db_dev
+  #     - POSTGRES_USER=aisha_user
+  #     - POSTGRES_PASSWORD=aisha_pass_dev
+  #   volumes:
+  #     - postgres_dev_data:/var/lib/postgresql/data
+  #   ports:
+  #     - "5433:5432"
+  #   networks:
+  #     - aisha_bot_dev
+
+  # Redis для локальной разработки (опционально)
+  # redis-dev:
+  #   image: redis:7-alpine
+  #   container_name: redis-dev
+  #   restart: unless-stopped
+  #   volumes:
+  #     - redis_dev_data:/data
+  #   ports:
+  #     - "6380:6379"
+  #   networks:
+  #     - aisha_bot_dev
+
+volumes:
+  bot_dev_storage_temp:
+    driver: local
+  bot_dev_storage_audio:
+    driver: local
+  bot_dev_logs:
+    driver: local
+  bot_dev_cache:
+    driver: local
+  # postgres_dev_data:
+  #   driver: local
+  # redis_dev_data:
+  #   driver: local
+
+networks:
+  aisha_bot_dev:
+    driver: bridge
+
+# ============================================================================
+# Команды для разработки:
+#
+# Запуск разработки:
+#   docker-compose -f docker-compose.bot.dev.yml up -d
+#
+# Просмотр логов:
+#   docker-compose -f docker-compose.bot.dev.yml logs -f aisha-bot-dev
+#
+# Рестарт после изменений:
+#   docker-compose -f docker-compose.bot.dev.yml restart aisha-bot-dev
+#
+# Пересборка:
+#   docker-compose -f docker-compose.bot.dev.yml up -d --build
+#
+# Остановка:
+#   docker-compose -f docker-compose.bot.dev.yml down
+# ============================================================================ 

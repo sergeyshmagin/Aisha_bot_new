@@ -55,7 +55,8 @@ class WhisperRecognizer(AudioRecognizer):
                 return await self._transcribe_large_file(temp_path, language)
             
             # Транскрибируем файл
-            async with aiohttp.ClientSession() as session:
+            timeout = aiohttp.ClientTimeout(total=60.0)  # 60 секунд общий таймаут
+            async with aiohttp.ClientSession(timeout=timeout) as session:
                 for attempt in range(self.max_retries):
                     try:
                         form = aiohttp.FormData()
@@ -68,28 +69,43 @@ class WhisperRecognizer(AudioRecognizer):
                         form.add_field("model", "whisper-1")
                         form.add_field("language", language)
                         form.add_field("response_format", "json")
+                        
+                        logger.info(f"[Whisper] Отправка запроса к OpenAI API (попытка {attempt + 1}/{self.max_retries})")
+                        
                         async with session.post(
                             self.api_url,
                             headers={"Authorization": f"Bearer {self.api_key}"},
                             data=form
                         ) as response:
+                            logger.info(f"[Whisper] Получен ответ от OpenAI API: status={response.status}")
+                            
                             if response.status == 200:
                                 result = await response.json()
+                                logger.info(f"[Whisper] Успешная транскрибация, длина текста: {len(result['text'])} символов")
                                 return TranscribeResult(
                                     success=True,
                                     text=result["text"],
                                     metadata=metadata
                                 )
                             elif response.status == 429:  # Rate limit
+                                logger.warning(f"[Whisper] Rate limit (429), ждем {self.retry_delay * (attempt + 1)} секунд")
                                 if attempt < self.max_retries - 1:
                                     await asyncio.sleep(self.retry_delay * (attempt + 1))
                                     continue
                             else:
                                 error_text = await response.text()
+                                logger.error(f"[Whisper] Ошибка API: {response.status} - {error_text}")
                                 raise AudioProcessingError(
                                     f"Ошибка API: {response.status} - {error_text}"
                                 )
+                    except asyncio.TimeoutError:
+                        logger.error(f"[Whisper] Таймаут при запросе к OpenAI API (попытка {attempt + 1})")
+                        if attempt < self.max_retries - 1:
+                            await asyncio.sleep(self.retry_delay * (attempt + 1))
+                            continue
+                        raise AudioProcessingError("Таймаут при запросе к OpenAI API")
                     except aiohttp.ClientError as e:
+                        logger.error(f"[Whisper] Ошибка сети (попытка {attempt + 1}): {e}")
                         if attempt < self.max_retries - 1:
                             await asyncio.sleep(self.retry_delay * (attempt + 1))
                             continue
