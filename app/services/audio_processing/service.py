@@ -70,8 +70,8 @@ class AudioService:
                 
                 logger.info(f"[AudioService] Определен формат: {detected_format}")
             
-            # Используем абсолютный путь для systemd
-            temp_dir = "/opt/aisha-backend/storage/temp"
+            # Используем правильный путь для контейнера
+            temp_dir = "/app/storage/temp"
             os.makedirs(temp_dir, exist_ok=True)
             ogg_path = os.path.join(temp_dir, f"{uuid.uuid4()}.ogg")
             mp3_path = os.path.join(temp_dir, f"{uuid.uuid4()}.mp3")
