@@ -8,7 +8,7 @@ version: '3.8'
 services:
   # Webhook API для FAL AI - экземпляр 1
   aisha-webhook-api-1:
-    image: 192.168.0.4:5000/aisha/webhook:latest
+    image: 192.168.0.4:5000/webhook-api:latest
     container_name: aisha-webhook-api-1
     restart: unless-stopped
     environment:
@@ -59,7 +59,7 @@ services:
 
   # Webhook API для FAL AI - экземпляр 2 (Load Balancing)
   aisha-webhook-api-2:
-    image: 192.168.0.4:5000/aisha/webhook:latest
+    image: 192.168.0.4:5000/webhook-api:latest
     container_name: aisha-webhook-api-2
     restart: unless-stopped
     environment:
@@ -110,7 +110,7 @@ services:
 
   # Nginx для Load Balancing webhook'ов
   aisha-nginx-webhook:
-    image: 192.168.0.4:5000/aisha/nginx:latest
+    image: 192.168.0.4:5000/nginx-webhook:latest
     container_name: aisha-nginx-webhook
     restart: unless-stopped
     ports:

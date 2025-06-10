@@ -13,8 +13,8 @@ from minio import Minio
 from redis.asyncio import Redis
 from redis.backoff import ExponentialBackoff
 from redis.retry import Retry
-from minio import Minio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.core.logger import get_logger
@@ -24,10 +24,6 @@ from app.services.generation.generation_service import ImageGenerationService
 from app.services.text_processing import TextProcessingService
 from app.services.transcript import TranscriptService
 from app.services.user import UserService
-from app.services.audio_processing.factory import get_audio_service
-# Убрано неправильный импорт get_db_session
-from app.services.generation.generation_service import ImageGenerationService
-from app.core.logger import get_logger
 from app.utils.timezone_handler import TimezoneHandler
 from app.utils.datetime_utils import set_global_datetime_manager
 

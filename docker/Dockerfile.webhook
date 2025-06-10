@@ -50,10 +50,10 @@ ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV DEBUG=true
 ENV API_HOST=0.0.0.0
-ENV API_PORT=8001
+ENV API_PORT=8000
 ENV SSL_ENABLED=false
 
-EXPOSE 8001
+EXPOSE 8000
 
 CMD ["python", "-m", "api_server.main"]
 
@@ -85,13 +85,13 @@ ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
 ENV DEBUG=false
 ENV API_HOST=0.0.0.0
-ENV API_PORT=8001
+ENV API_PORT=8000
 ENV SSL_ENABLED=false
 ENV API_RELOAD=false
 
 # Healthcheck для webhook API
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8001/health || exit 1
+    CMD curl -f http://localhost:8000/health || exit 1
 
 # Метаданные
 LABEL maintainer="Aisha Bot Team"
@@ -100,12 +100,12 @@ LABEL environment="production"
 LABEL description="Aisha Webhook API Server"
 LABEL service="webhook-api"
 
-EXPOSE 8001
+EXPOSE 8000
 
 # Запуск с uvicorn и оптимальными настройками для webhook
 CMD ["uvicorn", "api_server.main:app", \
      "--host", "0.0.0.0", \
-     "--port", "8001", \
+     "--port", "8000", \
      "--workers", "2", \
      "--access-log", \
      "--log-level", "info", \

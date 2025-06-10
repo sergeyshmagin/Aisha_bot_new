@@ -33,11 +33,11 @@ LABEL description="Production Nginx reverse proxy for Aisha Bot v2"
 COPY --chown=root:root healthcheck.sh /usr/local/bin/healthcheck.sh
 RUN chmod +x /usr/local/bin/healthcheck.sh
 
-EXPOSE 8443
+EXPOSE 80 443
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -k -f https://localhost:8443/health || exit 1
+    CMD curl -f http://localhost/health || exit 1
 
 # Создаем startup script для проверки конфигурации
 RUN echo '#!/bin/sh' > /docker-entrypoint.d/90-check-config.sh && \

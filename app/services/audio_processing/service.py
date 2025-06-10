@@ -6,6 +6,9 @@ from typing import Optional
 import tempfile
 import os
 import uuid
+import asyncio
+
+import aiofiles
 
 from app.core.config import settings
 from app.services.audio_processing.types import (
@@ -72,26 +75,31 @@ class AudioService:
             
             # Используем правильный путь для контейнера
             temp_dir = "/app/storage/temp"
-            os.makedirs(temp_dir, exist_ok=True)
+            await asyncio.get_event_loop().run_in_executor(None, os.makedirs, temp_dir, True)
             ogg_path = os.path.join(temp_dir, f"{uuid.uuid4()}.ogg")
             mp3_path = os.path.join(temp_dir, f"{uuid.uuid4()}.mp3")
-            # 1. Сохраняем исходный файл в storage/temp
-            with open(ogg_path, "wb") as f:
-                f.write(audio_data)
+            
+            # 1. Сохраняем исходный файл в storage/temp асинхронно
+            async with aiofiles.open(ogg_path, "wb") as f:
+                await f.write(audio_data)
+            
             try:
                 # 2. Конвертируем в mp3 через ffmpeg
                 logger.info(f"[AudioService] Конвертация {ogg_path} в mp3 через ffmpeg")
                 mp3_bytes = await self.converter.convert_to_mp3(audio_data, use_ffmpeg=True)
-                with open(mp3_path, "wb") as f:
-                    f.write(mp3_bytes)
+                async with aiofiles.open(mp3_path, "wb") as f:
+                    await f.write(mp3_bytes)
                 logger.info(f"[AudioService] mp3-файл создан: {mp3_path}")
+                
                 # 3. Разбиваем mp3 на чанки через ffmpeg
                 logger.info(f"[AudioService] Нарезка {mp3_path} на чанки через ffmpeg")
                 chunks = await self.processor.split_audio(mp3_bytes, use_ffmpeg=True)
                 logger.info(f"[AudioService] Получено чанков: {len(chunks)}")
+                
                 if not chunks:
                     logger.error(f"[AudioService] Не удалось нарезать аудио на чанки. mp3_path={mp3_path}")
                     raise AudioProcessingError(f"Не удалось нарезать аудио на чанки. mp3_path={mp3_path}")
+                
                 # 4. Транскрибируем каждый chunk
                 texts = []
                 for idx, chunk in enumerate(chunks):
@@ -101,6 +109,7 @@ class AudioService:
                         texts.append(result.text)
                     else:
                         logger.warning(f"[AudioService] Ошибка транскрибации чанка {idx+1}: {result.error}")
+                
                 final_text = "\n".join(texts)
                 success = bool(texts)
                 
@@ -112,10 +121,12 @@ class AudioService:
                     logger.error(f"[AudioService] ❌ {error_msg}")
                     return TranscribeResult(success=False, text="", error=error_msg)
             finally:
-                if os.path.exists(ogg_path):
-                    os.unlink(ogg_path)
-                if os.path.exists(mp3_path):
-                    os.unlink(mp3_path)
+                # Асинхронное удаление временных файлов
+                if await asyncio.get_event_loop().run_in_executor(None, os.path.exists, ogg_path):
+                    await asyncio.get_event_loop().run_in_executor(None, os.unlink, ogg_path)
+                if await asyncio.get_event_loop().run_in_executor(None, os.path.exists, mp3_path):
+                    await asyncio.get_event_loop().run_in_executor(None, os.unlink, mp3_path)
+                    
         except Exception as e:
             logger.error(f"[AudioService] Ошибка при обработке аудио (ffmpeg pipeline): {e}", exc_info=True)
             raise AudioProcessingError(f"Ошибка обработки: {str(e)}")

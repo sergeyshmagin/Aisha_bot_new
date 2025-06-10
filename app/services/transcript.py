@@ -34,10 +34,14 @@ class TranscriptService(BaseService):
     Сервис для работы с транскриптами (асинхронный StorageService)
     """
 
+    def __init__(self, session: AsyncSession):
+        super().__init__(session)
+        self.bucket = settings.MINIO_BUCKET_NAME or "aisha"
+        self.storage = StorageService()  # Создаем один раз как атрибут класса
+
     def _setup_repositories(self):
         """Инициализация репозиториев"""
-        self.transcript_repo = TranscriptRepository(self.session)
-        self.bucket = settings.MINIO_BUCKETS.get("transcripts", "transcripts")
+        self.transcript_repo = self._get_transcript_repository()
 
     def _get_transcript_repository(self) -> TranscriptRepository:
         """Возвращает репозиторий транскриптов.
@@ -56,10 +60,10 @@ class TranscriptService(BaseService):
         metadata: Optional[Dict] = None
     ) -> Dict:
         """
-        Сохраняет транскрипт в MinIO и БД (асинхронно)
+        Сохраняет транскрипт и аудио в базу и MinIO
         """
         normalized_user_id = _normalize_user_id(user_id)
-        logger.info(f"[SAVE] Начало сохранения транскрипта для user_id={normalized_user_id}")
+        logger.info(f"[SAVE] Начало сохранения для user_id={normalized_user_id}")
         
         if not transcript_data:
             logger.error("[SAVE] transcript_data отсутствует")
@@ -72,12 +76,11 @@ class TranscriptService(BaseService):
         transcript_id = transcript.id
         logger.info(f"[SAVE] Создана запись в БД: transcript_id={transcript_id}")
         
-        storage = StorageService()
         # Сохраняем аудио, если есть
         if audio_data:
             audio_key = f"{normalized_user_id}/{transcript_id}/audio.mp3"
             logger.info(f"[SAVE] Сохранение аудио: {audio_key}")
-            success = await storage.upload_file(
+            success = await self.storage.upload_file(
                 bucket=self.bucket,
                 object_name=audio_key,
                 data=audio_data,
@@ -95,7 +98,7 @@ class TranscriptService(BaseService):
         # Сохраняем текст транскрипта
         transcript_key = f"{normalized_user_id}/{transcript_id}/transcript.txt"
         logger.info(f"[SAVE] Сохранение транскрипта: {transcript_key}")
-        success = await storage.upload_file(
+        success = await self.storage.upload_file(
             bucket=self.bucket,
             object_name=transcript_key,
             data=transcript_data,
@@ -135,15 +138,14 @@ class TranscriptService(BaseService):
         if not transcript:
             return None
         expires = settings.MINIO_PRESIGNED_EXPIRES or 3600
-        storage = StorageService()
         audio_url = None
         if transcript.audio_key:
-            audio_url = await storage.generate_presigned_url(
+            audio_url = await self.storage.generate_presigned_url(
                 bucket=self.bucket,
                 object_name=transcript.audio_key,
                 expires=expires
             )
-        transcript_url = await storage.generate_presigned_url(
+        transcript_url = await self.storage.generate_presigned_url(
             bucket=self.bucket,
             object_name=transcript.transcript_key,
             expires=expires
@@ -162,8 +164,6 @@ class TranscriptService(BaseService):
             "created_at": created_at_str,
             "metadata": transcript.transcript_metadata
         }
-
-
 
     async def list_transcripts(self, user_id: Union[int, str, UUID], limit: int = 10, offset: int = 0) -> List[dict]:
         """
@@ -224,14 +224,13 @@ class TranscriptService(BaseService):
         transcript = await self.transcript_repo.get_transcript_by_id(normalized_user_id, transcript_id)
         if not transcript:
             return False
-        storage = StorageService()
         if transcript.audio_key:
             try:
-                await storage.delete_file(self.bucket, transcript.audio_key)
+                await self.storage.delete_file(self.bucket, transcript.audio_key)
             except Exception as e:
                 logger.exception(f"Ошибка при удалении аудио из MinIO: {e}")
         try:
-            await storage.delete_file(self.bucket, transcript.transcript_key)
+            await self.storage.delete_file(self.bucket, transcript.transcript_key)
         except Exception as e:
             logger.exception(f"Ошибка при удалении транскрипта из MinIO: {e}")
         return await self.transcript_repo.delete(transcript_id)
@@ -247,7 +246,6 @@ class TranscriptService(BaseService):
                 logger.error(f"[GET_CONTENT] Транскрипт не найден в БД: user_id={normalized_user_id}, transcript_id={transcript_id}")
                 return None
             logger.info(f"[GET_CONTENT] transcript.transcript_key={transcript.transcript_key}")
-            storage = StorageService()
             if not transcript.transcript_key:
                 logger.error(f"[GET_CONTENT] transcript_key отсутствует для transcript_id={transcript_id}")
                 return None
@@ -255,13 +253,13 @@ class TranscriptService(BaseService):
                 logger.info(f"[GET_CONTENT] Проверка существования файла в MinIO: bucket={self.bucket}, key={transcript.transcript_key}")
                 import asyncio
                 loop = asyncio.get_event_loop()
-                await loop.run_in_executor(None, lambda: storage.client.stat_object(self.bucket, transcript.transcript_key))
+                await loop.run_in_executor(None, lambda: self.storage.client.stat_object(self.bucket, transcript.transcript_key))
                 logger.info(f"[GET_CONTENT] Файл существует в MinIO")
             except Exception as e:
                 logger.error(f"[GET_CONTENT] Файл не найден в MinIO: {e}")
                 return None
             logger.info(f"[GET_CONTENT] Загрузка файла из MinIO")
-            content = await storage.download_file(self.bucket, transcript.transcript_key)
+            content = await self.storage.download_file(self.bucket, transcript.transcript_key)
             logger.info(f"[GET_CONTENT] Файл загружен, размер={len(content) if content else 0} байт")
             if not content:
                 logger.error(f"[GET_CONTENT] Получен пустой контент для transcript_id={transcript_id}")
