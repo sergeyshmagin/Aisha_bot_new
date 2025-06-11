@@ -75,7 +75,9 @@ class AudioService:
             
             # Используем правильный путь для контейнера
             temp_dir = "/app/storage/temp"
-            await asyncio.get_event_loop().run_in_executor(None, os.makedirs, temp_dir, True)
+            await asyncio.get_event_loop().run_in_executor(
+                None, lambda: os.makedirs(temp_dir, exist_ok=True)
+            )
             ogg_path = os.path.join(temp_dir, f"{uuid.uuid4()}.ogg")
             mp3_path = os.path.join(temp_dir, f"{uuid.uuid4()}.mp3")
             

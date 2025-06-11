@@ -7,6 +7,8 @@ from datetime import timedelta
 from typing import Dict, List, Optional, Union
 from uuid import UUID
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from app.core.config import settings
 from app.database.models import UserTranscript
 from app.database.repositories import TranscriptRepository

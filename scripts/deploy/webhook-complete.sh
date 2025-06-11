@@ -1,178 +1,160 @@
 #!/bin/bash
 
 # ============================================================================
-# 🚀 WEBHOOK API COMPLETE DEPLOYMENT SCRIPT
+# Скрипт полного деплоя webhook сервисов на продакшн сервер
+# 
+# Использование:
+#   ./scripts/deploy/webhook-complete.sh
+#
+# Что делает:
+# 1. Собирает и пушит образы webhook-api и nginx-webhook 
+# 2. Создаёт сеть для webhook кластера
+# 3. Запускает webhook сервисы через docker-compose
 # ============================================================================
 
-set -e
+set -e  # Остановка при любой ошибке
 
-GREEN='\033[0;32m'
+# Цвета для логов
 RED='\033[0;31m'
+GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${GREEN}🚀 Начинаем полное развертывание Webhook API...${NC}"
-
-# Конфигурация
-REGISTRY_SERVER="192.168.0.4:5000"
-PROD_SERVER="192.168.0.10"
-WEBHOOK_IMAGE="webhook-api"
-NGINX_IMAGE="nginx-webhook"
-
-# Переходим в корень проекта
-cd "$(dirname "$0")/../.."
-
-# ============================================================================
-# 🔧 Функции
-# ============================================================================
-
+# Логирование
 log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
+    echo -e "${BLUE}[INFO]${NC} $1"
 }
 
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+log_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+log_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
 }
 
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-check_command() {
-    if ! command -v $1 &> /dev/null; then
-        log_error "$1 не найден!"
-        exit 1
-    fi
-}
+# Переменные
+REGISTRY="192.168.0.4:5000"
+WEBHOOK_IMAGE="${REGISTRY}/webhook-api:latest"
+NGINX_IMAGE="${REGISTRY}/nginx-webhook:latest"
+COMPOSE_FILE="docker-compose.webhook.prod.yml"
+NETWORK_NAME="aisha_webhook_cluster"
 
-# ============================================================================
-# 🔍 Проверки
-# ============================================================================
-
-log_info "Проверка зависимостей..."
-check_command docker
-check_command docker-compose
-
-# ============================================================================
-# 🏗️ ЭТАП 1: Сборка образов
-# ============================================================================
-
-log_info "ЭТАП 1: Сборка образов..."
-
-# Сборка webhook API
-log_info "Сборка webhook-api..."
-docker build -f docker/Dockerfile.webhook -t $WEBHOOK_IMAGE:latest .
-
-# Сборка nginx
-log_info "Сборка nginx..."
-docker build -f docker/nginx/Dockerfile -t $NGINX_IMAGE:latest docker/nginx/
-
-# ============================================================================
-# 🏷️ ЭТАП 2: Тегирование для registry
-# ============================================================================
-
-log_info "ЭТАП 2: Тегирование образов..."
-
-docker tag $WEBHOOK_IMAGE:latest $REGISTRY_SERVER/$WEBHOOK_IMAGE:latest
-docker tag $NGINX_IMAGE:latest $REGISTRY_SERVER/$NGINX_IMAGE:latest
-
-# ============================================================================
-# 📤 ЭТАП 3: Отправка в registry
-# ============================================================================
-
-log_info "ЭТАП 3: Отправка образов в registry..."
-
-# Проверка доступности registry
-if ! curl -s http://$REGISTRY_SERVER/v2/ > /dev/null; then
-    log_error "Registry $REGISTRY_SERVER недоступен!"
-    log_warn "Сначала запустите: ./scripts/deploy/fix-registry.sh"
+# Проверка что мы в корне проекта
+if [ ! -f "docker-compose.webhook.prod.yml" ]; then
+    log_error "docker-compose.webhook.prod.yml не найден. Запустите скрипт из корня проекта."
     exit 1
 fi
 
-log_info "Registry доступен, отправляем образы..."
-docker push $REGISTRY_SERVER/$WEBHOOK_IMAGE:latest
-docker push $REGISTRY_SERVER/$NGINX_IMAGE:latest
-
-# ============================================================================
-# 🚀 ЭТАП 4: Развертывание на продакшн
-# ============================================================================
-
-log_info "ЭТАП 4: Развертывание на продакшн сервере..."
-
-# Копирование файлов развертывания
-log_info "Копирование файлов развертывания..."
-scp docker-compose.webhook.prod.yml aisha@$PROD_SERVER:~/
-scp prod.env aisha@$PROD_SERVER:~/
-scp -r ssl_certificate/ aisha@$PROD_SERVER:~/
-
-# Развертывание на продакшн сервере
-log_info "Запуск развертывания на продакшн сервере..."
-ssh aisha@$PROD_SERVER << 'EOF'
-    # Настройка insecure registry
-    if ! grep -q "192.168.0.4:5000" /etc/docker/daemon.json 2>/dev/null; then
-        echo '{"insecure-registries": ["192.168.0.4:5000"]}' | sudo tee /etc/docker/daemon.json
-        sudo systemctl restart docker
-        sleep 5
-    fi
-    
-    # Остановка старых контейнеров
-    sudo docker-compose -f docker-compose.webhook.prod.yml down || true
-    
-    # Загрузка новых образов
-    sudo docker pull 192.168.0.4:5000/webhook-api:latest
-    sudo docker pull 192.168.0.4:5000/nginx-webhook:latest
-    
-    # Запуск новых контейнеров
-    sudo docker-compose -f docker-compose.webhook.prod.yml up -d
-    
-    # Проверка статуса
-    sleep 10
-    sudo docker-compose -f docker-compose.webhook.prod.yml ps
-EOF
-
-# ============================================================================
-# ✅ ЭТАП 5: Проверка развертывания
-# ============================================================================
-
-log_info "ЭТАП 5: Проверка развертывания..."
-
-# Проверка health endpoints
-log_info "Проверка health endpoints..."
-
-# Проверка через внешний API
-if curl -k -s https://aibots.kz:8443/health | grep -q "ok"; then
-    log_info "✅ Webhook API доступен через https://aibots.kz:8443"
-else
-    log_warn "⚠️ Webhook API может быть недоступен извне"
+# Проверка что prod.env существует
+if [ ! -f "prod.env" ]; then
+    log_error "prod.env файл не найден. Создайте его со всеми необходимыми переменными."
+    exit 1
 fi
 
-# Проверка через внутренний IP
-if curl -k -s https://$PROD_SERVER:8443/health | grep -q "ok"; then
-    log_info "✅ Webhook API доступен через https://$PROD_SERVER:8443"
+log_info "🚀 Начинаю деплой webhook сервисов..."
+
+# ============================================================================
+# 1. Сборка и пуш образов
+# ============================================================================
+
+log_info "📦 Собираю webhook-api образ..."
+docker build -f docker/Dockerfile.webhook -t ${WEBHOOK_IMAGE} .
+log_success "Webhook API образ собран"
+
+log_info "📦 Собираю nginx-webhook образ..."
+docker build -f docker/nginx/Dockerfile -t ${NGINX_IMAGE} docker/nginx/
+log_success "Nginx образ собран"
+
+log_info "⬆️ Пушу образы в реестр ${REGISTRY}..."
+docker push ${WEBHOOK_IMAGE}
+docker push ${NGINX_IMAGE}
+log_success "Образы запушены в реестр"
+
+# ============================================================================
+# 2. Создание сети
+# ============================================================================
+
+log_info "🌐 Создаю Docker сеть для webhook кластера..."
+if ! docker network ls | grep -q ${NETWORK_NAME}; then
+    docker network create ${NETWORK_NAME}
+    log_success "Сеть ${NETWORK_NAME} создана"
 else
-    log_warn "⚠️ Webhook API может быть недоступен через внутренний IP"
+    log_warning "Сеть ${NETWORK_NAME} уже существует"
 fi
 
 # ============================================================================
-# 📋 Финальная информация
+# 3. Остановка старых контейнеров (если есть)
 # ============================================================================
 
-echo -e "${GREEN}🎉 Развертывание завершено!${NC}"
-echo ""
-echo "📊 Конечные точки:"
-echo "  • Health Check: https://aibots.kz:8443/health"
-echo "  • Webhook API:   https://aibots.kz:8443/webhook/fal"
-echo "  • Внутренний IP: https://$PROD_SERVER:8443"
-echo ""
-echo "🔧 Команды для управления:"
-echo "  • Статус:      ssh aisha@$PROD_SERVER 'sudo docker-compose -f docker-compose.webhook.prod.yml ps'"
-echo "  • Логи:        ssh aisha@$PROD_SERVER 'sudo docker-compose -f docker-compose.webhook.prod.yml logs -f'"
-echo "  • Перезапуск:  ssh aisha@$PROD_SERVER 'sudo docker-compose -f docker-compose.webhook.prod.yml restart'"
-echo "  • Остановка:   ssh aisha@$PROD_SERVER 'sudo docker-compose -f docker-compose.webhook.prod.yml down'"
-echo ""
-echo "🎯 Следующие шаги:"
-echo "  1. Настройте FAL AI webhook URL: https://aibots.kz:8443/webhook/fal"
-echo "  2. Проверьте логи на отсутствие ошибок"
-echo "  3. Протестируйте обработку webhook'ов"
+log_info "🛑 Останавливаю старые webhook контейнеры..."
+docker-compose -f ${COMPOSE_FILE} --env-file prod.env down || true
+log_success "Старые контейнеры остановлены"
 
-log_info "Готово! 🚀" 
+# ============================================================================
+# 4. Запуск новых контейнеров
+# ============================================================================
+
+log_info "🔄 Подтягиваю свежие образы..."
+docker-compose -f ${COMPOSE_FILE} --env-file prod.env pull
+
+log_info "🚀 Запускаю webhook сервисы..."
+docker-compose -f ${COMPOSE_FILE} --env-file prod.env up -d
+
+# ============================================================================
+# 5. Проверка состояния
+# ============================================================================
+
+log_info "⏳ Ожидаю запуска сервисов (30 секунд)..."
+sleep 30
+
+log_info "🔍 Проверяю состояние контейнеров..."
+docker-compose -f ${COMPOSE_FILE} --env-file prod.env ps
+
+# Проверка webhook API endpoints
+log_info "🔍 Проверяю webhook API endpoints..."
+
+# Проверка через nginx load balancer
+if curl -f -s http://localhost/health > /dev/null; then
+    log_success "✅ Nginx load balancer работает"
+else
+    log_error "❌ Nginx load balancer недоступен"
+fi
+
+# Проверка прямых подключений к API
+if curl -f -s http://localhost:8001/health > /dev/null; then
+    log_success "✅ Webhook API #1 работает (порт 8001)"
+else
+    log_error "❌ Webhook API #1 недоступен (порт 8001)"
+fi
+
+if curl -f -s http://localhost:8002/health > /dev/null; then
+    log_success "✅ Webhook API #2 работает (порт 8002)"
+else
+    log_error "❌ Webhook API #2 недоступен (порт 8002)"
+fi
+
+# ============================================================================
+# 6. Финальная информация
+# ============================================================================
+
+log_success "🎉 Деплой webhook сервисов завершён!"
+echo ""
+log_info "📋 Сводка развёрнутых сервисов:"
+echo "   • Nginx Load Balancer: http://localhost (порты 80, 443)"
+echo "   • Webhook API #1: http://localhost:8001"
+echo "   • Webhook API #2: http://localhost:8002"
+echo "   • FAL AI Webhook URL: https://aibots.kz:8443/api/v1/avatar/status_update"
+echo ""
+log_info "📝 Полезные команды:"
+echo "   • Просмотр логов: docker-compose -f ${COMPOSE_FILE} --env-file prod.env logs -f"
+echo "   • Перезапуск: docker-compose -f ${COMPOSE_FILE} --env-file prod.env restart"
+echo "   • Остановка: docker-compose -f ${COMPOSE_FILE} --env-file prod.env down"
+echo "   • Обновление: ./scripts/deploy/webhook-complete.sh"
+echo ""
+log_success "✨ Готово! Webhook сервисы развёрнуты и готовы к работе." 

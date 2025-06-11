@@ -13,7 +13,7 @@ services:
     restart: unless-stopped
     environment:
       # Database
-      - DATABASE_URL=postgresql://aisha_user:aisha_pass_2024@192.168.0.4:5432/aisha_db
+      - DATABASE_URL=postgresql+asyncpg://aisha_user:KbZZGJHX09KSH7r9ev4m@192.168.0.4:5432/aisha
       
       # Redis
       - REDIS_URL=redis://192.168.0.3:6379/0
@@ -37,6 +37,10 @@ services:
       
       # Instance identification
       - INSTANCE_ID=webhook-api-1
+      
+      # Реальные значения Redis и MinIO из прода
+      - REDIS_URL=redis://:wd7QuwAbG0wtyoOOw3Sm@192.168.0.3:6379/0  
+      - MINIO_SECRET_KEY=74rSbw9asQ1uMzcFeM5G
       
     ports:
       - "8001:8000"
@@ -64,7 +68,7 @@ services:
     restart: unless-stopped
     environment:
       # Database
-      - DATABASE_URL=postgresql://aisha_user:aisha_pass_2024@192.168.0.4:5432/aisha_db
+      - DATABASE_URL=postgresql+asyncpg://aisha_user:KbZZGJHX09KSH7r9ev4m@192.168.0.4:5432/aisha
       
       # Redis
       - REDIS_URL=redis://192.168.0.3:6379/0
@@ -117,6 +121,10 @@ services:
       - "80:80"
       - "443:443"
     
+    volumes:
+      # Монтируем SSL сертификаты
+      - ./ssl_certificate:/etc/nginx/ssl:ro
+    
     networks:
       - aisha_webhook_cluster
     
@@ -133,7 +141,8 @@ services:
 
 networks:
   aisha_webhook_cluster:
-    external: true
+    driver: bridge
+    name: aisha_webhook_cluster
 
 # ============================================================================
 # Команды для управления:

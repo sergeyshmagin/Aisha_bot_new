@@ -20,7 +20,7 @@ pydantic-settings>=2.0.0
 minio>=7.0.0
 
 # HTTP
-aiohttp==3.9.5
+aiohttp==3.11.11
 httpx>=0.24.0
 
 # OpenAI для распознавания речи и обработки текста
@@ -36,7 +36,7 @@ uvicorn>=0.24.0
 # Document processing
 python-docx>=1.1.0
 pydub>=0.25.0  # Для обработки аудио
-aiofiles>=23.0.0
+aiofiles==23.2.1
 Pillow>=10.0.0
 
 # Testing

@@ -1,0 +1,42 @@
+FROM python:3.11-slim
+
+# Установка системных зависимостей
+RUN apt-get update && apt-get install -y \
+    gcc \
+    postgresql-client \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Копируем requirements
+COPY requirements_webhook.txt .
+
+# Устанавливаем Python зависимости
+RUN pip install --no-cache-dir -r requirements_webhook.txt
+
+# Копируем основное приложение
+COPY app /app/app
+COPY api_server/webhook_main.py /app/
+
+# Копируем конфигурационные файлы
+COPY alembic.ini /app/
+COPY alembic /app/alembic
+
+# Создаем пользователя для безопасности
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Настройки для production
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+# Expose порт
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Запускаем приложение
+CMD ["python", "-m", "uvicorn", "webhook_main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"] 

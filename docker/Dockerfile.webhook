@@ -21,21 +21,19 @@ RUN apt-get update && apt-get install -y \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Копируем requirements для API сервера
-COPY requirements_api.txt ./api_requirements.txt
-COPY requirements.txt ./main_requirements.txt
+# Копируем requirements только для webhook API
+COPY requirements_webhook.txt ./requirements.txt
 
 # Устанавливаем зависимости в wheels для оптимизации
 RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels \
-    -r api_requirements.txt -r main_requirements.txt
+    -r requirements.txt
 
 # ======================== DEVELOPMENT STAGE ========================
 FROM base as development
 
 # Копирование wheels и установка
 COPY --from=builder /app/wheels /wheels
-COPY requirements_api.txt ./api_requirements.txt
-COPY requirements.txt ./main_requirements.txt
+COPY requirements_webhook.txt ./requirements.txt
 
 RUN pip install --no-cache /wheels/* && rm -rf /wheels
 
@@ -62,8 +60,7 @@ FROM base as production
 
 # Копирование wheels и установка
 COPY --from=builder /app/wheels /wheels
-COPY requirements_api.txt ./api_requirements.txt
-COPY requirements.txt ./main_requirements.txt
+COPY requirements_webhook.txt ./requirements.txt
 
 RUN pip install --no-cache /wheels/* && rm -rf /wheels
 
@@ -102,11 +99,6 @@ LABEL service="webhook-api"
 
 EXPOSE 8000
 
-# Запуск с uvicorn и оптимальными настройками для webhook
-CMD ["uvicorn", "api_server.main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "8000", \
-     "--workers", "2", \
-     "--access-log", \
-     "--log-level", "info", \
-     "--no-server-header"] 
+# Command для запуска webhook API
+CMD ["uvicorn", "api_server.legacy_main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "2"]
+# CMD ["python", "api_server/test_main.py"] 
