@@ -10,7 +10,8 @@ RUN apk add --no-cache tzdata && \
 RUN apk add --no-cache \
     curl \
     openssl \
-    ca-certificates
+    ca-certificates \
+    procps-ng
 
 # Используем существующего пользователя nginx и создаем необходимые директории
 RUN mkdir -p /var/log/nginx /var/cache/nginx/proxy_temp \
