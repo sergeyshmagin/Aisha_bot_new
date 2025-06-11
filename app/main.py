@@ -130,8 +130,8 @@ async def main():
     # Инициализация бота и диспетчера с явной конфигурацией timeout
     try:
         # Создаем Bot стандартным способом - aiogram 3.x сам управляет сессией
-        bot_instance = Bot(token=settings.TELEGRAM_TOKEN)
-        logger.info("✅ Bot создан стандартным способом")
+        bot_instance = Bot(token=settings.effective_telegram_token)
+        logger.info(f"✅ Bot создан с токеном для окружения: {settings.ENVIRONMENT}")
         
     except Exception as e:
         logger.error(f"❌ Ошибка создания Bot: {e}")

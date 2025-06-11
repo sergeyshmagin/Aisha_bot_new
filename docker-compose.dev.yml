@@ -1,0 +1,154 @@
+version: '3.8'
+
+# ============================================================================
+# Docker Compose для DEV окружения Aisha Bot
+# Использует отдельный dev токен телеграм бота
+# ============================================================================
+
+services:
+  # Основной бот для разработки
+  aisha-bot-dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.bot
+      target: production
+    container_name: aisha-bot-dev
+    restart: unless-stopped
+    environment:
+      # Bot configuration - DEV TOKEN
+      - TELEGRAM_BOT_TOKEN=7891892225:AAHzdW0QdtQ3mpN_3aPT1eFOX-z_TWpUDJw
+      - TELEGRAM_TOKEN=7891892225:AAHzdW0QdtQ3mpN_3aPT1eFOX-z_TWpUDJw
+      - BOT_MODE=polling
+      - SET_POLLING=true
+      
+      # Instance identification
+      - INSTANCE_ID=bot-dev-isolated
+      - ENVIRONMENT=development
+      
+      # Database (продакшн)
+      - POSTGRES_HOST=192.168.0.4
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=aisha
+      - POSTGRES_USER=aisha_user
+      - POSTGRES_PASSWORD=KbZZGJHX09KSH7r9ev4m
+      
+      # Redis (продакшн)
+      - REDIS_HOST=192.168.0.3
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=wd7QuwAbG0wtyoOOw3Sm
+      
+      # MinIO (продакшн)
+      - MINIO_ENDPOINT=192.168.0.4:9000
+      - MINIO_ACCESS_KEY=minioadmin
+      - MINIO_SECRET_KEY=74rSbw9asQ1uMzcFeM5G
+      - MINIO_BUCKET_NAME=aisha
+      - MINIO_SECURE=false
+      
+      # AI APIs - подставьте свои ключи
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-your_openai_key_here}
+      - FAL_API_KEY=${FAL_API_KEY:-your_fal_key_here}
+      - FAL_WEBHOOK_SECRET=secure_webhook_secret_2024
+      
+      # Development settings
+      - DEBUG=true
+      - LOG_LEVEL=DEBUG
+      - AVATAR_TEST_MODE=true
+      - ENABLE_TRANSCRIPTION_LOGGING=true
+      - ENABLE_DETAILED_ERROR_LOGGING=true
+      - LOG_STACK_TRACES=true
+      
+      # FAL AI - быстрые настройки для разработки
+      - FAL_DEFAULT_QUALITY_PRESET=fast
+      - FAL_FAST_PORTRAIT_STEPS=300
+      - FAL_FAST_GENERAL_ITERATIONS=200
+      
+    volumes:
+      # Development volumes (изолированные)
+      - bot_dev_storage_temp:/app/storage/temp
+      - bot_dev_storage_audio:/app/storage/audio
+      - bot_dev_logs:/app/logs
+      - bot_dev_cache:/app/cache
+      
+    networks:
+      - aisha_bot_dev
+    
+    healthcheck:
+      test: ["CMD", "python", "-c", "print('Bot healthy')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Webhook API для разработки (опционально)
+  aisha-webhook-dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+      target: production
+    container_name: aisha-webhook-dev
+    restart: unless-stopped
+    environment:
+      # API configuration
+      - API_PORT=8001
+      - API_DEBUG=true
+      - SSL_ENABLED=false
+      
+      # Telegram - DEV TOKEN
+      - TELEGRAM_BOT_TOKEN=7891892225:AAHzdW0QdtQ3mpN_3aPT1eFOX-z_TWpUDJw
+      - TELEGRAM_TOKEN=7891892225:AAHzdW0QdtQ3mpN_3aPT1eFOX-z_TWpUDJw
+      
+      # Database (продакшн)
+      - POSTGRES_HOST=192.168.0.4
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=aisha
+      - POSTGRES_USER=aisha_user
+      - POSTGRES_PASSWORD=KbZZGJHX09KSH7r9ev4m
+      
+      # Redis (продакшн)
+      - REDIS_HOST=192.168.0.3
+      - REDIS_PORT=6379
+      - REDIS_DB=0
+      - REDIS_PASSWORD=wd7QuwAbG0wtyoOOw3Sm
+      
+      # AI APIs
+      - FAL_API_KEY=${FAL_API_KEY:-your_fal_key_here}
+      - FAL_WEBHOOK_SECRET=secure_webhook_secret_2024
+      
+      # Logging
+      - LOG_LEVEL=DEBUG
+      
+    ports:
+      - "8001:8001"
+      
+    volumes:
+      - webhook_dev_logs:/app/logs
+      
+    networks:
+      - aisha_bot_dev
+      
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  bot_dev_storage_temp:
+    driver: local
+  bot_dev_storage_audio:
+    driver: local
+  bot_dev_logs:
+    driver: local
+  bot_dev_cache:
+    driver: local
+  webhook_dev_logs:
+    driver: local
+
+networks:
+  aisha_bot_dev:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 

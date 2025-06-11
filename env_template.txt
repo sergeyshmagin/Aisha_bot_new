@@ -27,8 +27,13 @@ FAL_QUALITY_GENERAL_LR=0.00005
 # Основные настройки
 # ========================================
 
-# Telegram Bot Token
+# Telegram Bot Token (Production)
 TELEGRAM_TOKEN=your_telegram_bot_token_here
+TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
+
+# Telegram Bot Token (Development) - отдельный бот для разработки
+TELEGRAM_DEV_TOKEN=your_dev_telegram_bot_token_here
+TELEGRAM_DEV_BOT_TOKEN=your_dev_telegram_bot_token_here
 
 # FAL AI API Key
 FAL_API_KEY=your_fal_api_key_here
@@ -39,6 +44,9 @@ FAL_WEBHOOK_URL=https://yourdomain.com:8443/api/v1/avatar/status_update
 
 # Тестовый режим (true/false)
 AVATAR_TEST_MODE=false
+
+# Окружение (production/development)
+ENVIRONMENT=production
 
 # ========================================
 # База данных PostgreSQL

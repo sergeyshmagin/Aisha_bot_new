@@ -19,10 +19,22 @@ class Settings(BaseSettings):
     # Основные настройки
     DEBUG: bool = True
     ENV: str = "development"
+    ENVIRONMENT: str = Field(default="development", env="ENVIRONMENT")
     INSTANCE_ID: str = Field(default="aisha-bot", env="INSTANCE_ID")
     
     # Telegram
     TELEGRAM_TOKEN: str = Field(default="test_token", env="TELEGRAM_BOT_TOKEN")
+    
+    @property
+    def effective_telegram_token(self) -> str:
+        """Возвращает корректный телеграм токен в зависимости от окружения"""
+        # Если явно указан dev токен, используем его
+        dev_token = os.getenv("TELEGRAM_DEV_TOKEN") or os.getenv("TELEGRAM_DEV_BOT_TOKEN")
+        if dev_token and self.ENVIRONMENT == "development":
+            return dev_token
+        # Иначе используем продакшн токен
+        return self.TELEGRAM_TOKEN
+    
     # BACKEND_URL: str = "http://localhost:8000"  # LEGACY - удален
     
     # OpenAI
