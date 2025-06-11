@@ -40,7 +40,7 @@ class Settings(BaseSettings):
         return self.FAL_API_KEY or self.FAL_KEY or ""
     
     # FAL AI - Portrait Trainer Settings (ЕДИНСТВЕННЫЕ ИСПОЛЬЗУЕМЫЕ НАСТРОЙКИ)
-    FAL_PORTRAIT_STEPS: int = Field(100, env="FAL_PORTRAIT_STEPS")
+    FAL_PORTRAIT_STEPS: int = Field(1000, env="FAL_PORTRAIT_STEPS")
     FAL_PORTRAIT_LEARNING_RATE: float = Field(0.0002, env="FAL_PORTRAIT_LEARNING_RATE")
     FAL_PORTRAIT_SUBJECT_CROP: bool = Field(True, env="FAL_PORTRAIT_SUBJECT_CROP")
     FAL_PORTRAIT_CREATE_MASKS: bool = Field(True, env="FAL_PORTRAIT_CREATE_MASKS")
@@ -51,6 +51,53 @@ class Settings(BaseSettings):
     FAL_STATUS_CHECK_INTERVAL: int = Field(30, env="FAL_STATUS_CHECK_INTERVAL")  # секунд
     FAL_MAX_RETRIES: int = Field(3, env="FAL_MAX_RETRIES")
     FAL_AUTO_MODEL_SELECTION: bool = Field(True, env="FAL_AUTO_MODEL_SELECTION")  # Автовыбор модели
+    FAL_DEFAULT_QUALITY_PRESET: str = Field("fast", env="FAL_DEFAULT_QUALITY_PRESET")  # Качество по умолчанию
+    
+    # FAL AI - Пресеты качества (основываясь на документации flux-lora-portrait-trainer)
+    FAL_PRESET_FAST: dict = Field(default={
+        "portrait": {
+            "steps": 1000,
+            "learning_rate": 0.0002,
+            "multiresolution_training": True,
+            "subject_crop": True,
+            "create_masks": False
+        },
+        "general": {
+            "iterations": 800,
+            "learning_rate": 0.0002,
+            "priority": "speed"
+        }
+    }, env="FAL_PRESET_FAST")
+    
+    FAL_PRESET_BALANCED: dict = Field(default={
+        "portrait": {
+            "steps": 2500,
+            "learning_rate": 0.00009,
+            "multiresolution_training": True,
+            "subject_crop": True,
+            "create_masks": True
+        },
+        "general": {
+            "iterations": 1500,
+            "learning_rate": 0.00009,
+            "priority": "balanced"
+        }
+    }, env="FAL_PRESET_BALANCED")
+    
+    FAL_PRESET_QUALITY: dict = Field(default={
+        "portrait": {
+            "steps": 4000,
+            "learning_rate": 0.00005,
+            "multiresolution_training": True,
+            "subject_crop": True,
+            "create_masks": True
+        },
+        "general": {
+            "iterations": 3000,
+            "learning_rate": 0.00005,
+            "priority": "quality"
+        }
+    }, env="FAL_PRESET_QUALITY")
     
     # 🧪 FAL AI - Debug & Development Settings
     FAL_MOCK_TRAINING_DURATION: int = Field(30, env="FAL_MOCK_TRAINING_DURATION")  # секунд

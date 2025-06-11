@@ -5,12 +5,13 @@
 from uuid import UUID
 import logging
 
-from aiogram.types import CallbackQuery
+from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from aiogram import Router, F
 from aiogram.exceptions import TelegramBadRequest
 
 from app.core.di import get_user_service, get_avatar_service
+from app.handlers.state import AvatarStates
 from .keyboards import GalleryKeyboards
 from .models import gallery_cache
 from app.core.logger import get_logger
@@ -72,6 +73,204 @@ class AvatarActionsHandler:
         except Exception as e:
             logger.exception(f"Ошибка при установке основного аватара: {e}")
             await callback.answer("❌ Произошла ошибка", show_alert=True)
+
+    async def handle_rename_avatar(self, callback: CallbackQuery, state: FSMContext):
+        """Начинает процесс переименования аватара"""
+        try:
+            user_telegram_id = callback.from_user.id
+            avatar_id = UUID(callback.data.split(":")[1])
+            
+            # Получаем пользователя и аватар
+            async with get_user_service() as user_service:
+                user = await user_service.get_user_by_telegram_id(user_telegram_id)
+                if not user:
+                    await callback.answer("❌ Пользователь не найден", show_alert=True)
+                    return
+            
+            async with get_avatar_service() as avatar_service:
+                avatar = await avatar_service.get_avatar(avatar_id)
+                if not avatar or str(avatar.user_id) != str(user.id):
+                    await callback.answer("❌ Аватар не найден", show_alert=True)
+                    return
+                
+                current_name = avatar.name or "Безымянный аватар"
+            
+            # Сохраняем ID аватара в состояние
+            await state.update_data(rename_avatar_id=str(avatar_id))
+            await state.set_state(AvatarStates.renaming_avatar)
+            
+            # Формируем текст с инструкцией
+            text = f"""✏️ **Переименование аватара**
+
+🏷️ **Текущее имя:** {current_name}
+
+📝 Введите новое имя для аватара:
+
+💡 **Рекомендации:**
+• Длина: 2-30 символов
+• Используйте понятные имена
+• Избегайте спецсимволов
+
+✅ Просто напишите новое имя в чат"""
+            
+            keyboard = self.keyboards.get_rename_cancel_keyboard(str(avatar_id))
+            
+            # Отправляем инструкцию
+            if callback.message.photo:
+                # Если сообщение содержит фото, удаляем его и отправляем новое текстовое
+                try:
+                    await callback.message.delete()
+                except Exception:
+                    pass
+                
+                await callback.message.answer(
+                    text=text,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+            else:
+                # Если сообщение текстовое, просто редактируем
+                await callback.message.edit_text(
+                    text=text,
+                    reply_markup=keyboard,
+                    parse_mode="Markdown"
+                )
+            
+            logger.info(f"Пользователь {user_telegram_id} начал переименование аватара {avatar_id}")
+            
+        except Exception as e:
+            logger.exception(f"Ошибка при начале переименования аватара: {e}")
+            await callback.answer("❌ Произошла ошибка", show_alert=True)
+
+    async def handle_rename_avatar_cancel(self, callback: CallbackQuery, state: FSMContext):
+        """Отменяет переименование аватара"""
+        try:
+            user_telegram_id = callback.from_user.id
+            avatar_id = UUID(callback.data.split(":")[1])
+            
+            # Очищаем состояние
+            await state.clear()
+            
+            # Возвращаемся к карточке аватара
+            async with get_user_service() as user_service:
+                user = await user_service.get_user_by_telegram_id(user_telegram_id)
+                if not user:
+                    await callback.answer("❌ Пользователь не найден", show_alert=True)
+                    return
+            
+            async with get_avatar_service() as avatar_service:
+                avatars = await avatar_service.get_user_avatars_with_photos(user.id)
+                
+                # Находим индекс аватара
+                current_idx = 0
+                for i, avatar in enumerate(avatars):
+                    if avatar.id == avatar_id:
+                        current_idx = i
+                        break
+                
+                # Показываем карточку аватара
+                from .avatar_cards import AvatarCardsHandler
+                cards_handler = AvatarCardsHandler()
+                await cards_handler.send_avatar_card(callback, user.id, avatars, current_idx)
+            
+            await callback.answer("❌ Переименование отменено")
+            
+        except Exception as e:
+            logger.exception(f"Ошибка при отмене переименования: {e}")
+            await callback.answer("❌ Произошла ошибка", show_alert=True)
+
+    async def process_avatar_rename(self, message: Message, state: FSMContext):
+        """Обрабатывает ввод нового имени аватара"""
+        try:
+            user_telegram_id = message.from_user.id
+            new_name = message.text.strip()
+            
+            # Валидация имени
+            if not new_name:
+                await message.reply("❌ Имя не может быть пустым. Попробуйте ещё раз.")
+                return
+            
+            if len(new_name) < 2:
+                await message.reply("❌ Имя слишком короткое (минимум 2 символа). Попробуйте ещё раз.")
+                return
+            
+            if len(new_name) > 30:
+                await message.reply("❌ Имя слишком длинное (максимум 30 символов). Попробуйте ещё раз.")
+                return
+            
+            # Получаем ID аватара из состояния
+            data = await state.get_data()
+            avatar_id_str = data.get("rename_avatar_id")
+            if not avatar_id_str:
+                await message.reply("❌ Ошибка: не найден ID аватара. Попробуйте начать заново.")
+                await state.clear()
+                return
+            
+            avatar_id = UUID(avatar_id_str)
+            
+            # Получаем пользователя
+            async with get_user_service() as user_service:
+                user = await user_service.get_user_by_telegram_id(user_telegram_id)
+                if not user:
+                    await message.reply("❌ Пользователь не найден")
+                    return
+            
+            # Обновляем имя аватара
+            async with get_avatar_service() as avatar_service:
+                avatar = await avatar_service.get_avatar(avatar_id)
+                if not avatar or str(avatar.user_id) != str(user.id):
+                    await message.reply("❌ Аватар не найден")
+                    await state.clear()
+                    return
+                
+                old_name = avatar.name or "Безымянный аватар"
+                
+                # Обновляем имя
+                updated_avatar = await avatar_service.set_avatar_name(avatar_id, new_name)
+                
+                if updated_avatar:
+                    # Очищаем состояние
+                    await state.clear()
+                    
+                    # Получаем обновленный список аватаров
+                    avatars = await avatar_service.get_user_avatars_with_photos(user.id)
+                    
+                    # Находим индекс переименованного аватара
+                    current_idx = 0
+                    for i, avatar in enumerate(avatars):
+                        if avatar.id == avatar_id:
+                            current_idx = i
+                            break
+                    
+                    # Обновляем кэш
+                    await gallery_cache.set_avatars(user_telegram_id, avatars, current_idx)
+                    
+                    # Отправляем подтверждение
+                    await message.reply(f"✅ Аватар переименован!\n\n📝 **{old_name}** → **{new_name}**")
+                    
+                    # Показываем обновленную карточку аватара
+                    from .avatar_cards import AvatarCardsHandler
+                    cards_handler = AvatarCardsHandler()
+                    await cards_handler.send_avatar_card(
+                        type('CallbackQuery', (), {
+                            'message': message,
+                            'from_user': message.from_user
+                        })(), 
+                        user.id, 
+                        avatars, 
+                        current_idx
+                    )
+                    
+                    logger.info(f"Пользователь {user_telegram_id} переименовал аватар {avatar_id}: '{old_name}' → '{new_name}'")
+                else:
+                    await message.reply("❌ Не удалось переименовать аватар. Попробуйте ещё раз.")
+            
+        except ValueError as e:
+            await message.reply("❌ Некорректные данные. Попробуйте ещё раз.")
+            logger.error(f"Ошибка валидации при переименовании: {e}")
+        except Exception as e:
+            logger.exception(f"Ошибка при переименовании аватара: {e}")
+            await message.reply("❌ Произошла ошибка. Попробуйте ещё раз.")
 
     async def handle_delete_avatar(self, callback: CallbackQuery):
         """Показывает подтверждение удаления аватара"""

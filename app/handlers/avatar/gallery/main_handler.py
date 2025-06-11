@@ -4,13 +4,14 @@
 Объединяет AvatarCardsHandler, PhotoGalleryHandler, AvatarActionsHandler
 """
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton, Message
 from aiogram.fsm.context import FSMContext
 from aiogram.exceptions import TelegramBadRequest
 import logging
 
 from app.core.di import get_user_service, get_avatar_service
 from app.core.logger import get_logger
+from app.handlers.state import AvatarStates
 from .avatar_cards import AvatarCardsHandler
 from .photo_gallery import PhotoGalleryHandler
 from .avatar_actions import AvatarActionsHandler
@@ -64,6 +65,23 @@ class AvatarGalleryHandler:
         self.router.callback_query.register(
             self.handle_set_main_avatar,
             F.data.startswith("avatar_set_main:")
+        )
+        
+        # Переименование аватара
+        self.router.callback_query.register(
+            self.handle_rename_avatar,
+            F.data.startswith("avatar_rename:")
+        )
+        
+        self.router.callback_query.register(
+            self.handle_rename_avatar_cancel,
+            F.data.startswith("avatar_rename_cancel:")
+        )
+        
+        # Обработчик ввода текста для переименования
+        self.router.message.register(
+            self.handle_rename_text_input,
+            AvatarStates.renaming_avatar
         )
         
         self.router.callback_query.register(
@@ -169,6 +187,18 @@ class AvatarGalleryHandler:
     async def handle_set_main_avatar(self, callback: CallbackQuery, state: FSMContext):
         """Делегирует установку основного аватара"""
         await self.actions_handler.handle_set_main_avatar(callback)
+
+    async def handle_rename_avatar(self, callback: CallbackQuery, state: FSMContext):
+        """Делегирует начало переименования аватара"""
+        await self.actions_handler.handle_rename_avatar(callback, state)
+
+    async def handle_rename_avatar_cancel(self, callback: CallbackQuery, state: FSMContext):
+        """Делегирует отмену переименования аватара"""
+        await self.actions_handler.handle_rename_avatar_cancel(callback, state)
+
+    async def handle_rename_text_input(self, message: Message, state: FSMContext):
+        """Делегирует обработку ввода нового имени аватара"""
+        await self.actions_handler.process_avatar_rename(message, state)
 
     async def handle_delete_avatar(self, callback: CallbackQuery, state: FSMContext):
         """Делегирует удаление аватара"""

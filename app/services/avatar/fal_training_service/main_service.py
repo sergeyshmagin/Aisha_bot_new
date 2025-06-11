@@ -93,27 +93,43 @@ class FALTrainingService:
             if training_type == "portrait":
                 # Для портретного типа используем настройки portrait
                 portrait_settings = settings_preset["portrait"]
-                result = await self.fal_client.train_portrait_model(
-                    images_data_url=training_data_url,
-                    trigger_phrase=trigger,
-                    steps=portrait_settings["steps"],
-                    learning_rate=portrait_settings["learning_rate"],
-                    webhook_url=webhook_url
+                training_config = {
+                    "training_type": "portrait",
+                    "trigger_phrase": trigger,
+                    "steps": portrait_settings["steps"],
+                    "learning_rate": portrait_settings["learning_rate"],
+                    "multiresolution_training": portrait_settings.get("multiresolution_training", True),
+                    "subject_crop": portrait_settings.get("subject_crop", True),
+                    "create_masks": portrait_settings.get("create_masks", True),
+                    "webhook_url": webhook_url
+                }
+                
+                result = await self.fal_client.submit_training(
+                    user_id=config.avatar_id,  # используем avatar_id как user_id временно
+                    avatar_id=avatar_id,
+                    data_url=training_data_url,
+                    training_config=training_config
                 )
                 request_id = result
             else:  # style
                 # Для художественного типа используем настройки general
                 general_settings = settings_preset["general"]
-                result = await self.fal_client.train_general_model(
-                    images_data_url=training_data_url,
-                    trigger_word=trigger,
-                    iterations=general_settings["iterations"],
-                    learning_rate=general_settings["learning_rate"],
-                    priority=general_settings["priority"],
-                    webhook_url=webhook_url,
-                    avatar_id=avatar_id
+                training_config = {
+                    "training_type": "style",
+                    "trigger_word": trigger,
+                    "iterations": general_settings["iterations"],
+                    "learning_rate": general_settings["learning_rate"],
+                    "priority": general_settings["priority"],
+                    "webhook_url": webhook_url
+                }
+                
+                result = await self.fal_client.submit_training(
+                    user_id=config.avatar_id,  # используем avatar_id как user_id временно
+                    avatar_id=avatar_id,
+                    data_url=training_data_url,
+                    training_config=training_config
                 )
-                request_id = result["request_id"]
+                request_id = result
             
             # 🔍 ЗАПУСКАЕМ МОНИТОРИНГ СТАТУСА как резервный механизм
             from .status_checker import status_checker
@@ -136,7 +152,7 @@ class FALTrainingService:
                 return await self.test_simulator.simulate_status_check(request_id, training_type)
             
             # Реальная проверка через FAL AI
-            return await self.fal_client.check_training_status(request_id, training_type)
+            return await self.fal_client.get_training_status(request_id, training_type)
                 
         except Exception as e:
             logger.exception(f"Ошибка проверки статуса {request_id}: {e}")

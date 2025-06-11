@@ -62,6 +62,7 @@ class AvatarStates(StatesGroup):
     # Управление
     editing_avatar = State()          # Редактирование аватара
     deleting_avatar = State()         # Удаление аватара
+    renaming_avatar = State()         # Переименование аватара
     
     # New state for training
     training = State()                # Обучение в процессе 
