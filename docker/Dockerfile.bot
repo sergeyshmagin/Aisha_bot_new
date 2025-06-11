@@ -1,12 +1,19 @@
 # ============================================================================
-# Multi-stage Dockerfile для масштабируемого Telegram бота
-# Поддержка Redis сессий для горизонтального масштабирования
+# Multi-stage Dockerfile для масштабируемого Telegram бота (v2.0)
+# Улучшения:
+# - Оптимизированное кеширование зависимостей
+# - Поддержка Redis сессий для горизонтального масштабирования
+# - Раздельная установка зависимостей для лучшего кеширования
 # ============================================================================
 
 # ==================== БАЗОВЫЙ ОБРАЗ ====================
 FROM python:3.12-slim as base
 
-# Системные зависимости
+# Метка для кеширования
+LABEL maintainer="aisha-backend"
+LABEL cache-version="2.0"
+
+# Системные зависимости (кешируются отдельно)
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
@@ -14,17 +21,34 @@ RUN apt-get update && apt-get install -y \
     wget \
     git \
     ffmpeg \
-    && rm -rf /var/lib/apt/lists/*
+    pkg-config \
+    && rm -rf /var/lib/apt/lists/* \
+    && apt-get clean
 
 # Рабочая директория
 WORKDIR /app
 
-# Копируем requirements
+# Обновляем pip сначала (кешируется отдельно)
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Копируем только requirements для лучшего кеширования
 COPY requirements.txt .
 
-# Устанавливаем Python зависимости
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Устанавливаем зависимости поэтапно для лучшего кеширования
+# 1. Основные зависимости
+RUN pip install --no-cache-dir \
+    pydantic>=2.0.0 \
+    pydantic-settings>=2.0.0 \
+    environs>=14.2.0
+
+# 2. Async и базовые библиотеки
+RUN pip install --no-cache-dir \
+    aiohttp~=3.9.0 \
+    httpx>=0.24.0 \
+    aiofiles==23.2.1
+
+# 3. Устанавливаем все остальные зависимости
+RUN pip install --no-cache-dir -r requirements.txt
 
 # ==================== DEVELOPMENT STAGE ====================
 FROM base as development

@@ -15,12 +15,13 @@ redis>=5.0.0
 # Configuration
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
+environs>=14.2.0
 
 # Storage
 minio>=7.0.0
 
 # HTTP
-aiohttp==3.11.11
+aiohttp~=3.9.0
 httpx>=0.24.0
 
 # OpenAI для распознавания речи и обработки текста

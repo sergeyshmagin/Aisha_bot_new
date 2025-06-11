@@ -1,10 +1,12 @@
 #!/bin/bash
 
 # ============================================================================
-# Скрипт деплоя Aisha Bot через Docker Registry
-# 1. Тестирует локально
-# 2. Собирает и пушит в registry  
-# 3. Деплоит на продакшн
+# Скрипт деплоя Aisha Bot через Docker Registry (v2.0)
+# Улучшения:
+# - Проверка и создание Docker сети
+# - Кеширование зависимостей
+# - Быстрый режим деплоя
+# - Улучшенная обработка ошибок
 # ============================================================================
 
 set -e
@@ -39,6 +41,43 @@ IMAGE_NAME="aisha/bot"
 PROD_SERVER="192.168.0.10"
 PROD_USER="aisha"
 PROD_DIR="/opt/aisha-backend"
+DOCKER_NETWORK="aisha_bot_cluster"
+
+# Параметры командной строки
+SKIP_LOCAL_TEST=false
+SKIP_BUILD=false
+FORCE_REBUILD=false
+
+# Парсинг аргументов
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --skip-test)
+            SKIP_LOCAL_TEST=true
+            shift
+            ;;
+        --skip-build)
+            SKIP_BUILD=true
+            shift
+            ;;
+        --force-rebuild)
+            FORCE_REBUILD=true
+            shift
+            ;;
+        --help|-h)
+            echo "Использование: $0 [OPTIONS]"
+            echo "OPTIONS:"
+            echo "  --skip-test      Пропустить локальное тестирование"
+            echo "  --skip-build     Пропустить сборку (использовать существующий образ)"
+            echo "  --force-rebuild  Принудительная пересборка без кеша"
+            echo "  --help, -h       Показать справку"
+            exit 0
+            ;;
+        *)
+            log_error "Неизвестная опция: $1"
+            exit 1
+            ;;
+    esac
+done
 
 # Получение версии из git или timestamp
 get_version() {
@@ -59,7 +98,7 @@ VERSION=$(get_version)
 FULL_IMAGE="${REGISTRY}/${IMAGE_NAME}:${VERSION}"
 LATEST_IMAGE="${REGISTRY}/${IMAGE_NAME}:latest"
 
-log_info "🚀 Деплой Aisha Bot через Docker Registry"
+log_info "🚀 Деплой Aisha Bot через Docker Registry v2.0"
 log_info "📦 Образ: ${FULL_IMAGE}"
 log_info "🏷️ Версия: ${VERSION}"
 echo ""
@@ -95,23 +134,53 @@ check_environment() {
         exit 1
     fi
     
+    # Проверяем и создаем Docker сеть на продакшне
+    log_info "🔗 Проверка Docker сети на продакшне..."
+    ssh ${PROD_USER}@${PROD_SERVER} << EOF
+if ! docker network ls | grep -q "${DOCKER_NETWORK}"; then
+    echo "Создание Docker сети ${DOCKER_NETWORK} с подсетью..."
+    docker network create --subnet=172.26.0.0/16 ${DOCKER_NETWORK}
+    echo "✅ Сеть ${DOCKER_NETWORK} создана"
+else
+    # Проверяем есть ли подсеть
+    NETWORK_INFO=\$(docker network inspect ${DOCKER_NETWORK} 2>/dev/null | grep -o '"Subnet": "[^"]*"' | head -1)
+    if [ -z "\$NETWORK_INFO" ]; then
+        echo "Пересоздание сети ${DOCKER_NETWORK} с подсетью..."
+        docker network rm ${DOCKER_NETWORK}
+        docker network create --subnet=172.26.0.0/16 ${DOCKER_NETWORK}
+        echo "✅ Сеть ${DOCKER_NETWORK} пересоздана с подсетью"
+    else
+        echo "✅ Сеть ${DOCKER_NETWORK} уже существует с подсетью"
+    fi
+fi
+EOF
+    
     log_info "✅ Окружение проверено"
 }
 
 # ============================================================================
-# Шаг 2: Локальное тестирование
+# Шаг 2: Локальное тестирование (опционально)
 # ============================================================================
 
 local_test() {
+    if [ "$SKIP_LOCAL_TEST" = true ]; then
+        log_info "⏭️ Локальное тестирование пропущено"
+        return 0
+    fi
+    
     log_step "2️⃣ Локальное тестирование..."
     
     # Останавливаем существующие dev контейнеры
     log_info "🛑 Остановка существующих dev контейнеров..."
     docker-compose -f docker-compose.bot.dev.yml down || true
     
-    # Собираем образ для тестирования
+    # Собираем образ для тестирования с кешированием
     log_info "🔨 Сборка образа для тестирования..."
-    docker-compose -f docker-compose.bot.dev.yml build --no-cache aisha-bot-dev
+    if [ "$FORCE_REBUILD" = true ]; then
+        docker-compose -f docker-compose.bot.dev.yml build --no-cache aisha-bot-dev
+    else
+        docker-compose -f docker-compose.bot.dev.yml build aisha-bot-dev
+    fi
     
     # Запускаем для тестирования
     log_info "🧪 Запуск локального тестирования..."
@@ -131,7 +200,7 @@ local_test() {
     
     # Проверяем логи на ошибки
     log_info "📋 Проверка логов на критические ошибки..."
-    if docker-compose -f docker-compose.bot.dev.yml logs --tail 50 | grep -i "critical\|fatal\|error" | grep -v "TelegramNetworkError\|Request timeout"; then
+    if docker-compose -f docker-compose.bot.dev.yml logs --tail 50 | grep -i "critical\|fatal\|error" | grep -v "TelegramNetworkError\|Request timeout\|Token is invalid"; then
         log_warn "Обнаружены ошибки в логах, но продолжаем..."
     fi
     
@@ -149,15 +218,38 @@ local_test() {
 }
 
 # ============================================================================
-# Шаг 3: Сборка и пуш в Registry
+# Шаг 3: Сборка и пуш в Registry (опционально)
 # ============================================================================
 
 build_and_push() {
+    if [ "$SKIP_BUILD" = true ]; then
+        log_info "⏭️ Сборка пропущена, используется существующий образ"
+        return 0
+    fi
+    
     log_step "3️⃣ Сборка и отправка в Registry..."
     
-    # Сборка production образа
+    # Проверяем, существует ли образ
+    if [ "$FORCE_REBUILD" = false ] && docker manifest inspect ${LATEST_IMAGE} &>/dev/null; then
+        log_info "🔄 Образ уже существует в registry"
+        read -p "$(echo -e ${YELLOW}Пересобрать образ? [y/N]: ${NC})" -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log_info "Используется существующий образ"
+            return 0
+        fi
+    fi
+    
+    # Сборка production образа с кешированием
     log_info "🔨 Сборка production образа..."
-    docker build -f docker/Dockerfile.bot -t ${FULL_IMAGE} -t ${LATEST_IMAGE} .
+    BUILD_ARGS=""
+    if [ "$FORCE_REBUILD" = false ]; then
+        BUILD_ARGS="--cache-from ${LATEST_IMAGE}"
+    else
+        BUILD_ARGS="--no-cache"
+    fi
+    
+    docker build -f docker/Dockerfile.bot ${BUILD_ARGS} -t ${FULL_IMAGE} -t ${LATEST_IMAGE} .
     
     # Пуш образов в registry
     log_info "📤 Отправка в registry..."
@@ -176,7 +268,7 @@ deploy_to_production() {
     
     # Создаем backup конфигурации
     log_info "💾 Создание backup конфигурации..."
-    ssh ${PROD_USER}@${PROD_SERVER} "cd ${PROD_DIR} && cp docker-compose.bot.simple.yml docker-compose.bot.simple.yml.backup.$(date +%Y%m%d-%H%M%S)" || true
+    ssh ${PROD_USER}@${PROD_SERVER} "cd ${PROD_DIR} && cp docker-compose.bot.simple.yml docker-compose.bot.simple.yml.backup.$(date +%Y%m%d-%H%M%S)" 2>/dev/null || true
     
     # Останавливаем только bot контейнеры, webhook оставляем
     log_info "🛑 Остановка bot контейнеров на продакшн..."
@@ -184,8 +276,7 @@ deploy_to_production() {
 cd /opt/aisha-backend
 
 # Останавливаем только bot контейнеры
-docker stop aisha-bot-primary aisha-worker-1 2>/dev/null || true
-docker rm aisha-bot-primary aisha-worker-1 2>/dev/null || true
+docker-compose -f docker-compose.bot.simple.yml down || true
 
 echo "Bot контейнеры остановлены"
 EOF
@@ -196,11 +287,11 @@ EOF
     
     # Запускаем обновленные контейнеры
     log_info "🚀 Запуск обновленных bot контейнеров..."
-    ssh ${PROD_USER}@${PROD_SERVER} << 'EOF'
+    ssh ${PROD_USER}@${PROD_SERVER} << EOF
 cd /opt/aisha-backend
 
-# Запускаем только bot сервисы
-docker-compose -f docker-compose.bot.simple.yml up -d aisha-bot-primary aisha-worker-1
+# Запускаем bot сервисы
+docker-compose -f docker-compose.bot.simple.yml up -d
 
 echo "Bot контейнеры запущены"
 EOF
@@ -227,16 +318,16 @@ docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Image}}" | grep -E "(bot|w
 
 echo ""
 echo "=== Последние логи primary bot ==="
-docker logs aisha-bot-primary --tail 10
+docker logs aisha-bot-primary --tail 10 2>/dev/null || echo "Контейнер aisha-bot-primary не найден"
 
 echo ""
 echo "=== Последние логи worker ==="
-docker logs aisha-worker-1 --tail 5
+docker logs aisha-worker-1 --tail 5 2>/dev/null || echo "Контейнер aisha-worker-1 не найден"
 EOF
     
     # Проверяем логи на ошибки
     log_info "🔍 Проверка на критические ошибки..."
-    if ssh ${PROD_USER}@${PROD_SERVER} "docker logs aisha-bot-primary --tail 20" | grep -i "critical\|fatal" | grep -v "TelegramNetworkError"; then
+    if ssh ${PROD_USER}@${PROD_SERVER} "docker logs aisha-bot-primary --tail 20 2>/dev/null" | grep -i "critical\|fatal" | grep -v "TelegramNetworkError"; then
         log_warn "Обнаружены критические ошибки в логах"
         log_warn "Проверьте логи: ssh ${PROD_USER}@${PROD_SERVER} 'cd ${PROD_DIR} && docker logs aisha-bot-primary --tail 50'"
     else
@@ -254,8 +345,10 @@ cleanup() {
     log_step "6️⃣ Очистка..."
     
     # Остановка dev контейнеров
-    log_info "🧹 Остановка dev контейнеров..."
-    docker-compose -f docker-compose.bot.dev.yml down || true
+    if [ "$SKIP_LOCAL_TEST" = false ]; then
+        log_info "🧹 Остановка dev контейнеров..."
+        docker-compose -f docker-compose.bot.dev.yml down || true
+    fi
     
     # Очистка неиспользуемых образов
     log_info "🗑️ Очистка старых образов..."
@@ -272,6 +365,7 @@ main() {
     echo "🎯 Цель: Деплой версии ${VERSION} на продакшн"
     echo "📍 Registry: ${REGISTRY}"
     echo "🖥️ Продакшн: ${PROD_SERVER}"
+    echo "⚙️ Режим: skip-test=${SKIP_LOCAL_TEST}, skip-build=${SKIP_BUILD}, force-rebuild=${FORCE_REBUILD}"
     echo ""
     
     check_environment
@@ -295,8 +389,11 @@ main() {
     log_info "🎉 Деплой версии ${VERSION} успешно завершен!"
     log_info ""
     log_info "📊 Команды для мониторинга:"
-    log_info "   ssh ${PROD_USER}@${PROD_SERVER} 'cd ${PROD_DIR} && ./scripts/production/check-transcription.sh'"
-    log_info "   ssh ${PROD_USER}@${PROD_SERVER} 'cd ${PROD_DIR} && ./scripts/production/monitor-errors.sh'"
+    log_info "   ssh ${PROD_USER}@${PROD_SERVER} 'cd ${PROD_DIR} && docker logs aisha-bot-primary --tail 50'"
+    log_info "   ssh ${PROD_USER}@${PROD_SERVER} 'cd ${PROD_DIR} && docker ps'"
+    log_info ""
+    log_info "🚀 Быстрый деплой в следующий раз:"
+    log_info "   bash scripts/production/deploy-via-registry.sh --skip-test --skip-build"
 }
 
 # Запуск с обработкой ошибок

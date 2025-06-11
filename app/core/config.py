@@ -1,5 +1,5 @@
 """
-Конфигурация приложения
+Конфигурация приложения с поддержкой environs
 """
 import os
 from pathlib import Path
@@ -7,6 +7,11 @@ from typing import Optional, Union, List, Dict, Any
 
 from pydantic_settings import BaseSettings
 from pydantic import Field, validator
+from environs import Env
+
+# Инициализация environs для дополнительной функциональности
+env = Env()
+env.read_env()  # Автоматически читает .env файл
 
 class Settings(BaseSettings):
     """Настройки приложения"""
