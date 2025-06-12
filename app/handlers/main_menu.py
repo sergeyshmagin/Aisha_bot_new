@@ -368,7 +368,7 @@ async def show_help(call: CallbackQuery):
             # Другая ошибка Telegram
             logger.error(f"Неожиданная Telegram ошибка в справке: {telegram_error}")
             await call.answer("❌ Ошибка отображения справки", show_alert=True)
-            
+                
     except Exception as general_error:
         # Любая другая ошибка
         logger.exception(f"Критическая ошибка в справке: {general_error}")

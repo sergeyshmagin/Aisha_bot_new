@@ -165,10 +165,12 @@ class CustomPromptHandler(BaseHandler):
             custom_prompt = data.get("custom_prompt")
             avatar_name = data.get("avatar_name")
             
+            from app.shared.utils.telegram_utils import format_prompt_for_display
+            
             text = f"""📐 <b>Выберите формат изображения</b>
 
 🎭 <b>Аватар:</b> {avatar_name}
-📝 <b>Промпт:</b> {custom_prompt[:100]}{"..." if len(custom_prompt) > 100 else ""}
+📝 <b>Промпт:</b> {format_prompt_for_display(custom_prompt, 100)}
 
 👇 <b>Выберите соотношение сторон:</b>"""
             

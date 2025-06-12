@@ -2,11 +2,14 @@
 Утилиты для работы с Telegram API
 """
 import logging
+import html
 from typing import Optional
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup
 from aiogram.exceptions import TelegramBadRequest
 
-logger = logging.getLogger(__name__)
+from app.core.logger import get_logger
+
+logger = get_logger(__name__)
 
 async def safe_edit_text(
     message: Message,
@@ -134,3 +137,38 @@ async def safe_edit_callback_message(
             except:
                 pass  # Игнорируем ошибки при ответе на callback
         raise 
+
+def escape_html_for_telegram(text: str) -> str:
+    """
+    Экранирует HTML-символы для безопасного отображения в Telegram
+    
+    Args:
+        text: Исходный текст
+        
+    Returns:
+        Экранированный текст
+    """
+    if not text:
+        return ""
+    return html.escape(text)
+
+def format_prompt_for_display(prompt: str, max_length: int = 80) -> str:
+    """
+    Форматирует промпт для безопасного отображения в Telegram
+    
+    Args:
+        prompt: Исходный промпт
+        max_length: Максимальная длина для отображения
+        
+    Returns:
+        Отформатированный и экранированный промпт
+    """
+    if not prompt:
+        return "Не указан"
+    
+    escaped_prompt = escape_html_for_telegram(prompt)
+    
+    if len(escaped_prompt) > max_length:
+        return f"{escaped_prompt[:max_length]}..."
+    
+    return escaped_prompt 

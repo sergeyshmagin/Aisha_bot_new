@@ -195,6 +195,96 @@ async def handle_noop(callback: CallbackQuery):
     """Обработчик пустых callback'ов"""
     await callback.answer()
 
+@router.callback_query(F.data == "gallery_main")
+async def handle_gallery_main_new(callback: CallbackQuery, state: FSMContext):
+    """Обработчик callback gallery_main (альтернативный к my_gallery)"""
+    logger.info(f"🖼️ Обработка callback gallery_main от пользователя {callback.from_user.id}")
+    # Используем тот же обработчик что и для my_gallery
+    await handle_gallery_main(callback, state)
+
+@router.callback_query(F.data.startswith("generation_status:"))
+async def handle_generation_status(callback: CallbackQuery):
+    """Обработчик проверки статуса генерации"""
+    try:
+        # Извлекаем generation_id из callback_data
+        generation_id = callback.data.split(":")[1]
+        logger.info(f"📊 Проверка статуса генерации {generation_id}")
+        
+        # Получаем пользователя
+        from app.shared.handlers.base_handler import BaseHandler
+        base_handler = BaseHandler()
+        user = await base_handler.get_user_from_callback(callback, show_error=False)
+        if not user:
+            await callback.answer("❌ Пользователь не найден", show_alert=True)
+            return
+        
+        # Получаем генерацию из БД
+        from uuid import UUID
+        from app.core.database import get_session
+        from app.database.models.generation import ImageGeneration
+        from sqlalchemy import select
+        from sqlalchemy.orm import selectinload
+        
+        async with get_session() as session:
+            stmt = (
+                select(ImageGeneration)
+                .options(selectinload(ImageGeneration.avatar))
+                .where(
+                    ImageGeneration.id == UUID(generation_id),
+                    ImageGeneration.user_id == user.id
+                )
+            )
+            result = await session.execute(stmt)
+            generation = result.scalar_one_or_none()
+        
+        if not generation:
+            await callback.answer("❌ Генерация не найдена", show_alert=True)
+            return
+        
+        # Формируем ответ в зависимости от статуса
+        status_map = {
+            'pending': '⏳ В очереди',
+            'processing': '🎨 Генерируется...',
+            'completed': '✅ Завершена',
+            'failed': '❌ Ошибка',
+            'cancelled': '⏹️ Отменена'
+        }
+        
+        status_text = status_map.get(generation.status, generation.status)
+        
+        if generation.status == 'completed':
+            # Если генерация завершена - переходим в галерею к этому изображению
+            await callback.answer("✅ Генерация завершена! Переходим к изображению...")
+            
+            # Используем callback для возврата к конкретному изображению
+            from aiogram.types import CallbackQuery as NewCallbackQuery
+            
+            # Создаем новый callback для возврата к галерее
+            new_callback_data = f"my_gallery_return:{generation_id}"
+            new_callback = NewCallbackQuery(
+                id=callback.id,
+                from_user=callback.from_user,
+                chat_instance=callback.chat_instance,
+                message=callback.message,
+                data=new_callback_data
+            )
+            
+            # Переходим к галерее с нужным изображением
+            from aiogram.fsm.context import FSMContext
+            from aiogram.fsm.storage.memory import MemoryStorage
+            storage = MemoryStorage()
+            state = FSMContext(storage=storage, key=f"user:{user.id}")
+            
+            await handle_gallery_return(new_callback, state)
+            
+        else:
+            # Показываем текущий статус
+            await callback.answer(f"📊 Статус: {status_text}", show_alert=True)
+        
+    except Exception as e:
+        logger.exception(f"Ошибка проверки статуса генерации: {e}")
+        await callback.answer("❌ Ошибка проверки статуса", show_alert=True)
+
 @router.callback_query(F.data == "show_current_image")
 async def handle_show_current_image(callback: CallbackQuery):
     """Обработчик кнопки 'Показать изображение' при fallback"""

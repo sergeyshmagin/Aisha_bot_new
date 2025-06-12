@@ -23,6 +23,7 @@ from app.services.generation.generation_service import (
 )
 from app.services.user_settings import UserSettingsService
 from app.shared.handlers.base_handler import BaseHandler
+from app.shared.utils.telegram_utils import format_prompt_for_display
 
 from .keyboards import build_generation_result_keyboard
 
@@ -84,7 +85,7 @@ class GenerationMonitor(BaseHandler):
                 f"""🎨 <b>Запускаю генерацию...</b>
 
 🎭 <b>Аватар:</b> {avatar_name}
-📝 <b>Промпт:</b> {custom_prompt[:60]}{'...' if len(custom_prompt) > 60 else ''}
+📝 <b>Промпт:</b> {format_prompt_for_display(custom_prompt, 60)}
 📐 <b>Формат:</b> {aspect_ratio}
 ⚡ <b>Модель:</b> FLUX 1.1 Ultra
 
@@ -120,7 +121,7 @@ class GenerationMonitor(BaseHandler):
                 f"""✅ <b>Генерация запущена!</b>
 
 🎭 <b>Аватар:</b> {avatar_name}
-📝 <b>Промпт:</b> {custom_prompt[:60]}{'...' if len(custom_prompt) > 60 else ''}
+📝 <b>Промпт:</b> {format_prompt_for_display(custom_prompt, 60)}
 📐 <b>Формат:</b> {aspect_ratio}
 🆔 <b>ID:</b> {str(generation.id)[:8]}...
 
@@ -185,7 +186,7 @@ class GenerationMonitor(BaseHandler):
                 f"""🎨 <b>Запускаю генерацию...</b>
 
 🎭 <b>Аватар:</b> {avatar_name}
-📝 <b>Промпт:</b> {custom_prompt[:60]}{'...' if len(custom_prompt) > 60 else ''}
+📝 <b>Промпт:</b> {format_prompt_for_display(custom_prompt, 60)}
 📐 <b>Формат:</b> {aspect_ratio}
 ⚡ <b>Модель:</b> FLUX 1.1 Ultra
 
@@ -221,7 +222,7 @@ class GenerationMonitor(BaseHandler):
                 f"""✅ <b>Генерация запущена!</b>
 
 🎭 <b>Аватар:</b> {avatar_name}
-📝 <b>Промпт:</b> {custom_prompt[:60]}{'...' if len(custom_prompt) > 60 else ''}
+📝 <b>Промпт:</b> {format_prompt_for_display(custom_prompt, 60)}
 📐 <b>Формат:</b> {aspect_ratio}
 🆔 <b>ID:</b> {str(generation.id)[:8]}...
 
@@ -286,7 +287,7 @@ class GenerationMonitor(BaseHandler):
         await message.edit_text(
             f"""⏰ <b>Генерация занимает больше времени чем обычно</b>
 
-📝 <b>Промпт:</b> {original_prompt[:60]}{'...' if len(original_prompt) > 60 else ''}
+📝 <b>Промпт:</b> {format_prompt_for_display(original_prompt, 60)}
 🎭 <b>Аватар:</b> {avatar_name}
 
 💡 Проверьте результат через несколько минут в галерее""",
@@ -309,7 +310,7 @@ class GenerationMonitor(BaseHandler):
 
             text = f"""✨ <b>Изображение готово!</b>
 
-📝 <b>Промпт:</b> {original_prompt[:60]}{'...' if len(original_prompt) > 60 else ''}
+📝 <b>Промпт:</b> {format_prompt_for_display(original_prompt, 60)}
 🎭 <b>Аватар:</b> {avatar_name}
 ⚡ <b>Качество:</b> Максимальный фотореализм
 ⏱️ <b>Время:</b> {duration:.1f}с
