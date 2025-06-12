@@ -75,11 +75,12 @@ class PromptEnhancer:
         if environment_desc:
             enhanced_parts.append(environment_desc)
         
-        # 8. Технические параметры камеры и фокуса
+        # 8. Технические параметры камеры и фокуса с улучшением глаз
         camera_details = [
             "The depth of field is exceptional, ensuring sharp focus on the subject",
             "while creating beautiful bokeh in the background, shot with professional equipment",
-            "delivering crystal-clear detail and exceptional image quality"
+            "delivering crystal-clear detail and exceptional image quality",
+            "beautiful detailed eyes, sharp pupils, clean eyelashes, realistic reflection in eyes"
         ]
         enhanced_parts.extend(camera_details)
         
@@ -162,6 +163,14 @@ class PromptEnhancer:
             "unrealistic proportions", "cartoon", "anime", "painted",
             "artificial", "fake", "plastic", "doll-like", "uncanny valley"
         ]
+        
+        # Специальные негативные элементы для глаз
+        eyes_negative = [
+            "blurry eyes", "asymmetrical eyes", "cross-eye", "fused face", "bad eyelids",
+            "artificial eyes", "doll eyes", "glassy eyes", "lifeless eyes", 
+            "misaligned eyes", "dead eyes", "empty eyes", "soulless eyes"
+        ]
+        base_negative.extend(eyes_negative)
         
         if avatar_type == "portrait":
             portrait_negative = [

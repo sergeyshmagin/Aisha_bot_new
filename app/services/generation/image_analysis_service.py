@@ -90,9 +90,15 @@ class ImageAnalysisService:
             
             logger.info(f"[Image Analysis] Создан кинематографический промпт: {len(cinematic_result['processed'])} символов")
             
+            # Добавляем негативный промпт с улучшениями для глаз
+            from app.services.generation.prompt.enhancement.prompt_enhancer import PromptEnhancer
+            enhancer = PromptEnhancer()
+            negative_prompt = enhancer.get_negative_prompt(avatar_type)
+            
             return {
                 "analysis": base_description,
                 "prompt": cinematic_result["processed"],
+                "negative_prompt": negative_prompt,
                 "original_vision_prompt": vision_prompt,
                 "cinematic_enhancement": cinematic_result.get("enhancement_applied", False),
                 "user_prompt_integrated": bool(user_prompt),
@@ -180,7 +186,7 @@ JSON RESPONSE FORMAT:
 ```
 
 EXAMPLE PROMPT STYLE:
-"A high-quality, cinematic, ultra-realistic close-up portrait photograph, captured by professional medium-format digital camera, in style of super-detailed 8K resolution imagery, featuring warm directional side lighting during golden hour. The composition is expertly framed with subject positioned centrally, featuring a confident man with contemporary styling, positioned with natural elegance and authentic body language, gazing directly at camera with engaging intensity. Set in sophisticated modern environment with clean architectural lines, captured by professional medium-format digital camera, shot with 85mm portrait lens at f/2.8 for optimal sharpness, The depth of field is exceptional ensuring razor-sharp focus on subject, professional bokeh with smooth background transition. The color palette emphasizes rich warm tones and deep golds creating sophisticated atmospheric mood, well-defined eyes with natural catchlight and authentic iris detail, natural skin texture with fine detail and visible pores, sharp focus with optimal detail retention, high-end editorial photography style with cinematic quality."
+"A high-quality, cinematic, ultra-realistic close-up portrait photograph, captured by professional medium-format digital camera, in style of super-detailed 8K resolution imagery, featuring warm directional side lighting during golden hour. The composition is expertly framed with subject positioned centrally, featuring a confident man with contemporary styling, positioned with natural elegance and authentic body language, gazing directly at camera with engaging intensity. Set in sophisticated modern environment with clean architectural lines, captured by professional medium-format digital camera, shot with 85mm portrait lens at f/2.8 for optimal sharpness, The depth of field is exceptional ensuring razor-sharp focus on subject, professional bokeh with smooth background transition. The color palette emphasizes rich warm tones and deep golds creating sophisticated atmospheric mood, beautiful detailed eyes with sharp pupils, clean eyelashes, realistic reflection, well-defined eyes with natural catchlight and authentic iris detail, natural skin texture with fine detail and visible pores, sharp focus with optimal detail retention, high-end editorial photography style with cinematic quality."
 
 Create prompt EXACTLY in this style with maximum detail!"""
     
@@ -301,6 +307,11 @@ Combine EXACT photo composition with REQUEST content. Response in JSON format.""
         """Fallback анализ без GPT Vision"""
         logger.info("[Image Analysis] Использование fallback анализа")
         
+        # Создаем негативный промпт
+        from app.services.generation.prompt.enhancement.prompt_enhancer import PromptEnhancer
+        enhancer = PromptEnhancer()
+        negative_prompt = enhancer.get_negative_prompt(avatar_type)
+        
         if user_prompt:
             # Создаем кинематографический промпт на базе пользовательского запроса
             cinematic_result = await self.cinematic_service.create_cinematic_prompt(
@@ -313,6 +324,7 @@ Combine EXACT photo composition with REQUEST content. Response in JSON format.""
             return {
                 "analysis": f"Базовый анализ: {user_prompt}",
                 "prompt": cinematic_result["processed"],
+                "negative_prompt": negative_prompt,
                 "cinematic_enhancement": True,
                 "style": "cinematic_fallback"
             }
@@ -329,6 +341,7 @@ Combine EXACT photo composition with REQUEST content. Response in JSON format.""
             return {
                 "analysis": "Базовый анализ портрета",
                 "prompt": cinematic_result["processed"],
+                "negative_prompt": negative_prompt,
                 "cinematic_enhancement": True,
                 "style": "cinematic_default"
             }

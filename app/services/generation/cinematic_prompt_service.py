@@ -217,6 +217,9 @@ class CinematicPromptService:
         # Добавляем детали внешности
         details = []
         
+        # Добавляем качественное описание глаз для всех промптов
+        details.append("with beautiful detailed eyes, sharp pupils, clean eyelashes, realistic reflection")
+        
         if not any(word in prompt_lower for word in ['hair', 'волосы']):
             details.append("with expertly styled hair showing natural texture and contemporary cut")
         
@@ -335,6 +338,7 @@ class CinematicPromptService:
     def _create_quality_specifications(self) -> List[str]:
         """Создает спецификации качества изображения"""
         return [
+            "beautiful detailed eyes with sharp pupils, clean eyelashes, realistic reflection",
             "well-defined eyes with natural catchlight and authentic iris detail",
             "natural skin texture with fine detail and visible pores",
             "authentic facial features with realistic proportions",
