@@ -15,12 +15,13 @@ from app.core.logger import get_logger
 logger = get_logger(__name__)
 
 
-def require_user(show_error: bool = True):
+def require_user(show_error: bool = True, auto_register: bool = True):
     """
     Декоратор для автоматической проверки и получения пользователя
     
     Args:
         show_error: Показывать ли ошибку пользователю
+        auto_register: Автоматически регистрировать пользователя если не найден
     """
     def decorator(func: Callable):
         @functools.wraps(func)
@@ -47,9 +48,27 @@ def require_user(show_error: bool = True):
                 async with get_user_service() as user_service:
                     user = await user_service.get_user_by_telegram_id(str(user_telegram_id))
                     
+                    if not user and auto_register:
+                        # Автоматически регистрируем пользователя
+                        telegram_user_data = {
+                            "id": user_telegram_id,
+                            "first_name": (callback or message).from_user.first_name,
+                            "last_name": (callback or message).from_user.last_name,
+                            "username": (callback or message).from_user.username,
+                            "language_code": (callback or message).from_user.language_code,
+                            "is_premium": getattr((callback or message).from_user, 'is_premium', False),
+                            "is_bot": (callback or message).from_user.is_bot,
+                        }
+                        
+                        user = await user_service.register_user(telegram_user_data)
+                        if user:
+                            logger.info(f"Автоматически зарегистрирован пользователь: {user.telegram_id}")
+                        else:
+                            logger.error(f"Не удалось зарегистрировать пользователя {user_telegram_id}")
+                    
                     if not user:
                         if show_error:
-                            error_msg = "❌ Пользователь не найден"
+                            error_msg = "❌ Произошла ошибка. Попробуйте команду /start"
                             if callback:
                                 try:
                                     await callback.answer(error_msg, show_alert=True)
@@ -222,19 +241,19 @@ def require_main_avatar(
             
             try:
                 async with get_avatar_service() as avatar_service:
-                    avatar = await avatar_service.get_main_avatar(user.id)
+                    # Получаем основной аватар
+                    main_avatar = await avatar_service.get_main_avatar(user.id)
                     
-                    if not avatar:
+                    if not main_avatar:
+                        error_msg = "🎭 Для этого действия нужен аватар!\n\n✨ Создайте свой первый аватар и откройте все возможности бота!"
                         if show_error:
-                            error_msg = "❌ У вас нет основного аватара. Создайте аватар сначала!"
-                            if callback:
-                                await callback.answer(error_msg, show_alert=True)
-                            else:
-                                await message.reply(error_msg)
-                        return
+                            await callback.answer(error_msg, show_alert=True)
+                        else:
+                            logger.warning(f"Пользователь {callback.from_user.id} не имеет основного аватара")
+                        return None
                     
                     # Проверяем статус если требуется
-                    if check_completed and avatar.status != "completed":
+                    if check_completed and main_avatar.status != "completed":
                         if show_error:
                             error_msg = "❌ Ваш аватар еще не готов. Дождитесь завершения обучения!"
                             if callback:
@@ -244,7 +263,7 @@ def require_main_avatar(
                         return
                     
                     # Добавляем аватар в kwargs
-                    kwargs['main_avatar'] = avatar
+                    kwargs['main_avatar'] = main_avatar
                     return await func(*args, **kwargs)
                     
             except Exception as e:

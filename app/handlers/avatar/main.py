@@ -27,13 +27,27 @@ class AvatarMainHandler:
     async def show_avatar_menu(self, callback: CallbackQuery, state: FSMContext):
         """Показывает главное меню аватаров"""
         try:
-            # Получаем пользователя
+            # Получаем пользователя с автоматической регистрацией
             async with get_user_service() as user_service:
                 user = await user_service.get_user_by_telegram_id(callback.from_user.id)
                 
                 if not user:
-                    await callback.answer("❌ Пользователь не найден", show_alert=True)
-                    return
+                    # Автоматически регистрируем пользователя
+                    telegram_user_data = {
+                        "id": callback.from_user.id,
+                        "first_name": callback.from_user.first_name,
+                        "last_name": callback.from_user.last_name,
+                        "username": callback.from_user.username,
+                        "language_code": callback.from_user.language_code,
+                        "is_premium": getattr(callback.from_user, 'is_premium', False),
+                        "is_bot": callback.from_user.is_bot,
+                    }
+                    
+                    user = await user_service.register_user(telegram_user_data)
+                    if not user:
+                        logger.error(f"Не удалось зарегистрировать пользователя {callback.from_user.id}")
+                        await callback.answer("❌ Произошла ошибка. Попробуйте команду /start", show_alert=True)
+                        return
             
             # 🚀 ИСПРАВЛЕНИЕ: Используем ту же логику что и в галерее
             async with get_avatar_service() as avatar_service:

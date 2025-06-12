@@ -1,5 +1,5 @@
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, FSInputFile
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.exceptions import TelegramBadRequest
@@ -8,6 +8,7 @@ from app.keyboards.main import get_main_menu
 from app.core.di import get_user_service
 from app.services.user import UserService
 from app.core.logger import get_logger
+from app.core.static_resources import StaticResources
 
 logger = get_logger(__name__)
 router = Router()
@@ -16,32 +17,92 @@ router = Router()
 async def start_command(message: Message, state: FSMContext):
     """
     Обработчик команды /start.
+    Автоматически регистрирует пользователя и показывает приветственное сообщение с фото Аиши.
     """
     await state.clear()
     
-    welcome_text = f"""👋 Привет, {message.from_user.first_name}!
+    try:
+        # Автоматическая регистрация пользователя
+        telegram_user_data = {
+            "id": message.from_user.id,
+            "first_name": message.from_user.first_name,
+            "last_name": message.from_user.last_name,
+            "username": message.from_user.username,
+            "language_code": message.from_user.language_code,
+            "is_premium": getattr(message.from_user, 'is_premium', False),
+            "is_bot": message.from_user.is_bot,
+        }
+        
+        async with get_user_service() as user_service:
+            user = await user_service.register_user(telegram_user_data)
+            if not user:
+                logger.error(f"Не удалось зарегистрировать пользователя {message.from_user.id}")
+                # Всё равно показываем приветственное сообщение
+        
+        # Приветственное сообщение с фото Аиши
+        welcome_text = f"""👋 Привет, {message.from_user.first_name}!
+
+🤖 Я Aisha - ваш персональный ИИ-помощник для создания уникальных изображений и контента!
+
+✨ **Что я умею:**
+
+🎭 **Создание аватаров**
+• Обучаю персональные модели на ваших фото
+• Создаю профессиональные портреты
+• Генерирую изображения в любом стиле
+
+🎨 **Генерация изображений** 
+• Реалистичные фотографии
+• Художественные стили
+• Креативные концепты
+
+🖼️ **Личная галерея**
+• Сохраняю всю историю генераций
+• Удобный просмотр и управление
+• Экспорт в высоком качестве
+
+🎤 **Транскрибация**
+• Аудио в текст на русском и английском
+• Высокая точность распознавания
+• Поддержка различных форматов
+
+💎 **Доверьтесь профессионалу!**
+Я создаю изображения студийного качества, которые поразят ваших друзей и коллег!
+
+🚀 **Готовы начать творить?** Выберите действие в меню ниже!"""
+
+        # Путь к аватару Аиши
+        avatar_path = StaticResources.get_aisha_avatar_path()
+        
+        if avatar_path.exists():
+            # Отправляем фото с подписью
+            photo = FSInputFile(avatar_path)
+            await message.answer_photo(
+                photo=photo,
+                caption=welcome_text,
+                reply_markup=get_main_menu(),
+                parse_mode="Markdown"
+            )
+        else:
+            # Если фото нет, отправляем только текст
+            await message.answer(
+                welcome_text,
+                reply_markup=get_main_menu(),
+                parse_mode="Markdown"
+            )
+            
+    except Exception as e:
+        # Fallback на упрощенное сообщение
+        logger.exception(f"Ошибка в команде /start: {e}")
+        try:
+            fallback_text = f"""👋 Привет, {message.from_user.first_name}! 
 
 🤖 Я Aisha Bot - ваш персональный помощник для создания изображений с ИИ.
 
-✨ **Что я умею:**
-• 🎨 Создавать изображения с вашими аватарами
-• 🎭 Обучать персональные аватары
-• 🖼️ Сохранять историю ваших генераций
-• 🎤 Транскрибировать аудио и видео
-
-🚀 Выберите действие в меню ниже!"""
-
-    try:
-        await message.answer(
-            welcome_text,
-            reply_markup=get_main_menu()
-        )
-    except Exception as e:
-        # Fallback на упрощенное сообщение
-        logger.exception(f"Ошибка стартового сообщения: {e}")
-        try:
+✨ Готовы создавать уникальные изображения? Выберите действие в меню!"""
+            
             await message.answer(
-                f"👋 Привет, {message.from_user.first_name}! Добро пожаловать в Aisha Bot!",
+                fallback_text,
                 reply_markup=get_main_menu()
             )
         except Exception as final_error:
@@ -480,4 +541,48 @@ async def back_to_main(call: CallbackQuery):
                 reply_markup=get_main_menu()
             )
         except Exception:
-            await call.answer("❌ Ошибка главного меню", show_alert=True) 
+            await call.answer("❌ Ошибка главного меню", show_alert=True)
+
+@router.callback_query(F.data == "main_generation")
+async def show_main_generation(call: CallbackQuery, state: FSMContext):
+    """
+    Обработчик кнопки "Генерация" - перенаправляет на модуль генерации
+    """
+    try:
+        # Импортируем обработчик генерации
+        from app.handlers.generation.main_handler import generation_handler
+        
+        # Очищаем состояние
+        await state.clear()
+        
+        # Вызываем метод обработчика генерации
+        await generation_handler.show_generation_menu(call)
+        
+        logger.info(f"Пользователь {call.from_user.id} перешел к генерации изображений")
+        
+    except Exception as e:
+        logger.exception(f"Ошибка при переходе к генерации: {e}")
+        await call.answer("❌ Произошла ошибка. Попробуйте позже.", show_alert=True)
+
+@router.callback_query(F.data == "styles_menu")
+async def show_styles_menu(call: CallbackQuery):
+    """
+    Обработчик кнопки "Стили" - заглушка с информацией о разработке
+    """
+    try:
+        await call.answer(
+            "🎭 Библиотека стилей\n\n"
+            "🚧 В разработке\n\n"
+            "📅 Скоро:\n"
+            "• Готовые стили\n"
+            "• Художественные фильтры\n"
+            "• Тематические коллекции\n\n"
+            "💡 Используйте 'Аватары' для создания изображений!", 
+            show_alert=True
+        )
+        
+        logger.info(f"Пользователь {call.from_user.id} попытался зайти в стили (заглушка)")
+        
+    except Exception as e:
+        logger.exception(f"Ошибка в обработчике стилей: {e}")
+        await call.answer("❌ Произошла ошибка", show_alert=True) 
