@@ -1,20 +1,49 @@
 """
-Обработчики главного меню бота
+🚨 LEGACY FILE - DEPRECATED 🚨
+
+Этот файл содержит 1258 строк и НАРУШАЕТ правило проекта "Один файл ≤ 500 строк".
+
+❌ ФАЙЛ ОТКЛЮЧЕН: Функциональность перенесена в модульную структуру:
+├── app/handlers/menu/main_handler.py     - Главное меню
+├── app/handlers/menu/creativity_handler.py - Творчество  
+├── app/handlers/menu/projects_handler.py - Мои работы
+├── app/handlers/menu/business_handler.py - Бизнес-ассистент
+├── app/handlers/menu/balance_handler.py  - Баланс
+├── app/handlers/menu/settings_handler.py - Настройки
+└── app/handlers/menu/help_handler.py     - Помощь
+
+✅ НОВЫЙ ИМПОРТ: from app.handlers.menu.router import menu_router
+
+TODO: УДАЛИТЬ ЭТОТ ФАЙЛ после полного тестирования новой структуры
+
+=============================================================================
+LEGACY CODE НИЖЕ - НЕ ИСПОЛЬЗУЕТСЯ
+=============================================================================
 """
-from typing import Optional, Dict, Any
+
+# LEGACY: Старый монолитный обработчик главного меню (1258 строк)
+# Заменен на модульную структуру app/handlers/menu/
 
 from aiogram import Router, F
-from aiogram.types import Message, CallbackQuery, FSInputFile, InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.filters import Command
+from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
+from aiogram.filters.command import Command
+from aiogram.types import FSInputFile
 from aiogram.exceptions import TelegramBadRequest
 
+# Новые импорты из модульной структуры
+from app.keyboards.menu.main import get_main_menu
+from app.keyboards.menu.creativity import get_creativity_menu, get_photo_menu, get_video_menu
+from app.keyboards.menu.projects import get_projects_menu, get_all_photos_menu, get_all_videos_menu
+from app.keyboards.menu.business import get_business_menu_v2 as get_business_menu
+
+# Оставляем LEGACY импорты из старого файла для совместимости
 from app.keyboards.main import (
-    get_main_menu, get_ai_creativity_menu, get_images_menu, get_video_menu, 
     get_news_menu, get_my_projects_menu, get_avatar_generation_menu, 
-    get_gallery_menu, get_business_menu, get_tasks_menu, get_add_to_chat_menu,
+    get_gallery_menu, get_tasks_menu, get_add_to_chat_menu,
     get_quick_action_menu
 )
+
 from app.core.di import get_user_service
 from app.services.user import UserService
 from app.core.logger import get_logger
@@ -617,8 +646,8 @@ async def show_styles_menu(call: CallbackQuery):
         logger.exception(f"Ошибка в обработчике стилей: {e}")
         await call.answer("❌ Произошла ошибка", show_alert=True)
 
-@router.callback_query(F.data == "ai_creativity_menu")
-async def show_ai_creativity_menu(call: CallbackQuery, state: FSMContext):
+@router.callback_query(F.data.in_(["ai_creativity_menu", "creativity_menu"]))
+async def show_creativity_menu(call: CallbackQuery, state: FSMContext):
     """
     🎨 **Творчество**
 
@@ -650,15 +679,15 @@ async def show_ai_creativity_menu(call: CallbackQuery, state: FSMContext):
         await base_handler.safe_edit_message(
             call,
             menu_text,
-            reply_markup=get_ai_creativity_menu(),
+            reply_markup=get_creativity_menu(),
             parse_mode="Markdown"
         )
     except Exception as e:
         logger.exception(f"Ошибка меню творчества: {e}")
         await call.answer("❌ Ошибка загрузки меню", show_alert=True)
 
-@router.callback_query(F.data == "images_menu")
-async def show_images_menu(call: CallbackQuery, state: FSMContext):
+@router.callback_query(F.data.in_(["images_menu", "photo_menu"]))
+async def show_photo_menu(call: CallbackQuery, state: FSMContext):
     """
     Показывает меню создания изображений.
     """
@@ -679,7 +708,7 @@ async def show_images_menu(call: CallbackQuery, state: FSMContext):
     try:
         await call.message.edit_text(
             menu_text,
-            reply_markup=get_images_menu(),
+            reply_markup=get_photo_menu(),
             parse_mode="Markdown"
         )
     except Exception as e:
@@ -852,8 +881,8 @@ async def show_news_menu(call: CallbackQuery, state: FSMContext):
         logger.exception(f"Ошибка меню новостей: {e}")
         await call.answer("❌ Ошибка загрузки меню", show_alert=True)
 
-@router.callback_query(F.data == "my_projects_menu")
-async def show_my_projects_menu(call: CallbackQuery, state: FSMContext):
+@router.callback_query(F.data.in_(["my_projects_menu", "projects_menu"]))
+async def show_projects_menu(call: CallbackQuery, state: FSMContext):
     """
     🎭 Моя галерея - просмотр созданного AI-контента
     """
@@ -876,7 +905,7 @@ async def show_my_projects_menu(call: CallbackQuery, state: FSMContext):
         await base_handler.safe_edit_message(
             call,
             menu_text,
-            reply_markup=get_my_projects_menu(),
+            reply_markup=get_projects_menu(),
             parse_mode="Markdown"
         )
     except Exception as e:

@@ -8,7 +8,7 @@ from aiogram.fsm.context import FSMContext
 
 from app.core.di import get_user_service, get_avatar_service
 from app.core.logger import get_logger
-from app.keyboards.main import get_main_menu
+from app.keyboards.menu.main import get_main_menu
 from app.handlers.state import AvatarStates
 
 logger = get_logger(__name__)

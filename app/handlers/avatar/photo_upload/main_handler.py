@@ -232,7 +232,7 @@ class PhotoUploadHandler:
                 else:
                     await callback.answer("❌ Данные аватара не найдены", show_alert=True)
                     # Возвращаем в главное меню
-                    from app.keyboards.main import get_main_menu
+                    from app.keyboards.menu.main import get_main_menu
                     keyboard = get_main_menu()
                     await callback.message.edit_text(
                         "❌ Данные аватара потеряны. Вернитесь в главное меню.",
@@ -292,7 +292,7 @@ class PhotoUploadHandler:
 Вы можете начать создание нового аватара в любое время."""
             
             # Возвращаем в главное меню
-            from app.keyboards.main import get_main_menu
+            from app.keyboards.menu.main import get_main_menu
             keyboard = get_main_menu()
             
             await callback.message.edit_text(

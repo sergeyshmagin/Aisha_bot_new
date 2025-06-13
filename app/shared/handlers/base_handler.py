@@ -360,7 +360,12 @@ class BaseHandler:
                 logger.warning(f"Не удалось удалить сообщение: {delete_error}")
             
             try:
-                await callback.message.answer(
+                # Используем bot для отправки сообщения в чат
+                # Получаем bot из callback
+                bot = callback.bot
+                
+                await bot.send_message(
+                    chat_id=callback.message.chat.id,
                     text=text,
                     reply_markup=reply_markup,
                     parse_mode=parse_mode

@@ -18,18 +18,34 @@ from aiohttp import web
 from app.core.config import settings
 from app.core.logger import get_logger
 from app.core.session import close_db_connection
-from app.handlers import (
-    main_router,
-    debug_router,
-    transcript_main_handler,
-    transcript_processing_handler,
-    imagen4_router,
-)
+from app.handlers import main_router
 from app.handlers.avatar import router as avatar_router
 from app.handlers.generation.main_handler import router as generation_router
-from app.handlers.gallery import main_router as gallery_main_router, filter_router as gallery_filter_router
 from app.handlers.profile.router import profile_router
 from app.handlers.fallback import fallback_router
+
+# Импорты для дополнительных роутеров
+try:
+    from app.handlers.main import router as debug_router
+except ImportError:
+    logger.warning("Debug router не найден, создаем заглушку")
+    from aiogram import Router
+    debug_router = Router(name="debug_stub")
+
+try:
+    from app.handlers.imagen4 import imagen4_router
+except ImportError:
+    logger.warning("Imagen4 router не найден, создаем заглушку") 
+    from aiogram import Router
+    imagen4_router = Router(name="imagen4_stub")
+
+try:
+    from app.handlers.gallery import main_router as gallery_main_router, filter_router as gallery_filter_router
+except ImportError:
+    logger.warning("Gallery routers не найдены, создаем заглушки")
+    from aiogram import Router
+    gallery_main_router = Router(name="gallery_main_stub")
+    gallery_filter_router = Router(name="gallery_filter_stub")
 from app.middlewares import register_all_middlewares
 
 # Настройка логирования
@@ -166,8 +182,12 @@ async def main():
 
     # Инициализация бота и диспетчера с явной конфигурацией timeout
     try:
-        # Создаем Bot стандартным способом - aiogram 3.x сам управляет сессией
-        bot_instance = Bot(token=settings.effective_telegram_token, parse_mode=ParseMode.HTML)
+        # Создаем Bot с новым подходом aiogram 3.x
+        from aiogram.client.default import DefaultBotProperties
+        bot_instance = Bot(
+            token=settings.effective_telegram_token,
+            default=DefaultBotProperties(parse_mode=ParseMode.HTML)
+        )
         logger.info(f"✅ Bot создан с токеном для окружения: {settings.ENVIRONMENT}")
         
     except Exception as e:
@@ -178,8 +198,21 @@ async def main():
     dp = Dispatcher(storage=storage)
 
     # Регистрация роутеров
-    dp.include_router(main_router)
+    dp.include_router(main_router)  # Уже содержит новую модульную структуру меню
     dp.include_router(debug_router)
+    
+    # ==================== LEGACY РОУТЕРЫ (ЗАКОММЕНТИРОВАНЫ) ====================
+    # TODO: Удалить после полного перехода на новую структуру
+    
+    # LEGACY: Старый профиль - заменен на app/handlers/menu/
+    # dp.include_router(profile_router)
+    
+    # LEGACY: Старая галерея - интегрирована в новое меню
+    # dp.include_router(gallery_main_router)
+    # dp.include_router(gallery_filter_router)
+    
+    # ==================== АКТИВНЫЕ РОУТЕРЫ ====================
+    # Эти роутеры остаются активными
     
     # Регистрация роутера аватаров
     dp.include_router(avatar_router)
@@ -191,24 +224,25 @@ async def main():
     dp.include_router(imagen4_router)
     
     # Регистрируем галерею
-    dp.include_router(gallery_main_router)
-    dp.include_router(gallery_filter_router)
+    # dp.include_router(gallery_main_router)
+    # dp.include_router(gallery_filter_router)
     
     # Регистрируем личный кабинет пользователя
-    dp.include_router(profile_router)
+    # dp.include_router(profile_router)
     
-    # Регистрация обработчиков транскриптов
-    await transcript_main_handler.register_handlers()
-    await transcript_processing_handler.register_handlers()
+    # ==================== TRANSCRIPT HANDLERS (ВРЕМЕННО ОТКЛЮЧЕНЫ) ====================
+    # TODO: Восстановить после рефакторинга или удалить если не нужны
+    # await transcript_main_handler.register_handlers()
+    # await transcript_processing_handler.register_handlers()
+    # dp.include_router(transcript_main_handler.router)
+    # dp.include_router(transcript_processing_handler.router)
     
-    dp.include_router(transcript_main_handler.router)
-    dp.include_router(transcript_processing_handler.router)
-    
-    # Регистрация роутеров платной транскрипции и промо-кодов
-    from app.handlers.transcript_processing.paid_transcription_handler import router as paid_transcription_router
-    from app.handlers.transcript_processing.promo_handler import router as promo_router
-    dp.include_router(paid_transcription_router)
-    dp.include_router(promo_router)
+    # ==================== TRANSCRIPT PROCESSING (ВРЕМЕННО ОТКЛЮЧЕНО) ====================
+    # TODO: Восстановить если эти модули нужны
+    # from app.handlers.transcript_processing.paid_transcription_handler import router as paid_transcription_router
+    # from app.handlers.transcript_processing.promo_handler import router as promo_router
+    # dp.include_router(paid_transcription_router)
+    # dp.include_router(promo_router)
 
     # Регистрируем fallback_router последним для ловли необработанных сообщений
     dp.include_router(fallback_router)

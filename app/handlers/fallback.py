@@ -1,7 +1,7 @@
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
-from app.keyboards.main import get_main_menu
+from app.keyboards.menu.main import get_main_menu
 from app.core.logger import get_logger
 
 logger = get_logger(__name__)
