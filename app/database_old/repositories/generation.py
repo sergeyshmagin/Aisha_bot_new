@@ -1,16 +1,14 @@
 """
-Репозиторий для работы с генерацией изображений
+Репозиторий для работы с генерациями изображений
 """
 from typing import List, Optional
 from uuid import UUID
 
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, desc, update, func
+from sqlalchemy import select, and_, or_, desc
 from sqlalchemy.orm import selectinload
 
-from app.database.models import ImageGeneration, GenerationStatus
+from app.database.models.generation import ImageGeneration, GenerationStatus
 from app.database.repositories.base import BaseRepository
-from app.utils.datetime_utils import now_utc
 
 
 class ImageGenerationRepository(BaseRepository[ImageGeneration]):
@@ -23,11 +21,10 @@ class ImageGenerationRepository(BaseRepository[ImageGeneration]):
         self, 
         user_id: UUID, 
         status: Optional[GenerationStatus] = None,
-        generation_type: Optional[str] = None,
         limit: int = 50,
         offset: int = 0
     ) -> List[ImageGeneration]:
-        """Получить генерации пользователя с возможностью фильтрации по типу"""
+        """Получить генерации пользователя"""
         query = (
             select(ImageGeneration)
             .options(selectinload(ImageGeneration.avatar))
@@ -36,9 +33,6 @@ class ImageGenerationRepository(BaseRepository[ImageGeneration]):
         
         if status:
             query = query.where(ImageGeneration.status == status)
-        
-        if generation_type:
-            query = query.where(ImageGeneration.generation_type == generation_type)
         
         query = query.order_by(desc(ImageGeneration.created_at))
         query = query.offset(offset).limit(limit)
@@ -49,15 +43,13 @@ class ImageGenerationRepository(BaseRepository[ImageGeneration]):
     async def get_completed_generations(
         self, 
         user_id: UUID,
-        generation_type: Optional[str] = None,
         limit: int = 50,
         offset: int = 0
     ) -> List[ImageGeneration]:
-        """Получить завершенные генерации пользователя с возможностью фильтрации по типу"""
+        """Получить завершенные генерации пользователя"""
         return await self.get_user_generations(
             user_id=user_id,
             status=GenerationStatus.COMPLETED,
-            generation_type=generation_type,
             limit=limit,
             offset=offset
         )
@@ -112,7 +104,8 @@ class ImageGenerationRepository(BaseRepository[ImageGeneration]):
             generation.error_message = error_message
         
         if status == GenerationStatus.COMPLETED:
-            generation.completed_at = now_utc().replace(tzinfo=None)
+            from datetime import datetime
+            generation.completed_at = datetime.utcnow()
         
         await self.session.commit()
         return generation
@@ -125,76 +118,4 @@ class ImageGenerationRepository(BaseRepository[ImageGeneration]):
         
         generation.is_favorite = not generation.is_favorite
         await self.session.commit()
-        return generation
-    
-    # 🆕 Методы для работы с типизацией генераций
-    
-    async def get_user_avatar_generations(
-        self, 
-        user_id: UUID,
-        limit: int = 50,
-        offset: int = 0
-    ) -> List[ImageGeneration]:
-        """Получить генерации с аватарами пользователя"""
-        return await self.get_completed_generations(
-            user_id=user_id,
-            generation_type="avatar",
-            limit=limit,
-            offset=offset
-        )
-    
-    async def get_user_imagen4_generations(
-        self, 
-        user_id: UUID,
-        limit: int = 50,
-        offset: int = 0
-    ) -> List[ImageGeneration]:
-        """Получить Imagen 4 генерации пользователя"""
-        return await self.get_completed_generations(
-            user_id=user_id,
-            generation_type="imagen4",
-            limit=limit,
-            offset=offset
-        )
-    
-    async def get_user_video_generations(
-        self, 
-        user_id: UUID,
-        limit: int = 50,
-        offset: int = 0
-    ) -> List[ImageGeneration]:
-        """Получить видео генерации пользователя"""
-        return await self.get_completed_generations(
-            user_id=user_id,
-            generation_type="video",
-            limit=limit,
-            offset=offset
-        )
-    
-    async def count_user_generations_by_type(
-        self, 
-        user_id: UUID
-    ) -> dict:
-        """Подсчитать количество генераций по типам"""
-        query = (
-            select(
-                func.count().label("total"),
-                func.sum(case((ImageGeneration.generation_type == "avatar", 1), else_=0)).label("avatar_count"),
-                func.sum(case((ImageGeneration.generation_type == "imagen4", 1), else_=0)).label("imagen4_count"),
-                func.sum(case((ImageGeneration.generation_type == "video", 1), else_=0)).label("video_count")
-            )
-            .where(
-                ImageGeneration.user_id == user_id,
-                ImageGeneration.status == GenerationStatus.COMPLETED
-            )
-        )
-        
-        result = await self.session.execute(query)
-        row = result.first()
-        
-        return {
-            "total": row.total or 0,
-            "avatar_count": row.avatar_count or 0,
-            "imagen4_count": row.imagen4_count or 0,
-            "video_count": row.video_count or 0
-        } 
+        return generation 
