@@ -9,7 +9,7 @@ from typing import List, Optional
 from uuid import UUID
 
 from app.core.logger import get_logger
-from app.database.models.generation import ImageGeneration
+from app.database.models import ImageGeneration
 from .ultra_fast_cache import ultra_gallery_cache
 
 logger = get_logger(__name__)

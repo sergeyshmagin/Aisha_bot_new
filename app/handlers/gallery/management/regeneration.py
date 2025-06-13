@@ -8,6 +8,7 @@ from aiogram.types import CallbackQuery
 
 from app.shared.handlers.base_handler import BaseHandler
 from app.core.logger import get_logger
+from app.database.models import ImageGeneration, GenerationStatus
 
 logger = get_logger(__name__)
 
@@ -48,7 +49,6 @@ class RegenerationManager(BaseHandler):
         """Получает оригинальное изображение из БД"""
         
         from app.core.database import get_session
-        from app.database.models.generation import ImageGeneration
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
         
@@ -225,7 +225,6 @@ class RegenerationManager(BaseHandler):
     async def _monitor_regeneration_progress(self, message, generation, prompt: str, avatar_name: str):
         """Мониторинг прогресса повторной генерации"""
         import asyncio
-        from app.database.models.generation import GenerationStatus
         from app.shared.utils.telegram_utils import format_prompt_for_display
         
         try:

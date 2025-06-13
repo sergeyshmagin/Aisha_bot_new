@@ -168,7 +168,7 @@ class PromptDisplayService(BaseHandler):
         """Получает генерацию по ID с загрузкой связанных объектов"""
         
         from app.core.database import get_session
-        from app.database.models.generation import ImageGeneration
+        from app.database.models import ImageGeneration
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
         

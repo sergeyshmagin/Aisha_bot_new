@@ -7,8 +7,7 @@ from uuid import UUID
 
 from app.core.database import get_session
 from app.core.logger import get_logger
-from app.database.models import Avatar
-from app.database.models.generation import ImageGeneration, GenerationStatus
+from app.database.models import Avatar, ImageGeneration, GenerationStatus
 
 logger = get_logger(__name__)
 

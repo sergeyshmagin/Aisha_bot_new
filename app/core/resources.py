@@ -41,6 +41,7 @@ class MinioConfig:
         "avatars": "aisha-v2-avatars",
         "photos": "aisha-v2-photos",
         "temp": "aisha-v2-temp",
+        "imagen4": "aisha-v2-imagen4",  # Отдельный bucket для Imagen4
     }
     
     FOLDERS = {
@@ -48,6 +49,7 @@ class MinioConfig:
         "processed": "processed/",
         "generated": "generated/",
         "temp": "temp/",
+        "imagen4": "imagen4/",  # Отдельная папка для Imagen4
     }
     
     # Время жизни временных файлов (в днях)
@@ -57,6 +59,7 @@ class MinioConfig:
     MAX_SIZES = {
         "photo": 5 * 1024 * 1024,  # 5MB
         "avatar": 10 * 1024 * 1024,  # 10MB
+        "imagen4": 15 * 1024 * 1024,  # 15MB для Imagen4
     }
 
 

@@ -2,13 +2,13 @@
 🎯 Основной сервис генерации изображений
 Рефакторенная версия с модульной архитектурой
 """
+import logging
 from typing import Dict, Any, Optional, List
 from uuid import UUID
 
-from app.core.config import settings
 from app.core.logger import get_logger
 
-from app.database.models.generation import ImageGeneration, GenerationStatus
+from app.database.models import ImageGeneration, GenerationStatus
 from .balance.balance_manager import BalanceManager
 from .config.generation_config import GenerationConfig
 from .storage.image_storage import ImageStorage
@@ -17,9 +17,11 @@ from .core.generation_processor import GenerationProcessor
 from .style_service import StyleService
 from .prompt_processing_service import PromptProcessingService
 
+
 logger = get_logger(__name__)
 
 # Экспорт константы для обратной совместимости
+from app.core.config import settings
 GENERATION_COST = settings.IMAGE_GENERATION_COST
 
 class ImageGenerationService:

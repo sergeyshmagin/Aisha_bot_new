@@ -6,8 +6,7 @@ from uuid import UUID
 
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-from app.database.models.generation import StyleCategory, StyleTemplate
-from app.database.models.user_settings import UserSettings
+from app.database.models import StyleCategory, StyleTemplate, UserSettings
 
 
 def build_generation_menu_keyboard(
@@ -28,11 +27,11 @@ def build_generation_menu_keyboard(
         # Два варианта создания промпта в одной строке
         buttons.append([
             InlineKeyboardButton(
-                text="📝 Свой промпт",
+                text="📝 Свой запрос",
                 callback_data=f"gen_custom:{avatar_id}"
             ),
             InlineKeyboardButton(
-                text="📸 Промпт по фото",
+                text="📸 По образцу",
                 callback_data=f"gen_photo:{avatar_id}"
             )
         ])
@@ -115,6 +114,49 @@ def build_aspect_ratio_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+def build_imagen4_aspect_ratio_keyboard() -> InlineKeyboardMarkup:
+    """Строит клавиатуру выбора соотношения сторон для Imagen 4"""
+    
+    # Получаем доступные варианты из модели
+    aspect_options = UserSettings.get_aspect_ratio_options()
+    
+    buttons = []
+    
+    # Первая строка: портрет и квадрат
+    buttons.append([
+        InlineKeyboardButton(
+            text=aspect_options["9:16"]["name"] + " (9:16)",
+            callback_data="imagen4_aspect_ratio:9:16"
+        ),
+        InlineKeyboardButton(
+            text=aspect_options["1:1"]["name"] + " (1:1)",
+            callback_data="imagen4_aspect_ratio:1:1"
+        )
+    ])
+    
+    # Вторая строка: альбом и A4
+    buttons.append([
+        InlineKeyboardButton(
+            text=aspect_options["16:9"]["name"] + " (16:9)",
+            callback_data="imagen4_aspect_ratio:16:9"
+        ),
+        InlineKeyboardButton(
+            text=aspect_options["3:4"]["name"] + " (3:4)",
+            callback_data="imagen4_aspect_ratio:3:4"
+        )
+    ])
+    
+    # Кнопка "Назад" - возврат к меню изображений
+    buttons.append([
+        InlineKeyboardButton(
+            text="◀️ Назад",
+            callback_data="images_menu"
+        )
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
 def build_generation_result_keyboard(
     generation_id: UUID,
     show_full_prompt: bool = True
@@ -126,8 +168,8 @@ def build_generation_result_keyboard(
     # Основные действия
     buttons.append([
         InlineKeyboardButton(
-            text="🔄 Генерировать еще",
-            callback_data="generation_menu"
+            text="🔄 Еще раз",
+            callback_data=f"regenerate:{generation_id}"
         ),
         InlineKeyboardButton(
             text="🖼️ В галерею",
@@ -178,6 +220,72 @@ def build_custom_prompt_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text="🔙 Назад",
                 callback_data="generation_menu"
+            )
+        ]
+    ]
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def build_imagen4_menu_keyboard(
+    user_balance: float,
+    generation_cost: float
+) -> InlineKeyboardMarkup:
+    """Строит клавиатуру главного меню Imagen 4"""
+    
+    buttons = []
+    
+    # Проверяем, достаточно ли баланса
+    has_balance = user_balance >= generation_cost
+    
+    if has_balance:
+        # Кнопка создания изображения по описанию
+        buttons.append([
+            InlineKeyboardButton(
+                text="📝 По описанию",
+                callback_data="imagen4_prompt"
+            )
+        ])
+    else:
+        # Недостаточно баланса
+        buttons.append([
+            InlineKeyboardButton(
+                text="💰 Пополнить баланс",
+                callback_data="balance_topup"
+            )
+        ])
+    
+    # Моя галерея
+    buttons.append([
+        InlineKeyboardButton(
+            text="🖼️ Моя галерея",
+            callback_data="my_gallery"
+        )
+    ])
+    
+    # Назад к меню изображений
+    buttons.append([
+        InlineKeyboardButton(
+            text="◀️ Назад",
+            callback_data="images_menu"
+        ),
+        InlineKeyboardButton(
+            text="🏠 Главное меню",
+            callback_data="main_menu"
+        )
+    ])
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def build_imagen4_prompt_keyboard() -> InlineKeyboardMarkup:
+    """Строит клавиатуру для ввода промпта Imagen 4"""
+    
+    buttons = [
+        [
+            InlineKeyboardButton(
+                text="◀️ Назад",
+                callback_data="images_menu"
             )
         ]
     ]

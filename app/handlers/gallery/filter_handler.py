@@ -24,6 +24,73 @@ router = Router()
 gallery_viewer = GalleryViewer()
 gallery_manager = GalleryManager()
 
+
+class GalleryFilterHandler:
+    """Обработчик фильтров галереи"""
+    
+    def __init__(self):
+        self.gallery_viewer = GalleryViewer()
+        self.gallery_manager = GalleryManager()
+    
+    async def show_gallery_with_type_filter(self, callback: CallbackQuery, state: FSMContext, generation_type: str):
+        """Показывает галерею с фильтром по типу"""
+        try:
+            # Сохраняем фильтр в состоянии
+            await state.update_data(generation_type=generation_type)
+            
+            # Показываем галерею с фильтром
+            await self.gallery_viewer.show_gallery_main(callback, state)
+            
+        except Exception as e:
+            logger.exception(f"Ошибка при показе галереи с фильтром {generation_type}: {e}")
+            await callback.answer("❌ Произошла ошибка при загрузке галереи", show_alert=True)
+    
+    async def show_date_filter_menu(self, callback: CallbackQuery, state: FSMContext):
+        """Показывает меню фильтрации по дате"""
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="📅 Сегодня", callback_data="gallery_date:today"),
+                InlineKeyboardButton(text="📅 Вчера", callback_data="gallery_date:yesterday")
+            ],
+            [
+                InlineKeyboardButton(text="📅 За неделю", callback_data="gallery_date:week"),
+                InlineKeyboardButton(text="📅 За месяц", callback_data="gallery_date:month")
+            ],
+            [
+                InlineKeyboardButton(text="📅 Свой период", callback_data="gallery_date:custom"),
+                InlineKeyboardButton(text="◀️ Назад", callback_data="gallery_all")
+            ]
+        ])
+        
+        await callback.message.edit_text(
+            "📅 **Фильтр по дате**\n\nВыберите период для просмотра изображений:",
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+    
+    async def show_filter_menu(self, callback: CallbackQuery, state: FSMContext):
+        """Показывает главное меню фильтров"""
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🎭 По типу", callback_data="gallery_filter_type"),
+                InlineKeyboardButton(text="📅 По дате", callback_data="gallery_filter_date")
+            ],
+            [
+                InlineKeyboardButton(text="🔄 Сбросить", callback_data="gallery_reset_filters"),
+                InlineKeyboardButton(text="◀️ Назад", callback_data="gallery_all")
+            ]
+        ])
+        
+        await callback.message.edit_text(
+            "🔍 **Фильтры галереи**\n\nВыберите тип фильтрации:",
+            reply_markup=keyboard,
+            parse_mode="Markdown"
+        )
+
+
+# Создаем экземпляр обработчика
+gallery_filter_handler = GalleryFilterHandler()
+
 # ==================== ФИЛЬТРЫ ПО ТИПУ ====================
 
 @router.callback_query(F.data == "gallery_filter_type")
@@ -35,7 +102,7 @@ async def show_type_filter_menu(callback: CallbackQuery, state: FSMContext):
             InlineKeyboardButton(text="🎨 Изображения", callback_data="gallery_type:imagen4")
         ],
         [
-            InlineKeyboardButton(text="🔙 Назад", callback_data="my_gallery")
+            InlineKeyboardButton(text="◀️ Назад", callback_data="gallery_all")
         ]
     ])
     
@@ -55,7 +122,7 @@ async def handle_type_filter(callback: CallbackQuery, state: FSMContext):
         await state.update_data(generation_type=generation_type)
         
         # Показываем галерею с фильтром
-        await gallery_viewer.show_gallery_main(callback, state)
+        await gallery_filter_handler.show_gallery_with_type_filter(callback, state, generation_type)
         
     except Exception as e:
         logger.exception(f"Ошибка при фильтрации по типу: {e}")
@@ -66,25 +133,7 @@ async def handle_type_filter(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "gallery_filter_date")
 async def show_date_filter_menu(callback: CallbackQuery, state: FSMContext):
     """Показывает меню фильтрации по дате"""
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [
-            InlineKeyboardButton(text="📅 Сегодня", callback_data="gallery_date:today"),
-            InlineKeyboardButton(text="📅 Вчера", callback_data="gallery_date:yesterday")
-        ],
-        [
-            InlineKeyboardButton(text="📅 За неделю", callback_data="gallery_date:week"),
-            InlineKeyboardButton(text="📅 За месяц", callback_data="gallery_date:month")
-        ],
-        [
-            InlineKeyboardButton(text="📅 Свой период", callback_data="gallery_date:custom"),
-            InlineKeyboardButton(text="🔙 Назад", callback_data="my_gallery")
-        ]
-    ])
-    
-    await callback.message.edit_text(
-        "Выберите период:",
-        reply_markup=keyboard
-    )
+    await gallery_filter_handler.show_date_filter_menu(callback, state)
 
 @router.callback_query(F.data.startswith("gallery_date:"))
 async def handle_date_filter(callback: CallbackQuery, state: FSMContext):
@@ -130,7 +179,7 @@ async def handle_date_filter(callback: CallbackQuery, state: FSMContext):
             end_date=end_date.isoformat()
         )
         
-        # Показываем галерею с фильтром
+        # Показываем галерею без фильтров
         await gallery_viewer.show_gallery_main(callback, state)
         
     except Exception as e:
@@ -166,7 +215,7 @@ async def handle_custom_date_input(callback: CallbackQuery, state: FSMContext):
                 end_date=end_date.isoformat()
             )
             
-            # Показываем галерею с фильтром
+            # Показываем галерею без фильтров
             await gallery_viewer.show_gallery_main(callback, state)
             
         except ValueError:

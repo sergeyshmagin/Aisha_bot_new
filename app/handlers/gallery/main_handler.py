@@ -12,6 +12,7 @@ from app.core.logger import get_logger
 from .gallery_viewer import GalleryViewer
 from .gallery_manager import GalleryManager
 from .keyboards import build_search_keyboard
+from app.database.models import ImageGeneration
 
 logger = get_logger(__name__)
 router = Router()
@@ -221,7 +222,6 @@ async def handle_generation_status(callback: CallbackQuery):
         # Получаем генерацию из БД
         from uuid import UUID
         from app.core.database import get_session
-        from app.database.models.generation import ImageGeneration
         from sqlalchemy import select
         from sqlalchemy.orm import selectinload
         

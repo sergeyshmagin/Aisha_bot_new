@@ -2,9 +2,11 @@
 Модуль форматирования карточек изображений
 Быстрое и безопасное форматирование текста
 """
-from typing import List
+from typing import List, Optional
+from datetime import datetime
 
-from app.database.models.generation import ImageGeneration
+from app.database.models import ImageGeneration
+from app.core.logger import get_logger
 
 
 class CardFormatter:

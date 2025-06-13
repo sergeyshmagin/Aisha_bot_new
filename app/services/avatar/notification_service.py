@@ -154,7 +154,7 @@ class AvatarNotificationService:
             
         finally:
             if redis_client:
-                await redis_client.close()
+                await redis_client.aclose()
     
     async def _mark_notification_sent(self, avatar_id: UUID) -> None:
         """
@@ -185,7 +185,7 @@ class AvatarNotificationService:
             
         finally:
             if redis_client:
-                await redis_client.close()
+                await redis_client.aclose()
     
     async def send_completion_notification_by_id(self, avatar_id: UUID) -> bool:
         """

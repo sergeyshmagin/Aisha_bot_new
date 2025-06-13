@@ -68,7 +68,7 @@ async def check_redis_connection() -> bool:
         return False
     finally:
         if redis_client:
-            await redis_client.close()
+            await redis_client.aclose()
             logger.info("Соединение с Redis закрыто.")
 
 async def main():

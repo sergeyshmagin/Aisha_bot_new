@@ -10,6 +10,7 @@ from aiogram.types import CallbackQuery
 from app.shared.handlers.base_handler import BaseHandler
 from app.core.logger import get_logger
 from ..cache import ultra_gallery_cache
+from app.database.models import ImageGeneration
 
 logger = get_logger(__name__)
 
@@ -133,7 +134,6 @@ class DeletionManager(BaseHandler):
         """Получает генерацию из БД"""
         
         from app.core.database import get_session
-        from app.database.models.generation import ImageGeneration
         from sqlalchemy import select
         
         async with get_session() as session:
@@ -179,7 +179,6 @@ class DeletionManager(BaseHandler):
         """Удаляет изображение из БД"""
         
         from app.core.database import get_session
-        from app.database.models.generation import ImageGeneration
         from sqlalchemy import select, delete
         
         async with get_session() as session:

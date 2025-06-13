@@ -137,7 +137,6 @@ $RECYCLE.BIN/
 GFPGAN*.pth
 weights/
 *.pth 
-models/
 distr/
 dist/
 distr/GFPGAN/

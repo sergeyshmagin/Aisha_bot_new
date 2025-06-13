@@ -59,7 +59,7 @@ class AvatarRedisService:
     async def close(self):
         """Закрывает подключение к Redis"""
         if self._redis:
-            await self._redis.close()
+            await self._redis.aclose()
             self._redis = None
     
     # ==================== БУФЕРИЗАЦИЯ ФОТОГРАФИЙ ====================

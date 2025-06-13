@@ -12,7 +12,7 @@ def get_avatar_main_menu(avatars_count: int = 0) -> InlineKeyboardMarkup:
     buttons = [
         [
             InlineKeyboardButton(
-                text="🎭 Создать портретный аватар",
+                text="👤 Создать образ",
                 callback_data="create_avatar"
             )
         ]
@@ -21,7 +21,7 @@ def get_avatar_main_menu(avatars_count: int = 0) -> InlineKeyboardMarkup:
     if avatars_count > 0:
         buttons.append([
             InlineKeyboardButton(
-                text=f"📁 Мои аватары ({avatars_count})",
+                text=f"📂 Мои образы ({avatars_count})",
                 callback_data="avatar_gallery"
             )
         ])
@@ -29,7 +29,7 @@ def get_avatar_main_menu(avatars_count: int = 0) -> InlineKeyboardMarkup:
     buttons.extend([
         [
             InlineKeyboardButton(
-                text="ℹ️ Как работают аватары?",
+                text="❓ Как работает?",
                 callback_data="avatar_help"
             )
         ],
@@ -60,13 +60,13 @@ def get_avatar_gender_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                text="💡 Зачем выбирать пол?",
+                text="💡 Зачем выбирать?",
                 callback_data="explain_gender_choice"
             )
         ],
         [
             InlineKeyboardButton(
-                text="◀️ Главное меню",
+                text="◀️ Назад",
                 callback_data="back_to_avatar_menu"
             ),
             InlineKeyboardButton(
@@ -139,7 +139,7 @@ def get_avatar_actions_keyboard(avatar_id: str, status: AvatarStatus) -> InlineK
     if status == "completed":
         buttons.append([
             InlineKeyboardButton(
-                text="🎨 Генерировать изображение",
+                text="📷 Сделать фото",
                 callback_data=f"generate_image_{avatar_id}"
             )
         ])

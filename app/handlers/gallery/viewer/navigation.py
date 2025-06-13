@@ -61,7 +61,9 @@ class NavigationHandler(BaseHandler):
             # ⚡ ПОКАЗЫВАЕМ новое изображение быстро
             from .main import GalleryViewer
             gallery_viewer = GalleryViewer()
-            await gallery_viewer.send_image_card_ultra_fast(callback, images, new_idx, user_id)
+            # Передаем пустые фильтры для навигации
+            filters = {'generation_type': None, 'start_date': None, 'end_date': None}
+            await gallery_viewer.send_image_card_ultra_fast(callback, images, new_idx, user_id, filters)
             
             logger.debug(f"⚡ Navigation: {current_idx} → {new_idx}")
             
@@ -131,7 +133,9 @@ class NavigationHandler(BaseHandler):
             # Fallback на прямую загрузку из БД
             from .main import GalleryViewer
             gallery_viewer = GalleryViewer()
-            images = await gallery_viewer.get_user_completed_images_ultra_fast(user_id)
+            # Передаем пустые фильтры для навигации
+            filters = {'generation_type': None, 'start_date': None, 'end_date': None}
+            images = await gallery_viewer.get_user_completed_images_ultra_fast(user_id, filters)
             
             if not images:
                 await callback.answer("❌ Изображения не найдены", show_alert=True)

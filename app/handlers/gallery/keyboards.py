@@ -9,18 +9,21 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
 def build_empty_gallery_keyboard() -> InlineKeyboardMarkup:
-    """Клавиатура для пустой галереи"""
+    """Клавиатура для пустой галереи с вариантами генерации"""
     
     buttons = [
         [
-            InlineKeyboardButton(text="🎨 Генерация", callback_data="main_generation")
+            InlineKeyboardButton(text="📷 Фото со мной", callback_data="avatar_generation_menu")
         ],
         [
-            InlineKeyboardButton(text="👤 Аватары", callback_data="avatar_menu"),
-            InlineKeyboardButton(text="🎭 Стили", callback_data="styles_menu")
+            InlineKeyboardButton(text="📝 По описанию", callback_data="imagen4_generation")
         ],
         [
-            InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")
+            InlineKeyboardButton(text="🎬 Видео", callback_data="video_generation_stub")
+        ],
+        [
+            InlineKeyboardButton(text="◀️ Назад", callback_data="my_projects_menu"),
+            InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")
         ]
     ]
     
@@ -31,7 +34,8 @@ def build_gallery_keyboard(
     img_idx: int, 
     total_images: int, 
     generation_id: str,
-    is_favorite: bool = False
+    is_favorite: bool = False,
+    back_callback: str = "my_projects_menu"
 ) -> InlineKeyboardMarkup:
     """Основная клавиатура галереи с полной функциональностью"""
     
@@ -79,7 +83,8 @@ def build_gallery_keyboard(
     
     # 🔙 БЛОК 5: Навигация назад
     back_row = [
-        InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")
+        InlineKeyboardButton(text="◀️ Назад", callback_data=back_callback),
+        InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")
     ]
     buttons.append(back_row)
     
@@ -126,11 +131,9 @@ def build_gallery_stats_keyboard() -> InlineKeyboardMarkup:
     buttons = [
         [
             InlineKeyboardButton(
-                text="🔙 К галерее",
-                callback_data="my_gallery"
-            )
-        ],
-        [
+                text="◀️ Назад",
+                callback_data="gallery_all"
+            ),
             InlineKeyboardButton(
                 text="🏠 Главное меню",
                 callback_data="main_menu"
@@ -151,8 +154,8 @@ def build_delete_confirmation_keyboard(generation_id: str) -> InlineKeyboardMark
                 callback_data=f"gallery_delete_confirm:{generation_id}"
             ),
             InlineKeyboardButton(
-                text="🔙 Отмена",
-                callback_data="my_gallery"
+                text="◀️ Отмена",
+                callback_data="gallery_all"
             )
         ]
     ]
@@ -186,8 +189,12 @@ def build_search_keyboard() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                text="🔙 К галерее",
-                callback_data="my_gallery"
+                text="◀️ Назад",
+                callback_data="gallery_all"
+            ),
+            InlineKeyboardButton(
+                text="🏠 Главное меню",
+                callback_data="main_menu"
             )
         ]
     ]

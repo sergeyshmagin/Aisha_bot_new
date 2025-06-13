@@ -156,7 +156,7 @@ class GalleryStatsManager(BaseHandler):
             active_avatars = 0
             try:
                 from app.core.database import get_session
-                from app.database.models.avatar import Avatar
+                from app.database.models import Avatar
                 from sqlalchemy import select
                 
                 async with get_session() as session:

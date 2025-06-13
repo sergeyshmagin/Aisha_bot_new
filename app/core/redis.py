@@ -38,7 +38,7 @@ async def acquire_lock(key: str, expire: int = 60) -> Optional[str]:
             return token
         return None
     finally:
-        await redis_client.close()
+        await redis_client.aclose()
 
 async def release_lock(key: str, token: str) -> bool:
     """
@@ -53,7 +53,7 @@ async def release_lock(key: str, token: str) -> bool:
             return True
         return False
     finally:
-        await redis_client.close()
+        await redis_client.aclose()
 
 async def refresh_lock(key: str, token: str, expire: int = 60) -> bool:
     """
@@ -68,4 +68,4 @@ async def refresh_lock(key: str, token: str, expire: int = 60) -> bool:
             return True
         return False
     finally:
-        await redis_client.close()
+        await redis_client.aclose()

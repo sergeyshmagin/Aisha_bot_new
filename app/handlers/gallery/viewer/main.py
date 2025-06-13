@@ -13,12 +13,14 @@ from aiogram.exceptions import TelegramBadRequest
 from app.shared.handlers.base_handler import BaseHandler
 from app.shared.decorators.auth_decorators import require_user
 from app.core.logger import get_logger
-from app.database.models.generation import ImageGeneration, GenerationStatus
+from app.core.di import get_user_service
+from app.database.models import ImageGeneration, GenerationStatus
+from app.handlers.gallery.viewer.card_formatter import CardFormatter
+from app.services.gallery_service import GalleryService
 
 from ..cache import ultra_gallery_cache, ImageCacheManager
 from .navigation import NavigationHandler
 from .image_loader import ImageLoader
-from .card_formatter import CardFormatter
 from ..keyboards import build_empty_gallery_keyboard
 
 logger = get_logger(__name__)
@@ -57,8 +59,17 @@ class GalleryViewer(BaseHandler):
         """🚀 БЫСТРЫЙ показ галереи с надежным кэшированием"""
         
         try:
+            # Получаем фильтры из состояния
+            state_data = await state.get_data()
+            filters = {
+                'generation_type': state_data.get('generation_type'),
+                'start_date': state_data.get('start_date'),
+                'end_date': state_data.get('end_date')
+            }
+            
             # 🔥 Очищаем состояние БЕЗ ожидания (fire-and-forget)
-            asyncio.create_task(self.safe_clear_state(state))
+            # НО сохраняем фильтры
+            asyncio.create_task(self.safe_clear_state_preserve_filters(state, filters))
             
             # 🎯 СИНХРОННО сохраняем сессионные данные (чтобы они точно были при навигации)
             await ultra_gallery_cache.set_session_data(user.id, {
@@ -71,11 +82,11 @@ class GalleryViewer(BaseHandler):
             # 🎯 Кэшируем пользователя асинхронно
             asyncio.create_task(ultra_gallery_cache.cache_user_data(user.id, user))
             
-            # 🔥 ПРЯМОЕ получение изображений (БЕЗ generation_service)
-            images = await self.get_user_completed_images_ultra_fast(user.id)
+            # 🔥 ПРЯМОЕ получение изображений с фильтрами
+            images = await self.get_user_completed_images_ultra_fast(user.id, filters)
             
             if not images:
-                await self._show_empty_gallery_message(callback)
+                await self._show_empty_gallery_message(callback, filters)
                 return
             
             # Определяем стартовый индекс БЕЗ лишних операций
@@ -93,9 +104,9 @@ class GalleryViewer(BaseHandler):
             asyncio.create_task(self.image_cache_manager.prefetch_adjacent_images(images, img_idx))
             
             # ⚡ ПОКАЗЫВАЕМ изображение МАКСИМАЛЬНО БЫСТРО
-            await self.send_image_card_ultra_fast(callback, images, img_idx, user.id)
+            await self.send_image_card_ultra_fast(callback, images, img_idx, user.id, filters)
             
-            logger.info(f"⚡ Gallery shown: user {user.telegram_id}, {len(images)} images, index {img_idx}")
+            logger.info(f"⚡ Gallery shown: user {user.telegram_id}, {len(images)} images, index {img_idx}, filters: {filters}")
             
         except Exception as e:
             logger.exception(f"❌ Ошибка показа галереи: {e}")
@@ -110,7 +121,8 @@ class GalleryViewer(BaseHandler):
         callback: CallbackQuery, 
         images: List[ImageGeneration], 
         img_idx: int,
-        user_id: UUID
+        user_id: UUID,
+        filters: dict
     ):
         """⚡ МОЛНИЕНОСНАЯ отправка карточки (МАКСИМАЛЬНАЯ СКОРОСТЬ)"""
         
@@ -147,11 +159,16 @@ class GalleryViewer(BaseHandler):
         if generation.result_urls:
             asyncio.create_task(self._async_load_and_update_image(callback, generation.result_urls[0], text, keyboard))
     
-    async def get_user_completed_images_ultra_fast(self, user_id: UUID) -> List[ImageGeneration]:
-        """🚀 УЛЬТРАБЫСТРОЕ получение изображений (БЕЗ создания FAL клиента)"""
+    async def get_user_completed_images_ultra_fast(self, user_id: UUID, filters: dict) -> List[ImageGeneration]:
+        """🚀 УЛЬТРАБЫСТРОЕ получение изображений с фильтрами"""
         
         try:
-            # 🎯 СНАЧАЛА проверяем кэш
+            # 🎯 Для фильтрованных запросов НЕ используем кэш
+            if any(filters.values()):
+                logger.debug(f"🔍 Filtered query for user {user_id}, filters: {filters}")
+                return await self._get_filtered_images_from_db(user_id, filters)
+            
+            # 🎯 СНАЧАЛА проверяем кэш (только для нефильтрованных запросов)
             cached_images = await ultra_gallery_cache.get_user_images(user_id)
             if cached_images:
                 logger.debug(f"🚀 ULTRA FAST images from cache: {len(cached_images)} images")
@@ -187,7 +204,7 @@ class GalleryViewer(BaseHandler):
                     if (gen.result_urls and len(gen.result_urls) > 0)
                 ]
             
-            # 🎯 КЭШИРУЕМ на 15 минут
+            # 🎯 КЭШИРУЕМ на 15 минут (только нефильтрованные)
             await ultra_gallery_cache.set_user_images(user_id, completed_images)
             
             logger.debug(f"🚀 ULTRA FAST direct DB load: {len(completed_images)} images")
@@ -196,6 +213,131 @@ class GalleryViewer(BaseHandler):
         except Exception as e:
             logger.exception(f"❌ Ошибка получения изображений: {e}")
             return []
+    
+    async def _get_filtered_images_from_db(self, user_id: UUID, filters: dict) -> List[ImageGeneration]:
+        """Получает отфильтрованные изображения из БД с кешированием"""
+        from app.core.database import get_session
+        from sqlalchemy import select, and_
+        from sqlalchemy.orm import selectinload
+        from datetime import datetime
+        import json
+        import hashlib
+        
+        try:
+            # Создаем ключ кеша на основе фильтров
+            filter_hash = hashlib.md5(json.dumps(filters, sort_keys=True).encode()).hexdigest()
+            cache_key = f"gallery:filtered:{user_id}:{filter_hash}"
+            
+            # Проверяем кеш Redis
+            try:
+                from app.core.di import get_redis
+                redis = await get_redis()
+                cached_data = await redis.get(cache_key)
+                
+                if cached_data:
+                    logger.debug(f"🚀 Filtered images from Redis cache: {cache_key}")
+                    # Десериализуем ID генераций
+                    generation_ids = json.loads(cached_data)
+                    
+                    # Получаем объекты из БД по ID
+                    if generation_ids:
+                        async with get_session() as session:
+                            stmt = (
+                                select(ImageGeneration)
+                                .options(selectinload(ImageGeneration.avatar))
+                                .where(ImageGeneration.id.in_(generation_ids))
+                                .order_by(ImageGeneration.created_at.desc())
+                            )
+                            result = await session.execute(stmt)
+                            generations = result.scalars().all()
+                            
+                            # Фильтруем завершенные с результатами
+                            completed_images = [
+                                gen for gen in generations
+                                if (gen.result_urls and len(gen.result_urls) > 0)
+                            ]
+                            
+                            logger.debug(f"🚀 Loaded {len(completed_images)} cached filtered images")
+                            return completed_images
+                    
+                    return []
+                    
+            except Exception as cache_error:
+                logger.warning(f"Redis cache error: {cache_error}")
+                # Продолжаем без кеша
+            
+            # Выполняем запрос к БД
+            async with get_session() as session:
+                # Базовый запрос
+                stmt = (
+                    select(ImageGeneration)
+                    .options(selectinload(ImageGeneration.avatar))
+                    .where(
+                        ImageGeneration.user_id == user_id,
+                        ImageGeneration.status == GenerationStatus.COMPLETED,
+                        ImageGeneration.result_urls.isnot(None)
+                    )
+                )
+                
+                # Фильтр по типу генерации
+                if filters.get('generation_type'):
+                    generation_type = filters['generation_type']
+                    if generation_type == 'avatar':
+                        # Изображения с аватарами
+                        stmt = stmt.where(ImageGeneration.avatar_id.isnot(None))
+                    elif generation_type == 'imagen4':
+                        # Изображения Imagen4 (без аватаров)
+                        stmt = stmt.where(ImageGeneration.avatar_id.is_(None))
+                    elif generation_type == 'video':
+                        # Видео (пока заглушка, можно добавить поле video_url)
+                        stmt = stmt.where(ImageGeneration.id == None)  # Пустой результат
+                
+                # Фильтр по дате
+                if filters.get('start_date') and filters.get('end_date'):
+                    start_date = datetime.fromisoformat(filters['start_date'])
+                    end_date = datetime.fromisoformat(filters['end_date'])
+                    stmt = stmt.where(
+                        and_(
+                            ImageGeneration.created_at >= start_date,
+                            ImageGeneration.created_at <= end_date
+                        )
+                    )
+                
+                stmt = stmt.order_by(ImageGeneration.created_at.desc()).limit(150)
+                
+                result = await session.execute(stmt)
+                generations = result.scalars().all()
+                
+                # Фильтруем завершенные с результатами
+                completed_images = [
+                    gen for gen in generations
+                    if (gen.result_urls and len(gen.result_urls) > 0)
+                ]
+                
+                # Кешируем результат в Redis на 5 минут
+                try:
+                    generation_ids = [str(gen.id) for gen in completed_images]
+                    await redis.setex(cache_key, 300, json.dumps(generation_ids))
+                    logger.debug(f"🔄 Cached filtered results: {cache_key}")
+                except Exception as cache_error:
+                    logger.warning(f"Failed to cache filtered results: {cache_error}")
+                
+                logger.debug(f"🔍 Filtered query result: {len(completed_images)} images")
+                return completed_images
+                
+        except Exception as e:
+            logger.exception(f"❌ Ошибка фильтрованного запроса: {e}")
+            return []
+    
+    async def safe_clear_state_preserve_filters(self, state: FSMContext, filters: dict):
+        """Безопасно очищает состояние, сохраняя фильтры"""
+        try:
+            await state.clear()
+            # Восстанавливаем фильтры
+            if any(filters.values()):
+                await state.update_data(**filters)
+        except Exception as e:
+            logger.exception(f"Ошибка очистки состояния: {e}")
     
     def _build_optimized_gallery_keyboard_v2(
         self,
@@ -248,9 +390,10 @@ class GalleryViewer(BaseHandler):
         
         buttons.append(action_row)
         
-        # 🔙 БЛОК 5: Навигация назад
+        # 🔙 БЛОК 5: Навигация назад - ОБНОВЛЕНО
         back_row = [
-            InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")
+            InlineKeyboardButton(text="◀️ Назад", callback_data="gallery_all"),
+            InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")
         ]
         buttons.append(back_row)
         
@@ -432,20 +575,34 @@ class GalleryViewer(BaseHandler):
             logger.debug(f"Ошибка асинхронной загрузки изображения: {e}")
             # Игнорируем ошибки фоновой загрузки чтобы не нарушать UX
     
-    async def _show_empty_gallery_message(self, callback: CallbackQuery):
+    async def _show_empty_gallery_message(self, callback: CallbackQuery, filters: dict):
         """Показывает сообщение о пустой галерее"""
         
-        text = """🖼️ *Ваша галерея пуста*
+        text = f"""🖼️ **Ваша галерея пуста**
 
-🎨 *Создайте первое изображение!*
+🎨 **Создайте первое изображение!**
 
-💡 *Что можно делать:*
-• Генерировать изображения по своим промптам
-• Создавать изображения по референсным фото
-• Использовать готовые шаблоны стилей
-• Экспериментировать с разными форматами
+**Доступные варианты генерации:**
 
-🚀 *Начните прямо сейчас!*"""
+📷 **Фото со мной** - создавайте фото с вашим лицом
+   • Используйте обученную на ваших фото модель
+   • Генерируйте портреты в любых стилях
+   • Экспериментируйте с образами и локациями
+
+📝 **По описанию** - создавайте любые изображения
+   • Опишите что хотите увидеть
+   • Используйте мощь Imagen 4 от Google
+   • Создавайте арт, иллюстрации, концепты
+
+🎬 **Видео** - оживляйте изображения (скоро)
+   • Анимация лиц и персонажей
+   • Создание коротких роликов
+   • Профессиональные видео-эффекты
+
+🚀 **Начните прямо сейчас!**
+
+🔍 Фильтры: {filters.get('generation_type', 'Все типы')}
+📅 Период: {filters.get('start_date', 'Не указан')} - {filters.get('end_date', 'Не указан')}"""
         
         keyboard = build_empty_gallery_keyboard()
         

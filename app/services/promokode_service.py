@@ -1,13 +1,14 @@
 """
 Сервис для работы с промокодами
 """
+import logging
 from typing import Optional, Tuple, Dict, Any, List
 from uuid import UUID
 from datetime import datetime, timezone
 
 from app.core.logger import get_logger
 from app.database.repositories.promokode import PromokodeRepository, PromokodeUsageRepository
-from app.database.models.promokode import PromokodeType
+from app.database.models import PromokodeType
 from app.services.base import BaseService
 
 logger = get_logger(__name__)

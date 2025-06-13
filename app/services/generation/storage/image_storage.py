@@ -6,9 +6,10 @@ import aiohttp
 from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
+import io
 
 from app.core.logger import get_logger
-from app.database.models.generation import ImageGeneration
+from app.database.models import ImageGeneration
 
 logger = get_logger(__name__)
 
@@ -32,16 +33,23 @@ class ImageStorage:
         
         Args:
             generation: Объект генерации
-            fal_urls: Список URL изображений из FAL AI
+            fal_urls: Список URL изображений от FAL AI
             
         Returns:
-            List[str]: Список URL сохраненных изображений в MinIO
+            List[str]: Список MinIO presigned URLs или пустой список при ошибке
         """
+
         try:
             storage = self._get_storage()
             saved_urls = []
             
             logger.info(f"[MinIO] Начинаем сохранение {len(fal_urls)} изображений для генерации {generation.id}")
+            
+            # Определяем bucket в зависимости от типа генерации
+            if generation.generation_type == "imagen4":
+                bucket = "imagen4"  # Отдельный bucket для Imagen4
+            else:
+                bucket = "generated"  # Общий bucket для остальных типов
             
             for i, fal_url in enumerate(fal_urls):
                 try:
@@ -56,7 +64,6 @@ class ImageStorage:
                     object_path = self._generate_storage_path(generation.id, i + 1)
                     
                     # Сохраняем в MinIO
-                    bucket = "generated"
                     logger.info(f"[MinIO] Загружаем в MinIO: bucket={bucket}, path={object_path}")
                     
                     success = await storage.upload_file(
@@ -113,8 +120,20 @@ class ImageStorage:
                     # Извлекаем путь объекта из URL
                     object_name = self._extract_object_name_from_url(url)
                     if object_name:
-                        await storage.delete_file("generated", object_name)
-                        logger.info(f"[MinIO Delete] Удален объект {object_name} для генерации {generation_id}")
+                        # Определяем bucket из URL
+                        bucket = self._extract_bucket_from_url(url)
+                        if not bucket:
+                            # Fallback: пробуем оба bucket'а
+                            for bucket_name in ["imagen4", "generated"]:
+                                try:
+                                    await storage.delete_file(bucket_name, object_name)
+                                    logger.info(f"[MinIO Delete] Удален объект {object_name} из bucket {bucket_name} для генерации {generation_id}")
+                                    break
+                                except:
+                                    continue
+                        else:
+                            await storage.delete_file(bucket, object_name)
+                            logger.info(f"[MinIO Delete] Удален объект {object_name} из bucket {bucket} для генерации {generation_id}")
                     
                 except Exception as e:
                     logger.warning(f"[MinIO Delete] Ошибка удаления объекта из URL {url}: {e}")
@@ -181,4 +200,24 @@ class ImageStorage:
             return None
         except Exception as e:
             logger.warning(f"Ошибка извлечения имени объекта из URL {url}: {e}")
+            return None
+    
+    def _extract_bucket_from_url(self, url: str) -> Optional[str]:
+        """
+        Извлекает имя bucket из MinIO URL
+        
+        Args:
+            url: MinIO presigned URL
+            
+        Returns:
+            str: Имя bucket или None
+        """
+        try:
+            import urllib.parse
+            parsed_url = urllib.parse.urlparse(url)
+            path_parts = parsed_url.path.strip('/').split('/', 1)
+            if len(path_parts) >= 1:
+                return path_parts[0]
+            return None
+        except Exception:
             return None 

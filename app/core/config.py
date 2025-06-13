@@ -23,7 +23,12 @@ class Settings(BaseSettings):
     INSTANCE_ID: str = Field(default="aisha-bot", env="INSTANCE_ID")
     
     # Telegram
-    TELEGRAM_TOKEN: str = Field(default="test_token", env="TELEGRAM_BOT_TOKEN")
+    TELEGRAM_TOKEN: str = Field(default="test_token", env="TELEGRAM_TOKEN")
+    TELEGRAM_BOT_TOKEN: str = Field(default="test_token", env="TELEGRAM_BOT_TOKEN")
+    TELEGRAM_WEBHOOK_URL: Optional[str] = None
+    TELEGRAM_WEBHOOK_HOST: str = "0.0.0.0"
+    TELEGRAM_WEBHOOK_PORT: int = 8000
+    TELEGRAM_WEBHOOK_PATH: str = "/webhook"
     
     @property
     def effective_telegram_token(self) -> str:
@@ -32,19 +37,26 @@ class Settings(BaseSettings):
         dev_token = os.getenv("TELEGRAM_DEV_TOKEN") or os.getenv("TELEGRAM_DEV_BOT_TOKEN")
         if dev_token and self.ENVIRONMENT == "development":
             return dev_token
+        # Используем TELEGRAM_TOKEN из .env (это dev токен)
+        if self.TELEGRAM_TOKEN and self.TELEGRAM_TOKEN != "test_token":
+            return self.TELEGRAM_TOKEN
         # Иначе используем продакшн токен
-        return self.TELEGRAM_TOKEN
+        return self.TELEGRAM_BOT_TOKEN
     
     # BACKEND_URL: str = "http://localhost:8000"  # LEGACY - удален
     
     # OpenAI
-    OPENAI_API_KEY: Optional[str] = Field(default="test_key")
+    OPENAI_API_KEY: str = Field(default="test_key", env="OPENAI_API_KEY")
+    OPENAI_API_URL: str = "https://api.openai.com/v1"
     ASSISTANT_ID: Optional[str] = None
     
     # Fal AI
     FAL_API_KEY: str = Field("", env="FAL_API_KEY")
     FAL_KEY: str = Field("", env="FAL_KEY")  # Альтернативное имя для совместимости
     FAL_WEBHOOK_URL: str = Field("https://aibots.kz:8443/api/v1/avatar/status_update", env="FAL_WEBHOOK_URL")
+    FAL_AI_API_KEY: Optional[str] = Field(default=None, env="FAL_AI_API_KEY")
+    FAL_AI_API_URL: str = "https://api.fal.ai/v1"
+    FAL_WEBHOOK_SECRET: str = Field(default="secure_webhook_secret_2024", env="FAL_WEBHOOK_SECRET")
     
     @property
     def effective_fal_api_key(self) -> str:
@@ -164,7 +176,7 @@ class Settings(BaseSettings):
     
     # Стоимость сервисов (в кредитах)
     AVATAR_CREATION_COST: float = Field(150.0, env="AVATAR_CREATION_COST")  # Создание аватара
-    IMAGE_GENERATION_COST: float = Field(5.0, env="IMAGE_GENERATION_COST")  # Генерация фото
+    IMAGE_GENERATION_COST: float = Field(5.0, env="IMAGE_GENERATION_COST")  # Генерация фото с аватаром
     VIDEO_5S_GENERATION_COST: float = Field(20.0, env="VIDEO_5S_GENERATION_COST")  # Видео 5 сек
     VIDEO_10S_GENERATION_COST: float = Field(40.0, env="VIDEO_10S_GENERATION_COST")  # Видео 10 сек
     VIDEO_PRO_5S_GENERATION_COST: float = Field(30.0, env="VIDEO_PRO_5S_GENERATION_COST")  # Видео PRO 5 сек
@@ -172,6 +184,15 @@ class Settings(BaseSettings):
     PORN_VIDEO_5S_GENERATION_COST: float = Field(30.0, env="PORN_VIDEO_5S_GENERATION_COST")  # Парное видео 5 сек
     PORN_VIDEO_10S_GENERATION_COST: float = Field(60.0, env="PORN_VIDEO_10S_GENERATION_COST")  # Парное видео 10 сек
     TRANSCRIPTION_COST_PER_MINUTE: float = Field(10.0, env="TRANSCRIPTION_COST_PER_MINUTE")  # Транскрибация за минуту
+    
+    # ========== IMAGEN 4 SETTINGS ==========
+    IMAGEN4_ENABLED: bool = Field(True, env="IMAGEN4_ENABLED")
+    IMAGEN4_DEFAULT_ASPECT_RATIO: str = Field("1:1", env="IMAGEN4_DEFAULT_ASPECT_RATIO")
+    IMAGEN4_MAX_IMAGES: int = Field(4, env="IMAGEN4_MAX_IMAGES")
+    IMAGEN4_GENERATION_COST: float = Field(5.0, env="IMAGEN4_GENERATION_COST")  # Imagen 4 генерация
+    IMAGEN4_TIMEOUT: int = Field(300, env="IMAGEN4_TIMEOUT")  # 5 минут таймаут
+    IMAGEN4_API_KEY: Optional[str] = Field(default=None, env="IMAGEN4_API_KEY")
+    IMAGEN4_API_URL: str = "https://api.imagen4.ai/v1"
     
     # Пакеты пополнения баланса
     TOPUP_PACKAGES: dict = Field(default={
@@ -194,7 +215,7 @@ class Settings(BaseSettings):
     STORAGE_CLEANUP_DAYS: int = 7
     
     # Настройки логирования
-    LOG_LEVEL: str = Field(default="DEBUG", env="LOG_LEVEL")  # Изменено с INFO на DEBUG
+    LOG_LEVEL: str = Field(default="INFO", env="LOG_LEVEL")
     LOG_FORMAT: str = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
     LOG_FILE: Optional[str] = None
     
@@ -219,13 +240,14 @@ class Settings(BaseSettings):
     TRACING_HOST: str = "localhost"
     
     # Настройки Redis
-    REDIS_HOST: str = Field(default="192.168.0.3")
-    REDIS_PORT: int = Field(default=6379)
-    REDIS_DB: int = Field(default=0)
-    REDIS_PASSWORD: str = Field(default="wd7QuwAbG0wtyoOOw3Sm")
-    REDIS_SSL: bool = Field(default=False)
-    REDIS_POOL_SIZE: int = Field(default=10)
-    REDIS_POOL_TIMEOUT: int = Field(default=5)
+    REDIS_URL: str = Field(default="redis://192.168.0.3:6379/0", env="REDIS_URL")
+    REDIS_HOST: str = Field(default="192.168.0.3", env="REDIS_HOST")
+    REDIS_PORT: int = Field(default=6379, env="REDIS_PORT")
+    REDIS_DB: int = Field(default=0, env="REDIS_DB")
+    REDIS_PASSWORD: str = Field(default="wd7QuwAbG0wtyoOOw3Sm", env="REDIS_PASSWORD")
+    REDIS_SSL: bool = Field(default=False, env="REDIS_SSL")
+    REDIS_POOL_SIZE: int = 10
+    REDIS_POOL_TIMEOUT: int = 30
     REDIS_MAX_RETRIES: int = Field(default=3)
     
     # PostgreSQL
@@ -234,31 +256,25 @@ class Settings(BaseSettings):
     POSTGRES_DB: Optional[str] = Field(default="aisha")
     POSTGRES_USER: Optional[str] = Field(default="aisha_user")
     POSTGRES_PASSWORD: Optional[str] = Field(default="KbZZGJHX09KSH7r9ev4m")
-    DATABASE_URL: Optional[str] = None
+    DATABASE_URL: str = Field(default="postgresql+asyncpg://aisha_user:KbZZGJHX09KSH7r9ev4m@192.168.0.4:5432/aisha", env="DATABASE_URL")
     
     # Настройки пула соединений БД
-    DB_ECHO: bool = Field(default=False)  # Логирование SQL запросов
-    DB_POOL_SIZE: int = Field(default=5)  # Размер пула соединений
-    DB_MAX_OVERFLOW: int = Field(default=10)  # Максимальное переполнение пула
-    DB_POOL_TIMEOUT: int = Field(default=30)  # Таймаут получения соединения из пула
-    DB_POOL_RECYCLE: int = Field(default=3600)  # Время жизни соединения в секундах
-    
-    @validator("DATABASE_URL", pre=True)
-    def assemble_db_url(cls, v: Optional[str], values: Dict[str, Any]) -> str:
-        """Автоматически собираем DATABASE_URL из переменных PostgreSQL"""
-        if isinstance(v, str) and v:
-            return v
-        return f"postgresql+asyncpg://{values.get('POSTGRES_USER')}:{values.get('POSTGRES_PASSWORD')}@{values.get('POSTGRES_HOST')}:{values.get('POSTGRES_PORT')}/{values.get('POSTGRES_DB')}"
+    DB_ECHO: bool = False
+    DB_POOL_SIZE: int = 5
+    DB_MAX_OVERFLOW: int = 10
+    DB_POOL_TIMEOUT: int = 30
+    DB_POOL_RECYCLE: int = 1800
     
     # MinIO
-    MINIO_ENDPOINT: Optional[str] = Field(default="192.168.0.4:9000")
-    MINIO_ACCESS_KEY: Optional[str] = Field(default="minioadmin")
-    MINIO_SECRET_KEY: Optional[str] = Field(default="74rSbw9asQ1uMzcFeM5G")
-    MINIO_BUCKET_NAME: Optional[str] = Field(default="aisha")
-    MINIO_SECURE: bool = Field(default=False)  # 🎯 ВАЖНО: отключаем SSL для локального сервера
+    MINIO_ENDPOINT: str = Field(default="192.168.0.4:9000", env="MINIO_ENDPOINT")
+    MINIO_ACCESS_KEY: str = Field(default="minioadmin", env="MINIO_ACCESS_KEY")
+    MINIO_SECRET_KEY: str = Field(default="74rSbw9asQ1uMzcFeM5G", env="MINIO_SECRET_KEY")
+    MINIO_BUCKET_NAME: str = Field(default="aisha", env="MINIO_BUCKET_NAME")
+    MINIO_SECURE: bool = Field(default=False, env="MINIO_SECURE")  # 🎯 ВАЖНО: отключаем SSL для локального сервера
     MINIO_BUCKET_AVATARS: Optional[str] = Field(default="avatars")
     MINIO_BUCKET_PHOTOS: Optional[str] = Field(default="photos")
     MINIO_BUCKET_TEMP: Optional[str] = Field(default="temp")
+    MINIO_BUCKET_IMAGEN4: Optional[str] = Field(default="imagen4")  # Отдельный bucket для Imagen4
     MINIO_PRESIGNED_EXPIRES: int = Field(default=3600)  # Время истечения presigned URL в секундах
     TEMP_DIR: Path = Path("/tmp") if os.name != 'nt' else Path(os.environ.get('TEMP', 'temp'))
     
@@ -277,9 +293,6 @@ class Settings(BaseSettings):
     REDIS_RETRY_ON_TIMEOUT: Union[bool, str] = True
     REDIS_RETRY_INTERVAL: Union[int, str] = 1
     
-    # PostgreSQL
-    POSTGRES_PASSWORD: Optional[str] = Field(default="KbZZGJHX09KSH7r9ev4m")
-    
     # MinIO
     TRACING_PORT: int = 6831
     
@@ -289,13 +302,21 @@ class Settings(BaseSettings):
         "transcripts": "transcripts",
         "documents": "documents",
         "temp": "temp",
-        "test": "test-bucket"
+        "test": "test-bucket",
+        "imagen4": "imagen4"  # Добавляем Imagen4 bucket
     }
     
     # Настройки временных файлов
     TEMP_FILE_CLEANUP_INTERVAL: int = 3600  # Очистка каждый час (в секундах)
     TEMP_FILE_MAX_AGE: int = 3600  # Максимальный возраст временных файлов (1 час)
     AUTO_CLEANUP_ENABLED: bool = True  # Автоматическая очистка временных файлов
+    
+    # ======= WEBHOOK SETTINGS =======
+    
+    # Webhook для FAL AI callback
+    WEBHOOK_HOST: str = Field(default="0.0.0.0", env="WEBHOOK_HOST")
+    WEBHOOK_PORT: int = Field(default=8443, env="WEBHOOK_PORT")
+    WEBHOOK_PATH: str = Field(default="/webhook", env="WEBHOOK_PATH")
     
     class Config:
         """Конфигурация Pydantic"""

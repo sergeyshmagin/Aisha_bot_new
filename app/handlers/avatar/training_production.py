@@ -318,7 +318,7 @@ class TrainingHandler:
                     keyboard = InlineKeyboardMarkup(inline_keyboard=[
                         [
                             InlineKeyboardButton(
-                                text="🎨 Генерировать изображение",
+                                text="📷 Сделать фото",
                                 callback_data=f"generate_image_{avatar_id}"
                             )
                         ],

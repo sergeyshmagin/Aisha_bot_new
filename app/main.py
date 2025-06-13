@@ -6,22 +6,31 @@ import logging
 import signal
 import sys
 import os
+from contextlib import asynccontextmanager
+from typing import Optional
 
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.enums import ParseMode
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
+from aiohttp import web
 
 from app.core.config import settings
+from app.core.logger import get_logger
+from app.core.session import close_db_connection
 from app.handlers import (
     main_router,
     debug_router,
     transcript_main_handler,
     transcript_processing_handler,
+    imagen4_router,
 )
 from app.handlers.avatar import router as avatar_router
 from app.handlers.generation.main_handler import router as generation_router
 from app.handlers.gallery import main_router as gallery_main_router, filter_router as gallery_filter_router
 from app.handlers.profile.router import profile_router
 from app.handlers.fallback import fallback_router
+from app.middlewares import register_all_middlewares
 
 # Настройка логирования
 logging.basicConfig(
@@ -117,6 +126,34 @@ def signal_handler(signum, frame):
     raise KeyboardInterrupt()
 
 
+@asynccontextmanager
+async def bot_lifetime():
+    """Контекстный менеджер для управления жизненным циклом бота"""
+    try:
+        # Запускаем бота
+        logger.info("Запуск бота...")
+        yield
+    finally:
+        # Останавливаем бота
+        logger.info("Остановка бота...")
+        await bot_instance.session.close()
+        await close_db_connection()
+        logger.info("Бот остановлен")
+
+
+async def on_startup(app: Optional[web.Application] = None):
+    """Действия при запуске"""
+    logger.info("Бот запущен")
+
+
+async def on_shutdown(app: Optional[web.Application] = None):
+    """Действия при остановке"""
+    logger.info("Бот останавливается...")
+    await bot_instance.session.close()
+    await close_db_connection()
+    logger.info("Бот остановлен")
+
+
 async def main():
     """
     Основная функция запуска бота
@@ -130,7 +167,7 @@ async def main():
     # Инициализация бота и диспетчера с явной конфигурацией timeout
     try:
         # Создаем Bot стандартным способом - aiogram 3.x сам управляет сессией
-        bot_instance = Bot(token=settings.effective_telegram_token)
+        bot_instance = Bot(token=settings.effective_telegram_token, parse_mode=ParseMode.HTML)
         logger.info(f"✅ Bot создан с токеном для окружения: {settings.ENVIRONMENT}")
         
     except Exception as e:
@@ -149,6 +186,9 @@ async def main():
     
     # Регистрация роутера генерации изображений
     dp.include_router(generation_router)
+    
+    # Регистрация роутера Imagen 4
+    dp.include_router(imagen4_router)
     
     # Регистрируем галерею
     dp.include_router(gallery_main_router)
@@ -173,51 +213,34 @@ async def main():
     # Регистрируем fallback_router последним для ловли необработанных сообщений
     dp.include_router(fallback_router)
 
-    # Выполняем задачи запуска
-    # await startup_tasks()
+    # Регистрируем обработчики и middleware
+    register_all_middlewares(dp)
 
-    # Запуск бота в зависимости от режима
-    try:
-        if BOT_MODE == "worker":
-            logger.info("⚙️ Запуск в режиме background worker...")
-            # Запускаем только background worker без polling
-            from app.workers.background_worker import BackgroundWorker
-            worker = BackgroundWorker()
-            await worker.start()
+    # Регистрируем обработчики запуска/остановки
+    dp.startup.register(on_startup)
+    dp.shutdown.register(on_shutdown)
+
+    # Запускаем бота
+    async with bot_lifetime():
+        if settings.TELEGRAM_WEBHOOK_URL:
+            # Webhook режим
+            app = web.Application()
+            webhook_handler = SimpleRequestHandler(
+                dispatcher=dp,
+                bot=bot_instance,
+            )
+            webhook_handler.register(app, path=settings.TELEGRAM_WEBHOOK_PATH)
+            setup_application(app, dp, bot=bot_instance)
             
-        elif BOT_MODE == "polling_standby":
-            if SET_POLLING:
-                logger.warning("⚠️ STANDBY БОТ НЕ ДОЛЖЕН ДЕЛАТЬ POLLING!")
-                logger.info("💤 Standby бот переходит в режим ожидания...")
-                # Standby бот просто ждет и не делает polling
-                await asyncio.sleep(float('inf'))
-            else:
-                logger.info("💤 Standby бот в режиме ожидания...")
-                await asyncio.sleep(float('inf'))
-                
-        elif BOT_MODE == "webhook":
-            logger.info("🌐 Запуск в режиме webhook...")
-            # В режиме webhook не запускаем polling
-            logger.info("🌐 Webhook режим - polling отключен")
-            await asyncio.sleep(float('inf'))
-            
-        else:  # polling mode (default)
-            if SET_POLLING:
-                logger.info("📡 Запуск polling...")
-                await dp.start_polling(bot_instance)
-            else:
-                logger.info("❌ Polling отключен через SET_POLLING=false")
-                logger.info("⚙️ Переключение в worker режим...")
-                from app.workers.background_worker import BackgroundWorker
-                worker = BackgroundWorker()
-                await worker.start()
-                
-    except Exception as e:
-        logger.error(f"❌ Ошибка при запуске бота: {e}")
-        raise
-    finally:
-        # Корректное завершение
-        await shutdown_handler()
+            # Запускаем webhook сервер
+            await web._run_app(
+                app,
+                host=settings.TELEGRAM_WEBHOOK_HOST,
+                port=settings.TELEGRAM_WEBHOOK_PORT
+            )
+        else:
+            # Long polling режим
+            await dp.start_polling(bot_instance)
 
 
 if __name__ == "__main__":
@@ -228,10 +251,10 @@ if __name__ == "__main__":
     try:
         logger.info("Старт приложения")
         asyncio.run(main())
-    except KeyboardInterrupt:
-        logger.info("Бот остановлен пользователем")
+    except (KeyboardInterrupt, SystemExit):
+        logger.info("Получен сигнал остановки...")
     except Exception as e:
-        logger.exception(f"Ошибка при запуске бота: {e}")
+        logger.exception(f"Критическая ошибка: {e}")
     finally:
         # Финальная очистка на уровне event loop
         try:

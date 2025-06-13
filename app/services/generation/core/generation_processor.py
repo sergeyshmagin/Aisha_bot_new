@@ -2,11 +2,11 @@
 Модуль обработки процесса генерации изображений
 """
 import asyncio
-from typing import List
+from typing import List, Optional, Dict, Any
 from uuid import UUID
 
 from app.core.logger import get_logger
-from app.database.models.generation import ImageGeneration, GenerationStatus
+from app.database.models import ImageGeneration, GenerationStatus
 from app.services.fal.generation_service import FALGenerationService
 from app.services.generation.balance.balance_manager import BalanceManager
 from app.services.generation.config.generation_config import GenerationConfig

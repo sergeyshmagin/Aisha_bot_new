@@ -119,7 +119,7 @@ class GenerationMainHandler(BaseHandler):
             logger.info(f"[DEBUG] Извлеченное соотношение: {aspect_ratio}")
             
             # Проверяем что соотношение валидно
-            from app.database.models.user_settings import UserSettings
+            from app.database.models import UserSettings
             valid_options = UserSettings.get_aspect_ratio_options()
             logger.info(f"[DEBUG] Доступные варианты: {list(valid_options.keys())}")
             

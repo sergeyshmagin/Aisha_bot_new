@@ -1,18 +1,20 @@
 """
-Сервис для управления настройками пользователей
+Сервис для работы с пользовательскими настройками
 """
-from typing import Optional
+
+import logging
+from typing import Optional, Dict, Any, Tuple
 from uuid import UUID
 
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.logger import get_logger
 from app.core.database import get_session
-from app.database.models.user_settings import UserSettings
+from app.database.models import UserSettings
 
-logger = get_logger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class UserSettingsService:

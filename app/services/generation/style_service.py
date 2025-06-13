@@ -7,10 +7,13 @@ from uuid import UUID
 from sqlalchemy import select, func, and_
 from sqlalchemy.orm import selectinload
 
-from app.core.database import get_session
 from app.core.logger import get_logger
-from app.database.models.generation import (
-    StyleCategory, StyleSubcategory, StyleTemplate, UserFavoriteTemplate
+from app.core.database import get_session
+from app.database.models import (
+    StyleCategory, 
+    StyleTemplate,
+    ImageGeneration,
+    GenerationStatus
 )
 
 logger = get_logger(__name__)

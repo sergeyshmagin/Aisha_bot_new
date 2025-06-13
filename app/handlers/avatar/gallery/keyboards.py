@@ -45,37 +45,20 @@ class GalleryKeyboards:
                 InlineKeyboardButton(text="🎨 Генерировать", callback_data=f"avatar_generate:{avatar_id}")
             ])
         
-        # Действия с аватаром - первая строка
-        action_buttons_1 = []
-        
-        # Кнопка "Сделать основным" только если не основной И не черновик
-        if not is_main and avatar_status not in [AvatarStatus.DRAFT, AvatarStatus.PHOTOS_UPLOADING]:
-            action_buttons_1.append(
-                InlineKeyboardButton(text="⭐ Основной", callback_data=f"avatar_set_main:{avatar_id}")
-            )
-        elif not is_main:
-            # Для черновиков не показываем кнопку вообще (пустое место)
-            pass
-        else:
-            # Если уже основной аватар - показываем неактивную кнопку
-            action_buttons_1.append(
-                InlineKeyboardButton(text="⭐ Основной", callback_data="noop")
-            )
-        
-        # Кнопка "Продолжить" только для черновиков и загрузки фото
-        if avatar_status in [AvatarStatus.DRAFT, AvatarStatus.PHOTOS_UPLOADING]:
-            action_buttons_1.append(
-                InlineKeyboardButton(text="🔄 Продолжить", callback_data=f"avatar_continue_creation:{avatar_id}")
-            )
+        # Основные действия
+        action_buttons = [
+            InlineKeyboardButton(text="📷 Сделать фото", callback_data=f"avatar_generate:{avatar_id}"),
+            InlineKeyboardButton(text="⭐ Основной", callback_data=f"avatar_set_main:{avatar_id}"),
+        ]
         
         # Кнопка "Переименовать" - доступна для всех аватаров кроме черновиков
         if avatar_status not in [AvatarStatus.DRAFT, AvatarStatus.PHOTOS_UPLOADING]:
-            action_buttons_1.append(
-                InlineKeyboardButton(text="✏️ Переименовать", callback_data=f"avatar_rename:{avatar_id}")
+            action_buttons.append(
+                InlineKeyboardButton(text="✏️ Изменить имя", callback_data=f"avatar_rename:{avatar_id}")
             )
         
-        if action_buttons_1:
-            buttons.append(action_buttons_1)
+        if action_buttons:
+            buttons.append(action_buttons)
         
         # Действия с аватаром - вторая строка (удаление)
         action_buttons_2 = []
@@ -86,7 +69,7 @@ class GalleryKeyboards:
         
         # Возврат в меню
         buttons.append([
-            InlineKeyboardButton(text="◀️ В меню аватаров", callback_data="avatar_menu")
+            InlineKeyboardButton(text="◀️ К образам", callback_data="avatar_menu")
         ])
         
         return InlineKeyboardMarkup(inline_keyboard=buttons)

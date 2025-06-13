@@ -14,7 +14,7 @@ from app.services.generation.image_analysis_service import ImageAnalysisService
 from app.services.user_settings import UserSettingsService
 from .states import GenerationStates
 from .keyboards import build_photo_prompt_keyboard, build_aspect_ratio_keyboard
-from app.database.models.user_settings import UserSettings
+from app.database.models import ImageGeneration, UserSettings
 
 logger = get_logger(__name__)
 

@@ -12,7 +12,7 @@ from app.handlers.base import BaseHandler
 from app.keyboards.profile.topup import TopupKeyboard
 from app.services.promokode_service import PromokodeService
 from app.services.balance_service import BalanceService
-from app.database.models.promokode import PromokodeType
+from app.database.models import PromokodeType
 
 logger = get_logger(__name__)
 

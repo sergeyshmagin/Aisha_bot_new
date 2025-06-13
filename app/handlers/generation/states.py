@@ -20,4 +20,11 @@ class GenerationStates(StatesGroup):
     waiting_for_quality_selection = State()
     
     # Процесс генерации
-    generation_in_progress = State() 
+    generation_in_progress = State()
+    
+    # 🆕 Imagen 4 States
+    # Ожидание промпта для Imagen 4
+    waiting_for_imagen4_prompt = State()
+    
+    # Выбор aspect ratio для Imagen 4
+    imagen4_selecting_aspect_ratio = State() 

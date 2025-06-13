@@ -1,15 +1,15 @@
 """
-Репозиторий для работы с промокодами
+Репозитории для работы с промокодами
 """
-from typing import Optional, List
+from typing import List, Optional, Tuple
 from uuid import UUID
 from datetime import datetime, timezone
 
-from sqlalchemy import select, and_, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, and_, func, desc
 from sqlalchemy.orm import selectinload
 
-from app.database.models.promokode import Promokode, PromokodeUsage, PromokodeType
+from app.database.models import Promokode, PromokodeUsage, PromokodeType
 from app.database.repositories.base import BaseRepository
 
 

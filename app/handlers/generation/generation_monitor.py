@@ -16,13 +16,14 @@ from aiogram.types import (
 
 from app.core.di import get_user_service
 from app.core.logger import get_logger
-from app.database.models.generation import GenerationStatus
+from app.database.models import GenerationStatus
 from app.services.generation.generation_service import (
     GENERATION_COST,
     ImageGenerationService,
 )
 from app.services.user_settings import UserSettingsService
 from app.shared.handlers.base_handler import BaseHandler
+from app.shared.decorators.auth_decorators import require_user
 from app.shared.utils.telegram_utils import format_prompt_for_display
 
 from .keyboards import build_generation_result_keyboard

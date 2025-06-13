@@ -105,7 +105,7 @@ class RedisStorage(BaseStorage):
 
     async def close(self) -> None:
         """Закрытие соединения с Redis"""
-        await self.redis.close()
+        await self.redis.aclose()
         logger.info("🔐 Redis Storage закрыт")
 
     async def wait_closed(self) -> None:
