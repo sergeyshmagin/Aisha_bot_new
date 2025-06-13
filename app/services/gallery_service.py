@@ -11,7 +11,7 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database.models import ImageGeneration
+from app.database.models import ImageGeneration, GenerationStatus
 from app.database.repositories import ImageGenerationRepository
 from app.services.cache_service import cache_service
 from app.core.logger import get_logger
@@ -316,6 +316,156 @@ class GalleryService:
                 }
         except Exception as e:
             return {"error": str(e), "redis_available": False}
+
+    async def get_gallery_items(
+        self,
+        user_id: int,
+        page: int = 1,
+        items_per_page: int = 10,
+        generation_type: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> Tuple[List[ImageGeneration], int]:
+        """
+        Получает элементы галереи с пагинацией и фильтрацией
+        
+        Args:
+            user_id: ID пользователя
+            page: Номер страницы
+            items_per_page: Количество элементов на странице
+            generation_type: Тип генерации (avatar или imagen4)
+            start_date: Начальная дата
+            end_date: Конечная дата
+            
+        Returns:
+            Tuple[List[ImageGeneration], int]: Список элементов и общее количество
+        """
+        try:
+            # Базовый запрос
+            query = select(ImageGeneration).where(
+                and_(
+                    ImageGeneration.user_id == user_id,
+                    ImageGeneration.status == GenerationStatus.completed
+                )
+            )
+            
+            # Применяем фильтры
+            if generation_type:
+                query = query.where(ImageGeneration.generation_type == generation_type)
+            
+            if start_date:
+                query = query.where(ImageGeneration.created_at >= start_date)
+            
+            if end_date:
+                query = query.where(ImageGeneration.created_at <= end_date)
+            
+            # Получаем общее количество
+            count_query = select(ImageGeneration.id).where(query.whereclause)
+            total_count = len(await self.session.execute(count_query))
+            
+            # Применяем пагинацию
+            query = query.order_by(ImageGeneration.created_at.desc())
+            query = query.offset((page - 1) * items_per_page).limit(items_per_page)
+            
+            # Выполняем запрос
+            result = await self.session.execute(query)
+            items = result.scalars().all()
+            
+            return items, total_count
+            
+        except Exception as e:
+            logger.exception(f"Ошибка при получении элементов галереи: {e}")
+            raise
+    
+    async def get_favorites(
+        self,
+        user_id: int,
+        page: int = 1,
+        items_per_page: int = 10,
+        generation_type: Optional[str] = None,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None
+    ) -> Tuple[List[ImageGeneration], int]:
+        """
+        Получает избранные элементы галереи
+        
+        Args:
+            user_id: ID пользователя
+            page: Номер страницы
+            items_per_page: Количество элементов на странице
+            generation_type: Тип генерации (avatar или imagen4)
+            start_date: Начальная дата
+            end_date: Конечная дата
+            
+        Returns:
+            Tuple[List[ImageGeneration], int]: Список элементов и общее количество
+        """
+        try:
+            # Базовый запрос
+            query = select(ImageGeneration).where(
+                and_(
+                    ImageGeneration.user_id == user_id,
+                    ImageGeneration.status == GenerationStatus.completed,
+                    ImageGeneration.is_favorite == True
+                )
+            )
+            
+            # Применяем фильтры
+            if generation_type:
+                query = query.where(ImageGeneration.generation_type == generation_type)
+            
+            if start_date:
+                query = query.where(ImageGeneration.created_at >= start_date)
+            
+            if end_date:
+                query = query.where(ImageGeneration.created_at <= end_date)
+            
+            # Получаем общее количество
+            count_query = select(ImageGeneration.id).where(query.whereclause)
+            total_count = len(await self.session.execute(count_query))
+            
+            # Применяем пагинацию
+            query = query.order_by(ImageGeneration.created_at.desc())
+            query = query.offset((page - 1) * items_per_page).limit(items_per_page)
+            
+            # Выполняем запрос
+            result = await self.session.execute(query)
+            items = result.scalars().all()
+            
+            return items, total_count
+            
+        except Exception as e:
+            logger.exception(f"Ошибка при получении избранных элементов: {e}")
+            raise
+    
+    async def toggle_favorite(self, generation_id: UUID) -> bool:
+        """
+        Переключает статус избранного для элемента галереи
+        
+        Args:
+            generation_id: ID генерации
+            
+        Returns:
+            bool: Новый статус избранного
+        """
+        try:
+            # Получаем элемент
+            query = select(ImageGeneration).where(ImageGeneration.id == generation_id)
+            result = await self.session.execute(query)
+            item = result.scalar_one_or_none()
+            
+            if not item:
+                raise ValueError(f"Элемент галереи {generation_id} не найден")
+            
+            # Переключаем статус
+            item.is_favorite = not item.is_favorite
+            await self.session.commit()
+            
+            return item.is_favorite
+            
+        except Exception as e:
+            logger.exception(f"Ошибка при переключении избранного: {e}")
+            raise
 
 
 # Глобальный экземпляр сервиса

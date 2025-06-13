@@ -6,6 +6,8 @@ from aiogram.fsm.state import State, StatesGroup
 from typing import Dict, List, Set, Optional
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta
+from enum import Enum
+from pydantic import BaseModel
 
 from app.core.logger import get_logger
 
@@ -21,6 +23,7 @@ class GalleryStates(StatesGroup):
 class GalleryFilterStates(StatesGroup):
     """Состояния для фильтров галереи"""
     selecting_filters = State()
+    waiting_custom_date = State()
     
     
 @dataclass
@@ -256,4 +259,16 @@ gallery_state_manager = GalleryStateManager()
 
 # Для обратной совместимости - deprecated
 user_filters: Dict[int, GalleryFilterData] = {}  # DEPRECATED: использовать gallery_state_manager
-gallery_data_storage: Dict[str, GalleryData] = {}  # DEPRECATED: использовать gallery_state_manager 
+gallery_data_storage: Dict[str, GalleryData] = {}  # DEPRECATED: использовать gallery_state_manager
+
+class GalleryFilterData(BaseModel):
+    """Данные фильтров галереи"""
+    generation_type: Optional[str] = None  # avatar или imagen4
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+
+class GalleryData(BaseModel):
+    """Данные галереи"""
+    current_page: int = 1
+    items_per_page: int = 10
+    filters: GalleryFilterData = GalleryFilterData() 
