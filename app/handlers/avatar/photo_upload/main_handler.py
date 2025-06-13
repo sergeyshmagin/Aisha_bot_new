@@ -92,6 +92,12 @@ class PhotoUploadHandler:
             F.data == "confirm_training_current"
         )
         
+        # Обработчик для balance_top_up callback (перенаправление в меню пополнения)
+        self.router.callback_query.register(
+            self.handle_balance_top_up,
+            F.data == "balance_top_up"
+        )
+        
         # Обработчик загрузки фотографий
         self.router.message.register(
             self.handle_photo_upload,
@@ -320,6 +326,36 @@ class PhotoUploadHandler:
     async def show_training_confirmation(self, callback: CallbackQuery, state: FSMContext):
         """Делегирует показ подтверждения обучения к ProgressHandler"""
         await self.progress_handler.show_training_confirmation(callback, state)
+
+    async def handle_balance_top_up(self, callback: CallbackQuery):
+        """Обрабатывает callback balance_top_up - перенаправляет в меню пополнения баланса"""
+        try:
+            await callback.answer("💰 Переходим в меню пополнения баланса...")
+            
+            # Импортируем необходимые модули
+            from app.keyboards.main import get_main_menu
+            
+            # Показываем сообщение о переходе в меню пополнения
+            text = """💰 **Пополнение баланса**
+            
+Для пополнения баланса вернитесь в главное меню и выберите "💰 Баланс".
+
+Там вы сможете:
+• Проверить текущий баланс
+• Пополнить баланс
+• Посмотреть историю операций"""
+            
+            keyboard = get_main_menu()
+            
+            await callback.message.edit_text(
+                text=text,
+                reply_markup=keyboard,
+                parse_mode="Markdown"
+            )
+            
+        except Exception as e:
+            logger.exception(f"Ошибка при обработке balance_top_up callback: {e}")
+            await callback.answer("❌ Ошибка при переходе к пополнению баланса", show_alert=True)
 
     # Вспомогательные методы
     async def _check_existing_draft(self, user_id: int, avatar_id: UUID) -> int:
