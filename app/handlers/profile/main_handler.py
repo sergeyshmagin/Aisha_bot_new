@@ -1,6 +1,7 @@
 """
-Основной обработчик личного кабинета пользователя
-Современный дизайн с акцентом на UX/UI
+LEGACY: Основной обработчик личного кабинета пользователя
+Заменен на современный интерфейс в app/handlers/menu/settings_handler.py
+Оставлен для совместимости со старыми callback'ами
 """
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any

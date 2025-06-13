@@ -1,6 +1,7 @@
 """
-Обработчик статистики пользователя
-Детальная аналитика активности, трендов и достижений
+LEGACY: Обработчик статистики пользователя
+Функциональность мигрирована в app/handlers/menu/settings_handler.py
+Оставлен для совместимости со старыми callback'ами
 """
 from datetime import datetime, timedelta
 from typing import Dict, Any

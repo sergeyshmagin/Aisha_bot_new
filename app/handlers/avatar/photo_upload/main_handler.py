@@ -92,6 +92,12 @@ class PhotoUploadHandler:
             F.data == "confirm_training_current"
         )
         
+        # Обработчик пополнения баланса
+        self.router.callback_query.register(
+            self.handle_balance_top_up,
+            F.data == "balance_top_up"
+        )
+        
         # Обработчик загрузки фотографий
         self.router.message.register(
             self.handle_photo_upload,
@@ -380,4 +386,22 @@ class PhotoUploadHandler:
                 await callback.message.answer(text, reply_markup=keyboard)
             except Exception as fallback_error:
                 logger.exception(f"Критическая ошибка в fallback продолжения черновика: {fallback_error}")
-                await callback.answer("❌ Ошибка отображения. Попробуйте снова.", show_alert=True) 
+                await callback.answer("❌ Ошибка отображения. Попробуйте снова.", show_alert=True)
+
+    async def handle_balance_top_up(self, callback: CallbackQuery, state: FSMContext):
+        """Обрабатывает нажатие на кнопку пополнения баланса"""
+        try:
+            # Переадресуем пользователя в меню пополнения баланса
+            from app.handlers.menu.settings_handler import ModernProfileHandler
+            
+            # Создаем экземпляр обработчика
+            profile_handler = ModernProfileHandler()
+            
+            # Показываем меню пополнения
+            await profile_handler.show_topup_menu(callback, state)
+            
+            logger.info(f"Пользователь {callback.from_user.id} перенаправлен в меню пополнения баланса")
+            
+        except Exception as e:
+            logger.exception(f"Ошибка при обработке пополнения баланса: {e}")
+            await callback.answer("❌ Произошла ошибка при переходе к пополнению баланса", show_alert=True) 

@@ -52,10 +52,15 @@ class UserService(BaseService):
             "last_name": telegram_data.get("last_name"),
             "username": telegram_data.get("username"),
             "language_code": telegram_data.get("language_code", "ru"),
-            "is_premium": telegram_data.get("is_premium", False),
+            "is_premium": telegram_data.get("is_premium") if telegram_data.get("is_premium") is not None else False,
             "is_bot": telegram_data.get("is_bot", False),  # Добавляем поле is_bot
             "is_blocked": telegram_data.get("is_blocked", False),  # Добавляем поле is_blocked
         }
+        
+        # Фильтруем None значения для обновления
+        if user:
+            # Для обновления исключаем None значения, кроме явно разрешенных полей
+            user_data = {k: v for k, v in user_data.items() if v is not None or k in ['last_name', 'username']}
         
         # Добавляем часовой пояс, только если он был определен
         if timezone:
@@ -201,6 +206,7 @@ class UserService(BaseService):
                 "telegram_id": telegram_id_str,
                 "first_name": "Пользователь",
                 "language_code": "ru",
+                "is_premium": False,  # Добавляем поле is_premium
                 "is_bot": False,  # Добавляем поле is_bot
                 "is_blocked": False  # Добавляем поле is_blocked
             }

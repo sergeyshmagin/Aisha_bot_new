@@ -1,6 +1,7 @@
 """
-Обработчик управления балансом пользователя
-Пополнение, история операций, детальная информация
+LEGACY: Обработчик управления балансом пользователя
+Функциональность мигрирована в app/handlers/menu/settings_handler.py
+Оставлен для совместимости со старыми callback'ами
 """
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional

@@ -1,5 +1,7 @@
 """
-Обработчик пополнения баланса с поддержкой промокодов
+LEGACY: Обработчик пополнения баланса с поддержкой промокодов
+Функциональность мигрирована в app/handlers/menu/settings_handler.py
+Оставлен для совместимости со старыми callback'ами
 """
 from aiogram import types, F
 from aiogram.fsm.context import FSMContext

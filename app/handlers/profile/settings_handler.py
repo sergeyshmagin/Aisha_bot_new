@@ -1,5 +1,7 @@
 """
-Обработчик настроек пользователя
+LEGACY: Обработчик настроек пользователя
+Функциональность мигрирована в app/handlers/menu/settings_handler.py
+Оставлен для совместимости со старыми callback'ами
 """
 from aiogram import Router, F
 from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton

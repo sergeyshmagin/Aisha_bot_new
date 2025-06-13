@@ -56,6 +56,86 @@ class ProjectsHandler(BaseHandler):
             self.show_favorites,
             F.data == "favorites"
         )
+        
+        # === ОБРАБОТЧИКИ ГАЛЕРЕИ ФОТО ===
+        self.router.callback_query.register(
+            self.handle_gallery_avatars,
+            F.data == "gallery_avatars"
+        )
+        
+        self.router.callback_query.register(
+            self.handle_gallery_imagen,
+            F.data == "gallery_imagen"
+        )
+        
+        self.router.callback_query.register(
+            self.handle_gallery_video,
+            F.data == "gallery_video"
+        )
+        
+        self.router.callback_query.register(
+            self.handle_gallery_by_date,
+            F.data == "gallery_by_date"
+        )
+        
+        # === ОБРАБОТЧИКИ ИЗБРАННОГО ===
+        self.router.callback_query.register(
+            self.handle_favorites_avatars,
+            F.data == "favorites_avatars"
+        )
+        
+        self.router.callback_query.register(
+            self.handle_favorites_images,
+            F.data == "favorites_images"
+        )
+        
+        self.router.callback_query.register(
+            self.handle_favorites_videos,
+            F.data == "favorites_videos"
+        )
+        
+        self.router.callback_query.register(
+            self.handle_favorites_collections,
+            F.data == "favorites_collections"
+        )
+        
+        # === ОБРАБОТЧИКИ ВИДЕО ===
+        self.router.callback_query.register(
+            self.handle_videos_by_date,
+            F.data == "videos_by_date"
+        )
+        
+        self.router.callback_query.register(
+            self.handle_gallery_hedra_videos,
+            F.data == "gallery_hedra_videos"
+        )
+        
+        self.router.callback_query.register(
+            self.handle_gallery_kling_videos,
+            F.data == "gallery_kling_videos"
+        )
+        
+        self.router.callback_query.register(
+            self.handle_gallery_weo3_videos,
+            F.data == "gallery_weo3_videos"
+        )
+        
+        self.router.callback_query.register(
+            self.handle_favorite_videos,
+            F.data == "favorite_videos"
+        )
+        
+        # === СТАТИСТИКА ===
+        self.router.callback_query.register(
+            self.handle_my_stats,
+            F.data == "my_stats"
+        )
+        
+        # === ПРОФИЛЬ ===
+        self.router.callback_query.register(
+            self.handle_my_gallery,
+            F.data == "my_gallery"
+        )
     
     async def show_projects_menu(self, callback: CallbackQuery, state: FSMContext):
         """Показывает главное меню раздела 'Мои работы'"""
@@ -152,6 +232,76 @@ class ProjectsHandler(BaseHandler):
         except Exception as e:
             logger.exception(f"Ошибка при показе меню избранного: {e}")
             await callback.answer("❌ Произошла ошибка", show_alert=True)
+    
+    # === ОБРАБОТЧИКИ ГАЛЕРЕИ ФОТО ===
+    
+    async def handle_gallery_avatars(self, callback: CallbackQuery, state: FSMContext):
+        """Галерея аватаров"""
+        await callback.answer("📸 Галерея аватаров - в разработке!\n\nЗдесь будут все ваши созданные аватары с фильтрацией.", show_alert=True)
+    
+    async def handle_gallery_imagen(self, callback: CallbackQuery, state: FSMContext):
+        """Галерея Imagen"""
+        await callback.answer("🖼️ Галерея Imagen4 - в разработке!\n\nВсе изображения, созданные по описанию.", show_alert=True)
+    
+    async def handle_gallery_video(self, callback: CallbackQuery, state: FSMContext):
+        """Галерея видео из фото"""
+        await callback.answer("🎬 Видео из фото - в разработке!\n\nАнимированные изображения и видеоролики.", show_alert=True)
+    
+    async def handle_gallery_by_date(self, callback: CallbackQuery, state: FSMContext):
+        """Галерея по дате"""
+        await callback.answer("📅 Просмотр по дате - в разработке!\n\nХронологический просмотр всех работ.", show_alert=True)
+    
+    # === ОБРАБОТЧИКИ ИЗБРАННОГО ===
+    
+    async def handle_favorites_avatars(self, callback: CallbackQuery, state: FSMContext):
+        """Избранные аватары"""
+        await callback.answer("👤 Избранные образы - в разработке!\n\nВаши любимые аватары и образы.", show_alert=True)
+    
+    async def handle_favorites_images(self, callback: CallbackQuery, state: FSMContext):
+        """Избранные изображения"""
+        await callback.answer("🖼️ Избранные фото - в разработке!\n\nОтмеченные изображения в одном месте.", show_alert=True)
+    
+    async def handle_favorites_videos(self, callback: CallbackQuery, state: FSMContext):
+        """Избранные видео"""
+        await callback.answer("🎬 Избранные видео - в разработке!\n\nВаши любимые видеоролики.", show_alert=True)
+    
+    async def handle_favorites_collections(self, callback: CallbackQuery, state: FSMContext):
+        """Избранные коллекции"""
+        await callback.answer("🗂️ Коллекции - в разработке!\n\nТематические подборки ваших работ.", show_alert=True)
+    
+    # === ОБРАБОТЧИКИ ВИДЕО ===
+    
+    async def handle_videos_by_date(self, callback: CallbackQuery, state: FSMContext):
+        """Видео по дате"""
+        await callback.answer("📅 Видео по дате - в разработке!\n\nХронологический просмотр видеороликов.", show_alert=True)
+    
+    async def handle_gallery_hedra_videos(self, callback: CallbackQuery, state: FSMContext):
+        """Видео Hedra AI"""
+        await callback.answer("🎭 Hedra AI видео - в разработке!\n\nВсе говорящие аватары, созданные в Hedra.", show_alert=True)
+    
+    async def handle_gallery_kling_videos(self, callback: CallbackQuery, state: FSMContext):
+        """Видео Kling"""
+        await callback.answer("🌟 Kling видео - в разработке!\n\nКинематографические ролики платформы Kling.", show_alert=True)
+    
+    async def handle_gallery_weo3_videos(self, callback: CallbackQuery, state: FSMContext):
+        """Видео Weo3"""
+        await callback.answer("🎪 Weo3 видео - в разработке!\n\nКреативные ролики от Weo3.", show_alert=True)
+    
+    async def handle_favorite_videos(self, callback: CallbackQuery, state: FSMContext):
+        """Избранные видео (дубликат)"""
+        await callback.answer("⭐ Избранные видео - в разработке!\n\nВаши отмеченные видеоролики.", show_alert=True)
+    
+    # === СТАТИСТИКА ===
+    
+    async def handle_my_stats(self, callback: CallbackQuery, state: FSMContext):
+        """Моя статистика"""
+        await callback.answer("📊 Статистика творчества - в разработке!\n\nАналитика ваших работ и активности.", show_alert=True)
+    
+    # === ПРОФИЛЬ ===
+    
+    async def handle_my_gallery(self, callback: CallbackQuery, state: FSMContext):
+        """Моя галерея"""
+        await callback.answer("🖼️ Моя галерея - в разработке!\n\nВаша персональная коллекция работ.", show_alert=True)
 
 
 # Создаем экземпляр обработчика
