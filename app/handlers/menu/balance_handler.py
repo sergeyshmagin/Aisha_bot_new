@@ -125,8 +125,9 @@ class BalanceMenuHandler(BaseHandler):
     async def show_balance_history(self, callback: CallbackQuery, state: FSMContext):
         """Показывает историю операций"""
         try:
-            # Переиспользуем существующий обработчик
-            await balance_handler.show_balance_history(callback, state)
+            # Импортируем и используем существующую callback-функцию
+            from app.handlers.profile.balance_handler import show_balance_history
+            await show_balance_history(callback)
             
         except Exception as e:
             logger.exception(f"Ошибка показа истории: {e}")

@@ -61,7 +61,7 @@ class ProjectsHandler(BaseHandler):
         """Показывает главное меню раздела 'Мои работы'"""
         try:
             await self.safe_edit_message(
-                callback.message,
+                callback,
                 text=(
                     "🎭 <b>Мои работы</b>\n\n"
                     "Все ваши творческие результаты:\n\n"
@@ -85,7 +85,7 @@ class ProjectsHandler(BaseHandler):
         """Показывает меню всех фото"""
         try:
             await self.safe_edit_message(
-                callback.message,
+                callback,
                 text=(
                     "🖼️ <b>Все фото</b>\n\n"
                     "Ваши изображения по категориям:\n\n"
@@ -109,7 +109,7 @@ class ProjectsHandler(BaseHandler):
         """Показывает меню всех видео"""
         try:
             await self.safe_edit_message(
-                callback.message,
+                callback,
                 text=(
                     "🎬 <b>Все видео</b>\n\n"
                     "Ваши видеоролики по платформам:\n\n"
@@ -133,7 +133,7 @@ class ProjectsHandler(BaseHandler):
         """Показывает меню избранного"""
         try:
             await self.safe_edit_message(
-                callback.message,
+                callback,
                 text=(
                     "⭐ <b>Избранное</b>\n\n"
                     "Ваши любимые работы:\n\n"
