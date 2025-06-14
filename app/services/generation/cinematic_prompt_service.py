@@ -97,7 +97,7 @@ class CinematicPromptService:
             }
     
     async def _build_cinematic_prompt(self, base_prompt: str, avatar_type: str, environment_text: Optional[str] = None) -> str:
-        """Строит кинематографический промпт по блокам"""
+        """Строит кинематографический промпт по блокам с приоритетом композиции"""
         
         prompt_lower = base_prompt.lower()
         components = []
@@ -106,44 +106,61 @@ class CinematicPromptService:
         if avatar_type == "portrait":
             components.append("TOK")
         
-        # 2. Технические характеристики изображения
-        tech_specs = self._build_technical_specifications()
-        components.extend(tech_specs)
-        
-        # 3. Определение типа кадра
+        # 🎯 2. КРИТИЧЕСКИ ВАЖНО: Тип кадра и композиция СРАЗУ после TOK
         shot_type = self._determine_shot_type(prompt_lower)
         components.append(shot_type)
         
-        # 4. Описание освещения
+        # 3. Дополнительные композиционные уточнения для полного роста
+        if any(word in prompt_lower for word in [
+            'full body', 'standing', 'walking', 'полный рост', 'стоя', 'в полный рост',
+            'по пояс', 'торс', 'до пояса', 'весь рост', 'целиком'
+        ]):
+            # Усиливаем композиционное требование
+            if 'full' in shot_type or 'полный' in prompt_lower or 'в полный рост' in prompt_lower:
+                components.append("showing the entire figure from head to feet, complete body composition")
+            elif 'half' in shot_type or 'по пояс' in prompt_lower:
+                components.append("framed from waist up, upper body composition")
+        
+        # 3.5. Дополнительные композиционные усилители для точного соблюдения требований
+        composition_enhancers = self._enhance_composition_requirements(prompt_lower)
+        if composition_enhancers:
+            # Добавляем только самые важные усилители, чтобы не перегружать промпт
+            components.extend(composition_enhancers[:2])  # Берем максимум 2 усилителя
+        
+        # 4. Технические характеристики изображения (после композиции)
+        tech_specs = self._build_technical_specifications()
+        components.extend(tech_specs)
+        
+        # 5. Описание освещения
         lighting = self._create_lighting_description(prompt_lower)
         components.append(lighting)
         
-        # 5. Композиция и фрейминг
+        # 6. Детальная композиция и фрейминг
         composition = self._create_composition_description(prompt_lower)
         components.append(composition)
         
-        # 6. Детальное описание субъекта
+        # 7. Детальное описание субъекта
         subject_description = self._enhance_subject_description(base_prompt, prompt_lower)
         components.append(subject_description)
         
-        # 7. Поза и язык тела
+        # 8. Поза и язык тела
         pose_description = self._create_pose_description(prompt_lower)
         components.append(pose_description)
         
-        # 8. Окружение и фон (с поддержкой переданного environment_text)
+        # 9. Окружение и фон (с поддержкой переданного environment_text)
         environment = self._create_environment_description(prompt_lower, environment_text)
         if environment:
             components.append(environment)
         
-        # 9. Технические параметры камеры
+        # 10. Технические параметры камеры
         camera_tech = self._create_camera_specifications()
         components.extend(camera_tech)
         
-        # 10. Цветовая палитра
+        # 11. Цветовая палитра
         color_palette = self._create_color_palette(prompt_lower)
         components.append(color_palette)
         
-        # 11. Финальные детали качества
+        # 12. Финальные детали качества
         quality_specs = self._create_quality_specifications()
         components.extend(quality_specs)
         
@@ -160,19 +177,32 @@ class CinematicPromptService:
         ]
     
     def _determine_shot_type(self, prompt_lower: str) -> str:
-        """Определяет тип кадра с детальным описанием"""
+        """Определяет тип кадра с детальным описанием и приоритетом композиции"""
+        
+        # Полный рост - максимальный приоритет
         if any(word in prompt_lower for word in [
-            'full body', 'standing', 'walking', 'полный рост', 'стоя', 'в полный рост'
+            'full body', 'full-body', 'full-length', 'full length', 'standing', 'walking', 
+            'полный рост', 'стоя', 'в полный рост', 'весь рост', 'целиком', 
+            'от головы до ног', 'во весь рост', 'полностью', 'с ног до головы', 
+            'целая фигура', 'вся фигура', 'entire figure', 'complete body'
         ]):
             return "full-body portrait photograph"
+        
+        # По пояс / до пояса
         elif any(word in prompt_lower for word in [
-            'half body', 'waist up', 'по пояс', 'торс', 'до пояса'
+            'half body', 'half-body', 'waist up', 'по пояс', 'торс', 'до пояса',
+            'upper body', 'от пояса', 'половина тела', 'грудь и плечи'
         ]):
             return "half-body portrait photograph"
+        
+        # Крупный план / голова и плечи
         elif any(word in prompt_lower for word in [
-            'close-up', 'headshot', 'крупный план', 'голова', 'портрет'
+            'close-up', 'close up', 'headshot', 'head shot', 'крупный план', 'голова',
+            'лицо крупно', 'только лицо', 'голова и плечи', 'портрет лица'
         ]):
             return "close-up portrait photograph"
+        
+        # Средний план - если ничего конкретного не указано
         else:
             return "medium portrait photograph"
     
@@ -266,39 +296,65 @@ class CinematicPromptService:
         return random.choice(poses)
     
     def _create_environment_description(self, prompt_lower: str, environment_text: Optional[str] = None) -> Optional[str]:
-        """Создает детальное описание окружения"""
+        """Создает детальное описание окружения с учетом композиционных требований"""
         if environment_text:
             return environment_text
         
-        if any(word in prompt_lower for word in ['dubai', 'burj khalifa', 'дубай']):
+        # Дубай и знаменитые места
+        if any(word in prompt_lower for word in ['dubai', 'burj khalifa', 'дубай', 'бурдж халифа']):
             return ("Set against the iconic Dubai skyline with the magnificent Burj Khalifa towering in the background, "
                    "featuring the architectural marvel rendered with atmospheric perspective and soft focus, "
                    "showcasing the grandeur of modern urban achievement with warm desert lighting")
         
-        elif any(word in prompt_lower for word in ['office', 'business', 'офис', 'деловой']):
+        # Офис и деловая среда
+        elif any(word in prompt_lower for word in ['office', 'business', 'офис', 'деловой', 'корпоративный']):
             return ("Set in a sophisticated modern office environment with clean architectural lines, "
                    "contemporary interior design elements visible in the professionally blurred background, "
                    "featuring warm ambient lighting and luxurious furnishings that convey success and professionalism")
         
-        elif any(word in prompt_lower for word in ['studio', 'студия']):
+        # Студия фотографическая
+        elif any(word in prompt_lower for word in ['studio', 'студия', 'фотостудия']):
             return ("In a professional photography studio setting with seamless backdrop and controlled environment, "
                    "featuring expertly positioned lighting equipment and neutral tones, "
                    "creating optimal conditions for maximum image quality and focus on the subject")
         
-        elif any(word in prompt_lower for word in ['outdoor', 'street', 'city', 'улица', 'город']):
+        # Улица и городская среда
+        elif any(word in prompt_lower for word in ['outdoor', 'street', 'city', 'улица', 'город', 'на улице', 'городской']):
             return ("Against an urban landscape backdrop with sophisticated architectural elements softly blurred, "
                    "featuring metropolitan atmosphere with natural depth and environmental context, "
                    "showcasing the dynamic relationship between subject and contemporary cityscape")
         
-        elif any(word in prompt_lower for word in ['nature', 'forest', 'park', 'природа', 'лес']):
+        # Природа и парки
+        elif any(word in prompt_lower for word in ['nature', 'forest', 'park', 'природа', 'лес', 'парк', 'зелень']):
             return ("Surrounded by natural landscape with organic textures and soft environmental elements, "
                    "featuring lush background with perfect depth of field and natural color harmony, "
                    "creating serene connection with the natural world and organic beauty")
         
-        elif any(word in prompt_lower for word in ['restaurant', 'cafe', 'ресторан', 'кафе']):
+        # Ресторан и кафе
+        elif any(word in prompt_lower for word in ['restaurant', 'cafe', 'ресторан', 'кафе', 'бар']):
             return ("Set in an elegant dining establishment with sophisticated interior design, "
                    "featuring warm ambient lighting and luxurious decor elements softly blurred in the background, "
                    "conveying refined taste and upscale lifestyle atmosphere")
+        
+        # Дом и интерьер
+        elif any(word in prompt_lower for word in ['home', 'interior', 'дом', 'интерьер', 'комната', 'квартира']):
+            return ("In a beautifully designed interior space with tasteful decor and warm, inviting atmosphere, "
+                   "featuring elegant furnishings and soft ambient lighting that creates a comfortable domestic setting")
+        
+        # Море и пляж
+        elif any(word in prompt_lower for word in ['beach', 'sea', 'ocean', 'пляж', 'море', 'океан']):
+            return ("Against a stunning coastal backdrop with the ocean stretching to the horizon, "
+                   "featuring natural lighting and the serene beauty of the seaside environment")
+        
+        # Горы и возвышенности
+        elif any(word in prompt_lower for word in ['mountain', 'hill', 'гора', 'горы', 'холм', 'возвышенность']):
+            return ("Set against majestic mountain scenery with dramatic natural landscape in the background, "
+                   "featuring atmospheric perspective and the grandeur of natural elevation")
+        
+        # Фон и задний план (общие указания)
+        elif any(word in prompt_lower for word in ['фон', 'background', 'задний план', 'backdrop']):
+            return ("With carefully composed background elements that complement the subject, "
+                   "featuring professional depth of field and balanced environmental context")
         
         return None
     
@@ -457,4 +513,49 @@ RESPONSE: only translated prompt without explanations."""
                 unique_parts.append(part)
                 seen.add(key)
         
-        return ', '.join(unique_parts) 
+        return ', '.join(unique_parts)
+    
+    def _enhance_composition_requirements(self, prompt_lower: str) -> List[str]:
+        """
+        Создает дополнительные композиционные усилители для четкого соблюдения требований
+        Эти фразы помогают модели точно соблюдать указанную композицию
+        """
+        enhancements = []
+        
+        # Усилители для полного роста
+        if any(word in prompt_lower for word in [
+            'full body', 'full-body', 'full-length', 'full length', 'standing', 'walking',
+            'полный рост', 'в полный рост', 'весь рост', 'целиком', 'от головы до ног', 
+            'во весь рост', 'полностью', 'с ног до головы', 'целая фигура', 'вся фигура',
+            'entire figure', 'complete body'
+        ]):
+            enhancements.extend([
+                "complete figure visible from head to toes",
+                "entire body composition with full height",
+                "no cropping of limbs or body parts",
+                "full-length portrait showing complete anatomy"
+            ])
+        
+        # Усилители для съемки по пояс
+        elif any(word in prompt_lower for word in [
+            'half body', 'half-body', 'по пояс', 'торс', 'до пояса', 'upper body', 'от пояса'
+        ]):
+            enhancements.extend([
+                "framed from waist up",
+                "upper torso and head composition",
+                "waist-level framing"
+            ])
+        
+        # Усилители для указанного фона
+        if any(word in prompt_lower for word in [
+            'фон', 'background', 'на фоне', 'против фона', 'backdrop', 'задний план'
+        ]):
+            enhancements.append("with clearly visible background environment")
+        
+        # Усилители для указанного окружения
+        if any(word in prompt_lower for word in [
+            'в', 'на', 'среди', 'возле', 'рядом с', 'около', 'у'
+        ]):
+            enhancements.append("positioned within the specified environment")
+        
+        return enhancements 
