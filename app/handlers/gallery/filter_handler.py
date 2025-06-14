@@ -15,6 +15,7 @@ from app.services.gallery_service import gallery_service
 from app.handlers.gallery.states import GalleryFilterStates, GalleryFilterData, GalleryData, gallery_state_manager
 from .gallery_viewer import GalleryViewer
 from .gallery_manager import GalleryManager
+from app.shared.utils.telegram_utils import safe_edit_callback_message
 
 logger = get_logger(__name__)
 
@@ -62,8 +63,9 @@ class GalleryFilterHandler:
             ]
         ])
         
-        await callback.message.edit_text(
-            "📅 **Фильтр по дате**\n\nВыберите период для просмотра изображений:",
+        await safe_edit_callback_message(
+            callback,
+            text="📅 **Фильтр по дате**\n\nВыберите период для просмотра изображений:",
             reply_markup=keyboard,
             parse_mode="Markdown"
         )
@@ -81,8 +83,9 @@ class GalleryFilterHandler:
             ]
         ])
         
-        await callback.message.edit_text(
-            "🔍 **Фильтры галереи**\n\nВыберите тип фильтрации:",
+        await safe_edit_callback_message(
+            callback,
+            text="🔍 **Фильтры галереи**\n\nВыберите тип фильтрации:",
             reply_markup=keyboard,
             parse_mode="Markdown"
         )
@@ -106,8 +109,9 @@ async def show_type_filter_menu(callback: CallbackQuery, state: FSMContext):
         ]
     ])
     
-    await callback.message.edit_text(
-        "Выберите тип изображений:",
+    await safe_edit_callback_message(
+        callback,
+        text="Выберите тип изображений:",
         reply_markup=keyboard
     )
 
@@ -160,10 +164,9 @@ async def handle_date_filter(callback: CallbackQuery, state: FSMContext):
         elif period == "custom":
             # Переходим в состояние выбора периода
             await state.set_state(GalleryFilterStates.waiting_custom_date)
-            await callback.message.edit_text(
-                "Введите период в формате:\n"
-                "ДД.ММ.ГГГГ-ДД.ММ.ГГГГ\n"
-                "Например: 01.06.2025-15.06.2025",
+            await safe_edit_callback_message(
+                callback,
+                text="Введите период в формате:\nДД.ММ.ГГГГ-ДД.ММ.ГГГГ\nНапример: 01.06.2025-15.06.2025",
                 reply_markup=InlineKeyboardMarkup(inline_keyboard=[
                     [InlineKeyboardButton(text="🔙 Отмена", callback_data="my_gallery")]
                 ])
