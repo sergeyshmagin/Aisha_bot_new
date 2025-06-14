@@ -12,12 +12,20 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 
-def get_main_menu() -> InlineKeyboardMarkup:
+def get_main_menu(balance: float = None) -> InlineKeyboardMarkup:
     """
     🏠 Главное меню бота - новая структура
     
     6 основных разделов для оптимального User Flow
+    
+    Args:
+        balance: Текущий баланс пользователя для отображения в кнопке
     """
+    # Формируем текст кнопки баланса
+    balance_text = "💰 Баланс"
+    if balance is not None:
+        balance_text = f"💰 Баланс ({balance:.0f})"
+    
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
@@ -35,7 +43,7 @@ def get_main_menu() -> InlineKeyboardMarkup:
                 callback_data="business_menu"
             ),
             InlineKeyboardButton(
-                text="💰 Баланс",
+                text=balance_text,
                 callback_data="balance_menu_v2"
             )
         ],

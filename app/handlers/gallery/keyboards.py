@@ -19,9 +19,6 @@ def build_empty_gallery_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="📝 По описанию", callback_data="imagen4_generation")
         ],
         [
-            InlineKeyboardButton(text="🎬 Видео", callback_data="video_generation_stub")
-        ],
-        [
             InlineKeyboardButton(text="◀️ Назад", callback_data="my_projects_menu"),
             InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")
         ]

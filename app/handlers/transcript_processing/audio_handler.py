@@ -14,6 +14,7 @@ from app.core.di import (
     get_user_service_with_session,
     get_transcript_service
 )
+from app.core.constants import MAX_AUDIO_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +111,7 @@ class AudioHandler:
     async def _validate_file_size(self, message: Message, file_info: dict, processing_msg: Message, state: FSMContext) -> bool:
         """Проверяет размер файла и возвращает True если файл можно обработать"""
         file_size = file_info.get("file_size")
-        max_file_size = settings.MAX_AUDIO_SIZE  # 1GB
+        max_file_size = MAX_AUDIO_SIZE  # 1GB
         
         if file_size and file_size > max_file_size:
             logger.warning(f"[AUDIO_UNIVERSAL] Файл слишком большой: {file_size} байт (лимит: {max_file_size})")

@@ -12,6 +12,7 @@ from aiogram.fsm.context import FSMContext
 
 from app.shared.handlers.base_handler import BaseHandler
 from app.keyboards.menu.main import get_main_menu
+from app.core.di import get_user_service
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,16 @@ class MainMenuHandler(BaseHandler):
         super().__init__()
         self.router = Router(name="main_menu")
         self._register_handlers()
+    
+    async def get_user_balance(self, user_id: int) -> float:
+        """Получает баланс пользователя"""
+        try:
+            async with get_user_service() as user_service:
+                balance = await user_service.get_user_balance(user_id)
+                return balance
+        except Exception as e:
+            logger.exception(f"Ошибка получения баланса пользователя {user_id}: {e}")
+            return 0.0
     
     def _register_handlers(self):
         """Регистрирует обработчики callback_data"""
@@ -68,6 +79,9 @@ class MainMenuHandler(BaseHandler):
             # Очищаем состояние при старте
             await self.safe_clear_state(state)
             
+            # Получаем баланс пользователя
+            user_balance = await self.get_user_balance(user.id)
+            
             # Приветственный текст
             welcome_text = f"""👋 <b>Добро пожаловать в Aisha!</b>
 
@@ -84,10 +98,10 @@ class MainMenuHandler(BaseHandler):
 
 <i>Выберите нужный раздел из меню ниже:</i>"""
 
-            # Отправляем главное меню
+            # Отправляем главное меню с балансом
             await message.answer(
                 text=welcome_text,
-                reply_markup=get_main_menu(),
+                reply_markup=get_main_menu(balance=user_balance),
                 parse_mode="HTML"
             )
             
@@ -110,6 +124,14 @@ class MainMenuHandler(BaseHandler):
         - ❓ Помощь
         """
         try:
+            # Получаем пользователя
+            user = await self.get_user_from_callback(callback)
+            if not user:
+                return
+            
+            # Получаем баланс пользователя
+            user_balance = await self.get_user_balance(user.id)
+            
             await self.safe_edit_message(
                 callback,
                 text=(
@@ -122,7 +144,7 @@ class MainMenuHandler(BaseHandler):
                     "⚙️ <b>Настройки</b> - персонализация\n"
                     "❓ <b>Помощь</b> - поддержка и обучение"
                 ),
-                reply_markup=get_main_menu(),
+                reply_markup=get_main_menu(balance=user_balance),
                 parse_mode="HTML"
             )
             

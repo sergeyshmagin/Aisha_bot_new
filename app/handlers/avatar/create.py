@@ -444,7 +444,24 @@ async def show_avatar_help(callback: CallbackQuery, state: FSMContext):
 Готовы создавать красивые фото с любыми описаниями!
 """
         
-        keyboard = get_avatar_main_menu(0)  # Показываем меню создания
+        # Получаем количество аватаров пользователя
+        try:
+            from app.shared.handlers.base_handler import BaseHandler
+            base_handler = BaseHandler()
+            user = await base_handler.get_user_from_callback(callback, show_error=False)
+            
+            if user:
+                from app.core.di import get_avatar_service
+                async with get_avatar_service() as avatar_service:
+                    avatars = await avatar_service.get_user_avatars_with_photos(user.id)
+                    avatars_count = len(avatars)
+            else:
+                avatars_count = 0
+        except Exception as e:
+            logger.warning(f"Ошибка получения количества аватаров: {e}")
+            avatars_count = 0
+        
+        keyboard = get_avatar_main_menu(avatars_count)  # Передаем реальное количество
         
         try:
             await callback.message.edit_text(

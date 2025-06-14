@@ -237,11 +237,23 @@ class ProjectsHandler(BaseHandler):
     
     async def handle_gallery_avatars(self, callback: CallbackQuery, state: FSMContext):
         """Галерея аватаров"""
-        await callback.answer("📸 Галерея аватаров - в разработке!\n\nЗдесь будут все ваши созданные аватары с фильтрацией.", show_alert=True)
+        await state.clear()
+        
+        # Импортируем обработчик фильтров галереи
+        from app.handlers.gallery.filter_handler import gallery_filter_handler
+        
+        # Устанавливаем фильтр по типу "avatar" и показываем галерею
+        await gallery_filter_handler.show_gallery_with_type_filter(callback, state, "avatar")
     
     async def handle_gallery_imagen(self, callback: CallbackQuery, state: FSMContext):
         """Галерея Imagen"""
-        await callback.answer("🖼️ Галерея Imagen4 - в разработке!\n\nВсе изображения, созданные по описанию.", show_alert=True)
+        await state.clear()
+        
+        # Импортируем обработчик фильтров галереи
+        from app.handlers.gallery.filter_handler import gallery_filter_handler
+        
+        # Устанавливаем фильтр по типу "imagen4" и показываем галерею
+        await gallery_filter_handler.show_gallery_with_type_filter(callback, state, "imagen4")
     
     async def handle_gallery_video(self, callback: CallbackQuery, state: FSMContext):
         """Галерея видео из фото"""
@@ -249,7 +261,13 @@ class ProjectsHandler(BaseHandler):
     
     async def handle_gallery_by_date(self, callback: CallbackQuery, state: FSMContext):
         """Галерея по дате"""
-        await callback.answer("📅 Просмотр по дате - в разработке!\n\nХронологический просмотр всех работ.", show_alert=True)
+        await state.clear()
+        
+        # Импортируем обработчик фильтров галереи
+        from app.handlers.gallery.filter_handler import gallery_filter_handler
+        
+        # Показываем меню фильтрации по дате
+        await gallery_filter_handler.show_date_filter_menu(callback, state)
     
     # === ОБРАБОТЧИКИ ИЗБРАННОГО ===
     
@@ -259,7 +277,10 @@ class ProjectsHandler(BaseHandler):
     
     async def handle_favorites_images(self, callback: CallbackQuery, state: FSMContext):
         """Избранные изображения"""
-        await callback.answer("🖼️ Избранные фото - в разработке!\n\nОтмеченные изображения в одном месте.", show_alert=True)
+        await state.clear()
+        
+        # Пока показываем заглушку для избранного, функция будет добавлена позже
+        await callback.answer("⭐ Избранные фото - в разработке!\n\nОтмеченные изображения в одном месте.", show_alert=True)
     
     async def handle_favorites_videos(self, callback: CallbackQuery, state: FSMContext):
         """Избранные видео"""
@@ -300,8 +321,10 @@ class ProjectsHandler(BaseHandler):
     # === ПРОФИЛЬ ===
     
     async def handle_my_gallery(self, callback: CallbackQuery, state: FSMContext):
-        """Моя галерея"""
-        await callback.answer("🖼️ Моя галерея - в разработке!\n\nВаша персональная коллекция работ.", show_alert=True)
+        """Моя галерея - перенаправляем на настоящую галерею"""
+        # Импортируем обработчик настоящей галереи
+        from app.handlers.gallery.main_handler import handle_gallery_main
+        await handle_gallery_main(callback, state)
 
 
 # Создаем экземпляр обработчика

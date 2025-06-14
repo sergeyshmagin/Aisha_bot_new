@@ -12,7 +12,7 @@ def get_avatar_main_menu(avatars_count: int = 0) -> InlineKeyboardMarkup:
     buttons = [
         [
             InlineKeyboardButton(
-                text="👤 Создать образ",
+                text="🎭 Создать аватар",
                 callback_data="create_avatar"
             )
         ]
@@ -21,7 +21,7 @@ def get_avatar_main_menu(avatars_count: int = 0) -> InlineKeyboardMarkup:
     if avatars_count > 0:
         buttons.append([
             InlineKeyboardButton(
-                text=f"📂 Мои образы ({avatars_count})",
+                text=f"🎭 Мои аватары ({avatars_count})",
                 callback_data="avatar_gallery"
             )
         ])
@@ -35,8 +35,8 @@ def get_avatar_main_menu(avatars_count: int = 0) -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                text="◀️ Главное меню",
-                callback_data="back_to_main"
+                text="◀️ Назад",
+                callback_data="creativity_menu"
             )
         ]
     ])

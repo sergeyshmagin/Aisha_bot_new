@@ -15,6 +15,7 @@ from aiogram.fsm.context import FSMContext
 from app.keyboards.menu.creativity import get_creativity_menu, get_photo_menu, get_video_menu_v2
 from app.core.logger import get_logger
 from app.shared.handlers.base_handler import BaseHandler
+from app.core.di import get_user_service
 
 logger = get_logger(__name__)
 
@@ -55,6 +56,51 @@ class CreativityHandler(BaseHandler):
         self.router.callback_query.register(self.start_kling_video, F.data == "kling_video")
         self.router.callback_query.register(self.start_weo3_video, F.data == "weo3_video")
         self.router.callback_query.register(self.show_my_videos, F.data == "my_videos")
+    
+    async def get_user_avatar_photos_count(self, user_id: int) -> int:
+        """Получает количество фото с аватаром пользователя"""
+        try:
+            async with get_user_service() as user_service:
+                # Здесь будет логика подсчета фото с аватарами из галереи
+                # Пока возвращаем 0, логику можно будет добавить позже
+                return 0
+        except Exception as e:
+            logger.exception(f"Ошибка получения количества фото с аватаром пользователя {user_id}: {e}")
+            return 0
+    
+    async def get_user_imagen_photos_count(self, user_id: int) -> int:
+        """Получает количество фото по описанию пользователя"""
+        try:
+            async with get_user_service() as user_service:
+                # Здесь будет логика подсчета фото Imagen4 из галереи
+                # Пока возвращаем 0, логику можно будет добавить позже
+                return 0
+        except Exception as e:
+            logger.exception(f"Ошибка получения количества фото Imagen пользователя {user_id}: {e}")
+            return 0
+    
+    async def get_user_avatars_count(self, user_id: int) -> int:
+        """Получает количество аватаров пользователя"""
+        try:
+            from app.core.di import get_avatar_service
+            async with get_avatar_service() as avatar_service:
+                # Получаем аватары пользователя (как в меню аватаров)
+                avatars = await avatar_service.get_user_avatars_with_photos(user_id)
+                return len(avatars)
+        except Exception as e:
+            logger.exception(f"Ошибка получения количества аватаров пользователя {user_id}: {e}")
+            return 0
+    
+    async def get_user_videos_count(self, user_id: int) -> int:
+        """Получает количество видео пользователя"""
+        try:
+            async with get_user_service() as user_service:
+                # Здесь будет логика подсчета видео
+                # Пока возвращаем 0, логику можно будет добавить позже
+                return 0
+        except Exception as e:
+            logger.exception(f"Ошибка получения количества видео пользователя {user_id}: {e}")
+            return 0
     
     async def show_creativity_menu(self, call: CallbackQuery, state: FSMContext):
         """
@@ -106,13 +152,24 @@ class CreativityHandler(BaseHandler):
         """
         await state.clear()
         
+        # Получаем пользователя
+        user = await self.get_user_from_callback(call)
+        if not user:
+            return
+        
+        # Получаем количества разных типов фото и аватаров
+        avatar_photos_count = await self.get_user_avatar_photos_count(user.id)
+        imagen_photos_count = await self.get_user_imagen_photos_count(user.id)
+        avatars_count = await self.get_user_avatars_count(user.id)
+        
         menu_text = """📷 **Фото**
 
 🎭 **Доступные технологии:**
 
-📷 **Фото со мной** - используйте обученную на ваших фото модель
+📷 **Фото с аватаром** - используйте обученную на ваших фото модель
 📝 **По описанию** - создание любых картинок через Imagen 4
-🎬 **Видео** - создание видеороликов (скоро)
+🎭 **Мои аватары** - управление созданными образами
+🖼️ **Мои фото** - все созданные изображения
 
 Создавайте профессиональные снимки и художественные изображения!
 
@@ -122,7 +179,11 @@ class CreativityHandler(BaseHandler):
             await self.safe_edit_message(
                 call,
                 menu_text,
-                reply_markup=get_photo_menu(),
+                reply_markup=get_photo_menu(
+                    avatar_photos_count=avatar_photos_count,
+                    imagen_photos_count=imagen_photos_count,
+                    avatars_count=avatars_count
+                ),
                 parse_mode="Markdown"
             )
             logger.debug("✅ Показано меню фото")
@@ -142,6 +203,14 @@ class CreativityHandler(BaseHandler):
         """
         await state.clear()
         
+        # Получаем пользователя
+        user = await self.get_user_from_callback(call)
+        if not user:
+            return
+        
+        # Получаем количество видео пользователя
+        videos_count = await self.get_user_videos_count(user.id)
+        
         menu_text = """🎬 **Видео**
 
 🎭 **Доступные платформы:**
@@ -149,8 +218,6 @@ class CreativityHandler(BaseHandler):
 🎭 **Hedra AI** - создание говорящих портретов
 🌟 **Kling** - генерация креативных роликов  
 🎪 **Weo3** - анимация ваших изображений
-
-📁 **Мои видео** - управление созданными роликами
 
 Оживите ваши идеи с помощью ИИ!
 
@@ -160,7 +227,7 @@ class CreativityHandler(BaseHandler):
             await self.safe_edit_message(
                 call,
                 menu_text,
-                reply_markup=get_video_menu_v2(),
+                reply_markup=get_video_menu_v2(videos_count=videos_count),
                 parse_mode="Markdown"
             )
             logger.debug("✅ Показано меню видео")

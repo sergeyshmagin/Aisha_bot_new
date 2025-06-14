@@ -9,7 +9,7 @@ from aiogram.fsm.context import FSMContext
 from app.shared.handlers.base_handler import BaseHandler
 from app.shared.decorators.auth_decorators import require_user, require_main_avatar
 from app.core.logger import get_logger
-from app.services.generation.generation_service import GENERATION_COST
+from app.core.constants import GENERATION_COST
 from .states import GenerationStates
 from .keyboards import build_custom_prompt_keyboard, build_aspect_ratio_keyboard
 from app.shared.utils.telegram_utils import safe_edit_callback_message
@@ -32,14 +32,8 @@ class CustomPromptHandler(BaseHandler):
         """Показывает форму для ввода кастомного промпта"""
         
         try:
-            # Извлекаем avatar_id из callback_data (gen_custom:{avatar_id})
-            data_parts = callback.data.split(":")
-            avatar_id = UUID(data_parts[1])
-            
-            # Проверяем что это тот же аватар
-            if avatar_id != main_avatar.id:
-                await callback.answer("❌ Неверный аватар", show_alert=True)
-                return
+            # Используем основной аватар пользователя
+            avatar_id = main_avatar.id
             
             # Проверяем баланс
             if not await self.check_user_balance(

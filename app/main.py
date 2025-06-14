@@ -224,8 +224,8 @@ async def main():
     dp.include_router(imagen4_router)
     
     # Регистрируем галерею
-    # dp.include_router(gallery_main_router)
-    # dp.include_router(gallery_filter_router)
+    dp.include_router(gallery_main_router)
+    dp.include_router(gallery_filter_router)
     
     # Регистрируем личный кабинет пользователя
     # dp.include_router(profile_router)

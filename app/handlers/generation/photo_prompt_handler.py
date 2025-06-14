@@ -15,6 +15,7 @@ from app.services.user_settings import UserSettingsService
 from .states import GenerationStates
 from .keyboards import build_photo_prompt_keyboard, build_aspect_ratio_keyboard
 from app.database.models import ImageGeneration, UserSettings
+from app.core.constants import GENERATION_COST
 
 logger = get_logger(__name__)
 
@@ -38,21 +39,13 @@ class PhotoPromptHandler(BaseHandler):
         """Показывает форму для загрузки референсного фото"""
         
         try:
-            # Извлекаем avatar_id из callback_data (gen_photo:{avatar_id})
-            data_parts = callback.data.split(":")
-            avatar_id = UUID(data_parts[1])
+            # Используем основной аватар пользователя
+            avatar_id = main_avatar.id
             
             # Добавляем логирование для диагностики
             logger.info(f"[PhotoPromptInput] User {user.telegram_id}, callback_data: {callback.data}")
-            logger.info(f"[PhotoPromptInput] Avatar ID from callback: {avatar_id}")
             logger.info(f"[PhotoPromptInput] Main avatar ID: {main_avatar.id}")
             logger.info(f"[PhotoPromptInput] Main avatar name: {main_avatar.name}")
-            
-            # Проверяем что это тот же аватар
-            if avatar_id != main_avatar.id:
-                logger.warning(f"[PhotoPromptInput] Avatar mismatch: callback={avatar_id} != main={main_avatar.id}")
-                await callback.answer("❌ Неверный аватар", show_alert=True)
-                return
             
             # Проверяем доступность Vision API
             if not self.image_analysis_service.is_available():
@@ -64,6 +57,7 @@ class PhotoPromptHandler(BaseHandler):
 
 🎭 <b>Аватар:</b> {main_avatar.name}
 ✨ <b>Тип:</b> {main_avatar.training_type.value.title()}
+💰 <b>Стоимость:</b> {GENERATION_COST:.0f} монет
 
 📋 <b>Отправьте фото для анализа:</b>
 
@@ -99,8 +93,6 @@ class PhotoPromptHandler(BaseHandler):
             
             logger.info(f"Пользователь {user.telegram_id} начал загрузку референсного фото для аватара {avatar_id}")
             
-        except ValueError as e:
-            await callback.answer("❌ Неверный формат данных", show_alert=True)
         except Exception as e:
             logger.exception(f"Ошибка показа формы фото-промпта: {e}")
             await callback.answer("❌ Произошла ошибка", show_alert=True)
@@ -317,6 +309,7 @@ class PhotoPromptHandler(BaseHandler):
 
 🎭 <b>Аватар:</b> {avatar_name}
 ✍️ <b>Промпт:</b> Создан ({len(custom_prompt)} символов)
+💰 <b>Стоимость:</b> {GENERATION_COST:.0f} монет
 
 👇 <b>Выберите соотношение сторон:</b>"""
             
@@ -376,6 +369,7 @@ class PhotoPromptHandler(BaseHandler):
 🎭 <b>Аватар:</b> {avatar_name}
 📐 <b>Размер:</b> {aspect_name}
 ⚡ <b>Модель:</b> FLUX 1.1 Ultra (максимальный фотореализм)
+💰 <b>Стоимость:</b> {GENERATION_COST:.0f} монет
 
 ⏳ <b>Генерация запущена...</b>
 💡 Обычно занимает 30-60 секунд""",

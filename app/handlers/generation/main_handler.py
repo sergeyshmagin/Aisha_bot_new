@@ -13,7 +13,7 @@ from app.shared.handlers.base_handler import BaseHandler
 from app.shared.decorators.auth_decorators import require_user, require_main_avatar
 from app.core.di import get_user_service
 from app.core.logger import get_logger
-from app.services.generation.generation_service import GENERATION_COST
+from app.core.constants import GENERATION_COST
 from .states import GenerationStates
 from .keyboards import build_generation_menu_keyboard
 from .custom_prompt_handler import CustomPromptHandler
@@ -55,7 +55,10 @@ class GenerationMainHandler(BaseHandler):
 💰 Баланс: {user_balance:.0f} монет
 💎 Стоимость: {GENERATION_COST:.0f} монет за изображение
 
-🔥 <b>Популярные стили</b>"""
+📸 <b>Изображения генерируются с вашим основным аватаром</b>
+Чтобы сменить аватар для генерации, нажмите "🎭 Мои аватары"
+
+🔥 <b>Выберите способ создания:</b>"""
             
             # Формируем клавиатуру
             keyboard = build_generation_menu_keyboard(
@@ -183,7 +186,7 @@ async def handle_generation_menu(callback: CallbackQuery):
     """Обработчик главного меню генерации"""
     await generation_handler.show_generation_menu(callback)
 
-@router.callback_query(F.data.startswith("gen_custom:"))
+@router.callback_query(F.data == "avatar_custom_prompt")
 async def handle_custom_prompt_request(callback: CallbackQuery, state: FSMContext):
     """Обработчик запроса кастомного промпта"""
     await generation_handler.custom_prompt_handler.show_custom_prompt_input(callback, state)
@@ -193,7 +196,7 @@ async def handle_custom_prompt_text(message: Message, state: FSMContext):
     """Обработчик текста кастомного промпта"""
     await generation_handler.custom_prompt_handler.process_custom_prompt(message, state)
 
-@router.callback_query(F.data.startswith("gen_photo:"))
+@router.callback_query(F.data == "avatar_from_photo")
 async def handle_photo_prompt_request(callback: CallbackQuery, state: FSMContext):
     """Обработчик запроса фото-промпта"""
     await generation_handler.photo_prompt_handler.show_photo_prompt_input(callback, state)
@@ -284,3 +287,9 @@ async def show_favorites(callback: CallbackQuery):
 async def handle_user_settings_request(callback: CallbackQuery):
     """Обработчик запроса настроек пользователя"""
     await callback.answer("🚧 Настройки пользователя в разработке", show_alert=True)
+
+@router.callback_query(F.data == "avatar_styles_stub")
+async def handle_avatar_styles_stub(callback: CallbackQuery):
+    """Заглушка для выбора стилей"""
+    await callback.answer("🚧 Библиотека стилей скоро будет доступна! Пока используйте свои промпты.", show_alert=True)
+

@@ -31,7 +31,8 @@ class BalanceManager:
         Returns:
             float: Общая стоимость
         """
-        return settings.IMAGE_GENERATION_COST * num_images
+        from app.core.constants import GENERATION_COST
+        return GENERATION_COST * num_images
     
     async def check_and_charge_balance(self, user_id: UUID, cost: float) -> float:
         """

@@ -69,7 +69,7 @@ class BalanceHandler(BaseHandler):
                 ],
                 [
                     InlineKeyboardButton(
-                        text="🔙 В личный кабинет",
+                        text="🔙 Назад",
                         callback_data="profile_menu"
                     )
                 ]
@@ -251,7 +251,7 @@ class BalanceHandler(BaseHandler):
             ],
             [
                 InlineKeyboardButton(
-                    text="🔙 В личный кабинет",
+                    text="🔙 Назад",
                     callback_data="profile_menu"
                 )
             ]

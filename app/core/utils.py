@@ -9,6 +9,7 @@ from typing import Optional
 
 from app.core.config import settings
 from app.core.exceptions.audio_exceptions import AudioProcessingError
+from app.core.constants import MAX_AUDIO_SIZE
 
 logger = logging.getLogger(__name__)
 
@@ -36,9 +37,9 @@ def validate_audio_file(file_path: Path) -> None:
         raise AudioProcessingError(f"Путь не является файлом: {file_path}")
     
     size = get_file_size(file_path)
-    if size > settings.MAX_AUDIO_SIZE:
+    if size > MAX_AUDIO_SIZE:
         raise AudioProcessingError(
-            f"Размер файла превышает максимально допустимый: {size} > {settings.MAX_AUDIO_SIZE}"
+            f"Размер файла превышает максимально допустимый: {size} > {MAX_AUDIO_SIZE}"
         )
     
     extension = file_path.suffix.lower().lstrip(".")

@@ -12,6 +12,7 @@ from app.core.di import get_avatar_service, get_user_service
 from app.database.models import AvatarPhoto
 from app.keyboards.photo_upload import get_photo_upload_keyboard, get_training_start_keyboard
 from app.core.config import settings
+from app.core.constants import AVATAR_CREATION_COST
 from .models import PhotoUploadConfig
 
 logger = logging.getLogger(__name__)
@@ -121,7 +122,7 @@ class ProgressHandler:
                 user_balance = await user_service.get_user_balance(user.id)
             
             # Определяем стоимость из конфигурации
-            avatar_cost = settings.AVATAR_CREATION_COST
+            avatar_cost = AVATAR_CREATION_COST
             
             # Проверяем тестовый режим
             is_test_mode = getattr(settings, 'AVATAR_TEST_MODE', False)

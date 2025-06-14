@@ -18,6 +18,7 @@ from app.handlers.generation.keyboards import (
     build_imagen4_aspect_ratio_keyboard
 )
 from app.core.config import settings
+from app.core.constants import IMAGEN4_GENERATION_COST
 from app.services.balance_service import BalanceService
 from app.core.di import get_user_service
 from app.core.database import get_session
@@ -48,29 +49,27 @@ class Imagen4Handler(BaseHandler):
                 balance_service = BalanceService(session)
                 user_balance = await balance_service.get_balance(user.id)
                 
-                generation_cost = settings.IMAGEN4_GENERATION_COST
+            if user_balance < IMAGEN4_GENERATION_COST:
+                insufficient_text = (
+                    "❌ <b>Недостаточно средств для генерации</b>\n\n"
+                    f"💎 <b>Ваш баланс:</b> {user_balance} кредитов\n"
+                    f"💰 <b>Стоимость:</b> {IMAGEN4_GENERATION_COST} кредитов\n\n"
+                    "💡 Пополните баланс в разделе \"Профиль\" → \"Пополнить баланс\""
+                )
                 
-                if user_balance < generation_cost:
-                    insufficient_text = f"""❌ <b>Недостаточно средств</b>
-
-💎 Ваш баланс: <b>{user_balance} кредитов</b>
-💰 Нужно для генерации: <b>{generation_cost} кредитов</b>
-
-Пополните баланс в разделе "Профиль" → "Пополнить баланс"."""
-                    
-                    try:
-                        await callback.message.edit_text(
-                            text=insufficient_text,
-                            parse_mode="HTML"
-                        )
-                    except Exception:
-                        await callback.message.answer(
-                            text=insufficient_text,
-                            parse_mode="HTML"
-                        )
-                    
-                    await callback.answer()
-                    return
+                try:
+                    await callback.message.edit_text(
+                        text=insufficient_text,
+                        parse_mode="HTML"
+                    )
+                except Exception:
+                    await callback.message.answer(
+                        text=insufficient_text,
+                        parse_mode="HTML"
+                    )
+                
+                await callback.answer()
+                return
             
             # Текст запроса промпта
             prompt_text = f"""🎨 <b>Imagen 4 - Генерация изображений</b>
@@ -79,7 +78,7 @@ class Imagen4Handler(BaseHandler):
 ⚡ <b>Высокочественная генерация от Google</b>
 
 💎 <b>Ваш баланс:</b> {user_balance} кредитов
-💰 <b>Стоимость:</b> {generation_cost} кредитов за изображение
+💰 <b>Стоимость:</b> {IMAGEN4_GENERATION_COST} кредитов за изображение
 
 📝 <b>Опишите что хотите увидеть на изображении:</b>
 
@@ -242,36 +241,29 @@ class Imagen4Handler(BaseHandler):
                 async with get_session() as session:
                     balance_service = BalanceService(session)
                     user_balance = await balance_service.get_balance(user.id)
-                    if user_balance < settings.IMAGEN4_GENERATION_COST:
-                        await callback.answer("❌ Недостаточно кредитов для генерации", show_alert=True)
-                        return
                     
-                    # Получаем название соотношения для отображения
-                    aspect_options = UserSettings.get_aspect_ratio_options()
-                    aspect_name = aspect_options.get(aspect_ratio, {}).get("name", aspect_ratio)
-                    
-                    # Показываем сообщение о начале генерации
-                    generation_text = (
-                        f"🎨 <b>Запускаем генерацию Imagen 4...</b>\n\n"
-                        f"📝 <b>Описание:</b> {prompt[:100]}{'...' if len(prompt) > 100 else ''}\n"
-                        f"📐 <b>Формат:</b> {aspect_name} ({aspect_ratio})\n"
-                        f"💎 <b>Стоимость:</b> {settings.IMAGEN4_GENERATION_COST} кредитов\n\n"
-                        f"⏳ Ожидайте, создаем ваше изображение..."
+                if user_balance < IMAGEN4_GENERATION_COST:
+                    insufficient_text = (
+                        "❌ <b>Недостаточно средств для генерации</b>\n\n"
+                        f"💎 <b>Ваш баланс:</b> {user_balance} кредитов\n"
+                        f"💰 <b>Стоимость:</b> {IMAGEN4_GENERATION_COST} кредитов\n\n"
+                        "💡 Пополните баланс в разделе \"Профиль\" → \"Пополнить баланс\""
                     )
                     
                     try:
                         await callback.message.edit_text(
-                            text=generation_text,
+                            text=insufficient_text,
                             parse_mode="HTML"
                         )
-                        await callback.answer()
                     except Exception:
                         await callback.message.answer(
-                            text=generation_text,
+                            text=insufficient_text,
                             parse_mode="HTML"
                         )
-                        await callback.answer()
                     
+                    await callback.answer()
+                    return
+                
                     # Запускаем генерацию в фоне
                     try:
                         from app.services.generation.imagen4.models import Imagen4Request, AspectRatio
@@ -360,7 +352,7 @@ class Imagen4Handler(BaseHandler):
                         
                         # Показываем меню
                         await callback.message.answer(
-                            text="🎨 <b>Меню Imagen 4</b>\n\nВыберите действие:",
+                            text="�� <b>Меню Imagen 4</b>\n\nВыберите действие:",
                             parse_mode="HTML",
                             reply_markup=build_imagen4_menu_keyboard(user_balance, settings.IMAGEN4_GENERATION_COST)
                         )
@@ -370,12 +362,41 @@ class Imagen4Handler(BaseHandler):
                         
                     except Exception as gen_error:
                         logger.exception(f"Ошибка генерации: {gen_error}")
-                        error_text = (
-                            "❌ <b>Ошибка генерации</b>\n\n"
-                            "Произошла ошибка при создании изображения. "
-                            "Попробуйте еще раз или обратитесь в поддержку.\n\n"
-                            "💰 Кредиты не были списаны"
-                        )
+                        
+                        # Определяем тип ошибки для более понятного сообщения
+                        error_message = str(gen_error)
+                        
+                        if "filtered by safety checks" in error_message.lower():
+                            error_text = (
+                                "🚫 <b>Контент заблокирован</b>\n\n"
+                                "Ваш запрос был заблокирован системой безопасности, "
+                                "так как может содержать неподходящий контент.\n\n"
+                                "💡 <b>Попробуйте:</b>\n"
+                                "• Изменить формулировку\n"
+                                "• Убрать спорные детали\n"
+                                "• Использовать более нейтральные термины\n\n"
+                                "💰 Кредиты не были списаны"
+                            )
+                        elif "insufficient balance" in error_message.lower():
+                            error_text = (
+                                "💳 <b>Недостаточно кредитов</b>\n\n"
+                                "На вашем балансе недостаточно кредитов для генерации.\n\n"
+                                "💡 Пополните баланс и попробуйте снова"
+                            )
+                        elif "timeout" in error_message.lower():
+                            error_text = (
+                                "⏱ <b>Превышено время ожидания</b>\n\n"
+                                "Генерация заняла слишком много времени. "
+                                "Попробуйте еще раз.\n\n"
+                                "💰 Кредиты не были списаны"
+                            )
+                        else:
+                            error_text = (
+                                "❌ <b>Ошибка генерации</b>\n\n"
+                                "Произошла ошибка при создании изображения. "
+                                "Попробуйте еще раз или обратитесь в поддержку.\n\n"
+                                "💰 Кредиты не были списаны"
+                            )
                         
                         try:
                             await callback.message.edit_text(

@@ -56,7 +56,7 @@ def get_balance_menu_legacy() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text="🏠 Личный кабинет",
+                text="🔙 Назад",
                 callback_data="profile_menu"  # LEGACY - существующий обработчик
             )
         ]

@@ -17,10 +17,8 @@ from aiogram.types import (
 from app.core.di import get_user_service
 from app.core.logger import get_logger
 from app.database.models import GenerationStatus
-from app.services.generation.generation_service import (
-    GENERATION_COST,
-    ImageGenerationService,
-)
+from app.core.constants import GENERATION_COST
+from app.services.generation.generation_service import ImageGenerationService
 from app.services.user_settings import UserSettingsService
 from app.shared.handlers.base_handler import BaseHandler
 from app.shared.decorators.auth_decorators import require_user
@@ -89,6 +87,7 @@ class GenerationMonitor(BaseHandler):
 📝 <b>Промпт:</b> {format_prompt_for_display(custom_prompt, 60)}
 📐 <b>Формат:</b> {aspect_ratio}
 ⚡ <b>Модель:</b> FLUX 1.1 Ultra
+💰 <b>Стоимость:</b> {GENERATION_COST:.0f} монет
 
 ⏳ <b>Процесс:</b>
 • 💰 Списание баланса...
@@ -190,6 +189,7 @@ class GenerationMonitor(BaseHandler):
 📝 <b>Промпт:</b> {format_prompt_for_display(custom_prompt, 60)}
 📐 <b>Формат:</b> {aspect_ratio}
 ⚡ <b>Модель:</b> FLUX 1.1 Ultra
+💰 <b>Стоимость:</b> {GENERATION_COST:.0f} монет
 
 ⏳ <b>Процесс:</b>
 • 💰 Списание баланса...

@@ -22,7 +22,8 @@ logger = get_logger(__name__)
 
 # Экспорт константы для обратной совместимости
 from app.core.config import settings
-GENERATION_COST = settings.IMAGE_GENERATION_COST
+# Константа теперь импортируется из constants.py
+# GENERATION_COST = settings.IMAGE_GENERATION_COST  # Перенесено в constants.py
 
 class ImageGenerationService:
     """

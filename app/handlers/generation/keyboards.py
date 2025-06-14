@@ -28,11 +28,19 @@ def build_generation_menu_keyboard(
         buttons.append([
             InlineKeyboardButton(
                 text="📝 Свой запрос",
-                callback_data=f"gen_custom:{avatar_id}"
+                callback_data="avatar_custom_prompt"
             ),
             InlineKeyboardButton(
                 text="📸 По образцу",
-                callback_data=f"gen_photo:{avatar_id}"
+                callback_data="avatar_from_photo"
+            )
+        ])
+        
+        # Добавляем кнопку стилей как заглушку
+        buttons.append([
+            InlineKeyboardButton(
+                text="🎨 Выбрать стиль",
+                callback_data="avatar_styles_stub"
             )
         ])
     else:
@@ -47,8 +55,8 @@ def build_generation_menu_keyboard(
     # Сменить аватар
     buttons.append([
         InlineKeyboardButton(
-            text="🔄 Сменить аватар",
-            callback_data="gen_change_avatar"
+            text="🎭 Мои аватары",
+            callback_data="gallery_avatars"
         )
     ])
     
@@ -107,7 +115,7 @@ def build_aspect_ratio_keyboard() -> InlineKeyboardMarkup:
     buttons.append([
         InlineKeyboardButton(
             text="🔙 Назад",
-            callback_data="generation_menu"
+            callback_data="avatar_generation_menu"
         )
     ])
     
@@ -150,7 +158,7 @@ def build_imagen4_aspect_ratio_keyboard() -> InlineKeyboardMarkup:
     buttons.append([
         InlineKeyboardButton(
             text="◀️ Назад",
-            callback_data="images_menu"
+            callback_data="photo_menu"
         )
     ])
     
@@ -204,7 +212,7 @@ def build_photo_prompt_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text="🔙 Назад",
-                callback_data="generation_menu"
+                callback_data="avatar_generation_menu"
             )
         ]
     ]
@@ -219,7 +227,7 @@ def build_custom_prompt_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text="🔙 Назад",
-                callback_data="generation_menu"
+                callback_data="avatar_generation_menu"
             )
         ]
     ]
@@ -267,7 +275,7 @@ def build_imagen4_menu_keyboard(
     buttons.append([
         InlineKeyboardButton(
             text="◀️ Назад",
-            callback_data="images_menu"
+            callback_data="photo_menu"
         ),
         InlineKeyboardButton(
             text="🏠 Главное меню",
@@ -285,7 +293,7 @@ def build_imagen4_prompt_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text="◀️ Назад",
-                callback_data="images_menu"
+                callback_data="photo_menu"
             )
         ]
     ]

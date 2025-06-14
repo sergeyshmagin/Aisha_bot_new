@@ -37,6 +37,13 @@ async def handle_gallery_main(callback: CallbackQuery, state: FSMContext):
     gallery_viewer = GalleryViewer()
     await gallery_viewer.show_gallery_main(callback, state)
 
+@router.callback_query(F.data == "gallery_all")
+async def handle_gallery_all(callback: CallbackQuery, state: FSMContext):
+    """Обработчик показа всех изображений в галерее"""
+    logger.info(f"🖼️ Обработка callback gallery_all от пользователя {callback.from_user.id}")
+    gallery_viewer = GalleryViewer()
+    await gallery_viewer.show_gallery_main(callback, state)
+
 @router.callback_query(F.data.startswith("my_gallery_return:"))
 async def handle_gallery_return(callback: CallbackQuery, state: FSMContext):
     """Обработчик возврата к галерее с восстановлением позиции"""

@@ -17,6 +17,7 @@ from app.services.avatar.fal_training_service import FALTrainingService
 from app.database.models import AvatarStatus
 from app.core.logger import get_logger
 from app.core.config import settings
+from app.core.constants import AVATAR_CREATION_COST
 
 logger = get_logger(__name__)
 router = Router()
@@ -58,7 +59,7 @@ class TrainingHandler:
                 if not is_test_mode:
                     # В продакшн режиме - списываем средства с баланса
                     user_balance = await user_service.get_user_balance(user.id)
-                    avatar_cost = settings.AVATAR_CREATION_COST  # Используем значение из конфигурации
+                    avatar_cost = AVATAR_CREATION_COST  # Используем значение из констант
                     
                     if user_balance < avatar_cost:
                         await callback.message.edit_text(

@@ -39,7 +39,7 @@ class Imagen4Service:
             enabled=getattr(settings, 'IMAGEN4_ENABLED', True),
             default_aspect_ratio=getattr(settings, 'IMAGEN4_DEFAULT_ASPECT_RATIO', '1:1'),
             max_images=getattr(settings, 'IMAGEN4_MAX_IMAGES', 4),
-            generation_cost=getattr(settings, 'IMAGEN4_GENERATION_COST', 5.0),
+            generation_cost=settings.IMAGEN4_GENERATION_COST,
             timeout_seconds=getattr(settings, 'IMAGEN4_TIMEOUT', 300)
         )
     
@@ -61,6 +61,33 @@ class Imagen4Service:
             fal_client is not None
         )
     
+    def _check_content_safety(self, prompt: str) -> bool:
+        """
+        Простая предварительная проверка контента
+        
+        Args:
+            prompt: Текст промпта
+            
+        Returns:
+            True если контент безопасен, False иначе
+        """
+        # Список проблематичных слов/фраз
+        unsafe_keywords = [
+            "синдром дауна", "down syndrome", "ментальная отсталость",
+            "умственная отсталость", "дебил", "идиот", "кретин",
+            "насилие", "violence", "убийство", "murder", "кровь", "blood",
+            "порно", "porn", "секс", "sex", "голый", "nude", "naked",
+            "наркотики", "drugs", "марихуана", "cocaine", "героин"
+        ]
+        
+        prompt_lower = prompt.lower()
+        
+        for keyword in unsafe_keywords:
+            if keyword in prompt_lower:
+                return False
+        
+        return True
+
     async def generate_image(self, request: Imagen4Request) -> Imagen4GenerationResult:
         """
         Генерирует изображение через Imagen 4 API
@@ -75,6 +102,13 @@ class Imagen4Service:
             return Imagen4GenerationResult(
                 status=Imagen4GenerationStatus.FAILED,
                 error_message="Imagen 4 service is not available"
+            )
+        
+        # Предварительная проверка контента
+        if not self._check_content_safety(request.prompt):
+            return Imagen4GenerationResult(
+                status=Imagen4GenerationStatus.FAILED,
+                error_message="Контент может быть заблокирован системой безопасности. Измените формулировку запроса."
             )
         
         start_time = time.time()
@@ -153,7 +187,16 @@ class Imagen4Service:
         except asyncio.TimeoutError:
             raise Exception(f"Таймаут генерации ({self.config.timeout_seconds}s)")
         except Exception as e:
-            raise Exception(f"Ошибка вызова FAL API: {str(e)}")
+            error_msg = str(e)
+            # Улучшаем сообщение для ошибок безопасности
+            if "filtered by safety checks" in error_msg.lower():
+                raise Exception("Контент заблокирован системой безопасности. Измените формулировку запроса.")
+            elif "quota" in error_msg.lower() or "limit" in error_msg.lower():
+                raise Exception("Превышен лимит API. Попробуйте позже.")
+            elif "invalid" in error_msg.lower() and "key" in error_msg.lower():
+                raise Exception("Неверный API ключ. Обратитесь к администратору.")
+            else:
+                raise Exception(f"Ошибка вызова FAL API: {error_msg}")
     
     def _parse_fal_response(self, fal_result: Dict[str, Any]) -> Imagen4Response:
         """

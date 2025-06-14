@@ -68,10 +68,6 @@ def get_all_photos_menu() -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 text="🖼️ По описанию",
                 callback_data="gallery_imagen"  # Переиспользуем существующий
-            ),
-            InlineKeyboardButton(
-                text="🎬 Видео из фото",
-                callback_data="gallery_video"  # Переиспользуем существующий
             )
         ],
         [

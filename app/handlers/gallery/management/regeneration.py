@@ -69,7 +69,7 @@ class RegenerationManager(BaseHandler):
         
         try:
             # Проверяем баланс пользователя
-            from app.services.generation.generation_service import GENERATION_COST
+            from app.core.constants import GENERATION_COST
             if not await self.check_user_balance_for_regeneration(user_id, GENERATION_COST):
                 await callback.answer("❌ Недостаточно средств для генерации", show_alert=True)
                 return

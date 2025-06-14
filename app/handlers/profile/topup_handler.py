@@ -10,6 +10,7 @@ from typing import Optional, Dict, Any
 
 from app.core.logger import get_logger
 from app.core.config import settings
+from app.core.constants import TOPUP_PACKAGES
 from app.handlers.base import BaseHandler
 from app.keyboards.profile.topup import TopupKeyboard
 from app.services.promokode_service import PromokodeService
@@ -48,7 +49,7 @@ class TopupHandler(BaseHandler):
                 current_balance = await balance_service.get_balance(user.id)
                 
                 # Получаем пакеты пополнения из конфига
-                packages = settings.TOPUP_PACKAGES
+                packages = TOPUP_PACKAGES
                 
                 text = self._format_topup_text(current_balance, packages)
                 keyboard = self.keyboard.create_packages_keyboard(packages)
@@ -101,7 +102,7 @@ class TopupHandler(BaseHandler):
         """Обрабатывает выбор пакета"""
         try:
             package_id = callback.data.split(":")[-1]
-            packages = settings.TOPUP_PACKAGES
+            packages = TOPUP_PACKAGES
             
             if package_id not in packages:
                 await callback.answer("❌ Неверный пакет", show_alert=True)
@@ -239,7 +240,7 @@ class TopupHandler(BaseHandler):
                     return
                 
                 current_balance = await balance_service.get_balance(user.id)
-                packages = settings.TOPUP_PACKAGES
+                packages = TOPUP_PACKAGES
                 
                 text = self._format_topup_text_with_promokode(current_balance, packages, promokode_data)
                 keyboard = self.keyboard.create_packages_keyboard(packages)
