@@ -139,8 +139,11 @@ async def handle_gallery_regenerate(callback: CallbackQuery):
 async def handle_gallery_stats(callback: CallbackQuery):
     """Обработчик статистики галереи"""
     logger.info(f"📊 Обработка callback gallery_stats от пользователя {callback.from_user.id}")
-    gallery_manager = GalleryManager()
-    await gallery_manager.show_gallery_stats(callback)
+    
+    # Используем реальный менеджер статистики
+    from .management.stats import GalleryStatsManager
+    stats_manager = GalleryStatsManager()
+    await stats_manager.show_gallery_stats(callback)
 
 # ==================== ПОИСК И ФИЛЬТРЫ ====================
 

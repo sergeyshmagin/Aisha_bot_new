@@ -33,18 +33,58 @@ class GalleryFilterHandler:
         self.gallery_viewer = GalleryViewer()
         self.gallery_manager = GalleryManager()
     
+    async def _save_filters_to_cache(self, telegram_id: int, filters: dict):
+        """Сохраняет фильтры в кэш для навигации"""
+        try:
+            # Получаем user_id по telegram_id
+            from app.core.di import get_user_service
+            async with get_user_service() as user_service:
+                user = await user_service.get_user_by_telegram_id(telegram_id)
+                if not user:
+                    return
+                
+                # Сохраняем в Redis
+                from app.core.di import get_redis
+                import json
+                
+                redis = await get_redis()
+                cache_key = f"gallery:active_filters:{user.id}"
+                
+                # Получаем существующие фильтры и обновляем
+                existing_filters_json = await redis.get(cache_key)
+                if existing_filters_json:
+                    existing_filters = json.loads(existing_filters_json)
+                    existing_filters.update(filters)
+                else:
+                    existing_filters = filters
+                
+                # Сохраняем обновленные фильтры
+                await redis.setex(cache_key, 3600, json.dumps(existing_filters))  # 1 час
+                logger.debug(f"🔍 Фильтры сохранены в кэш: {existing_filters}")
+                
+        except Exception as e:
+            logger.exception(f"Ошибка сохранения фильтров в кэш: {e}")
+    
     async def show_gallery_with_type_filter(self, callback: CallbackQuery, state: FSMContext, generation_type: str):
         """Показывает галерею с фильтром по типу"""
         try:
-            # Сохраняем фильтр в состоянии
+            # ВАЖНО: Устанавливаем фильтр в состояние ДО показа галереи
             await state.update_data(generation_type=generation_type)
             
+            # Также сохраняем фильтры в кэш для навигации
+            await self._save_filters_to_cache(callback.from_user.id, {'generation_type': generation_type})
+            
+            from .viewer.main import GalleryViewer
+            gallery_viewer = GalleryViewer()
+            
             # Показываем галерею с фильтром
-            await self.gallery_viewer.show_gallery_main(callback, state)
+            await gallery_viewer.show_gallery_main(callback, state)
+            
+            logger.info(f"✅ Показана галерея с фильтром по типу: {generation_type}")
             
         except Exception as e:
-            logger.exception(f"Ошибка при показе галереи с фильтром {generation_type}: {e}")
-            await callback.answer("❌ Произошла ошибка при загрузке галереи", show_alert=True)
+            logger.exception(f"Ошибка показа галереи с фильтром по типу: {e}")
+            await callback.answer("❌ Произошла ошибка", show_alert=True)
     
     async def show_date_filter_menu(self, callback: CallbackQuery, state: FSMContext):
         """Показывает меню фильтрации по дате"""
@@ -71,7 +111,34 @@ class GalleryFilterHandler:
         )
     
     async def show_filter_menu(self, callback: CallbackQuery, state: FSMContext):
-        """Показывает главное меню фильтров"""
+        """Показывает главное меню фильтров с отображением активных фильтров"""
+        
+        # Получаем текущие фильтры из состояния
+        state_data = await state.get_data()
+        filters = {
+            'generation_type': state_data.get('generation_type'),
+            'start_date': state_data.get('start_date'),
+            'end_date': state_data.get('end_date')
+        }
+        
+        # Формируем текст с отображением активных фильтров
+        filter_info = []
+        if filters.get('generation_type'):
+            if filters['generation_type'] == 'avatar':
+                filter_info.append("👤 Фото со мной")
+            elif filters['generation_type'] == 'imagen4':
+                filter_info.append("🎨 Изображения")
+        
+        if filters.get('start_date') or filters.get('end_date'):
+            filter_info.append("📅 По дате")
+        
+        if filter_info:
+            filter_text = f"🔍 **Активные фильтры:**\n• {chr(10).join(filter_info)}\n\n"
+        else:
+            filter_text = ""
+        
+        text = f"{filter_text}🔍 **Фильтры галереи**\n\nВыберите тип фильтрации:"
+        
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [
                 InlineKeyboardButton(text="🎭 По типу", callback_data="gallery_filter_type"),
@@ -79,16 +146,45 @@ class GalleryFilterHandler:
             ],
             [
                 InlineKeyboardButton(text="🔄 Сбросить", callback_data="gallery_reset_filters"),
-                InlineKeyboardButton(text="◀️ Назад", callback_data="gallery_all")
+                InlineKeyboardButton(text="◀️ Назад", callback_data="all_photos")
             ]
         ])
         
         await safe_edit_callback_message(
             callback,
-            text="🔍 **Фильтры галереи**\n\nВыберите тип фильтрации:",
+            text=text,
             reply_markup=keyboard,
             parse_mode="Markdown"
         )
+
+    async def show_gallery_with_date_filter(self, callback: CallbackQuery, state: FSMContext, start_date, end_date):
+        """Показывает галерею с фильтром по дате"""
+        try:
+            # ВАЖНО: Фильтры уже должны быть установлены в состояние в handle_date_filter
+            # Но проверим и установим еще раз для надежности
+            await state.update_data(
+                start_date=start_date.isoformat() if start_date else None,
+                end_date=end_date.isoformat() if end_date else None
+            )
+            
+            # Также сохраняем фильтры в кэш для навигации
+            date_filters = {
+                'start_date': start_date.isoformat() if start_date else None,
+                'end_date': end_date.isoformat() if end_date else None
+            }
+            await self._save_filters_to_cache(callback.from_user.id, date_filters)
+            
+            from .viewer.main import GalleryViewer
+            gallery_viewer = GalleryViewer()
+            
+            # Показываем галерею с фильтром
+            await gallery_viewer.show_gallery_main(callback, state)
+            
+            logger.info(f"✅ Показана галерея с фильтром по дате: {start_date} - {end_date}")
+            
+        except Exception as e:
+            logger.exception(f"Ошибка показа галереи с фильтром по дате: {e}")
+            await callback.answer("❌ Произошла ошибка", show_alert=True)
 
 
 # Создаем экземпляр обработчика
@@ -105,7 +201,7 @@ async def show_type_filter_menu(callback: CallbackQuery, state: FSMContext):
             InlineKeyboardButton(text="🎨 Изображения", callback_data="gallery_type:imagen4")
         ],
         [
-            InlineKeyboardButton(text="◀️ Назад", callback_data="gallery_all")
+            InlineKeyboardButton(text="◀️ Назад", callback_data="all_photos")
         ]
     ])
     
@@ -141,37 +237,27 @@ async def show_date_filter_menu(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data.startswith("gallery_date:"))
 async def handle_date_filter(callback: CallbackQuery, state: FSMContext):
-    """Обрабатывает выбор периода"""
+    """Обрабатывает выбор фильтра по дате"""
     try:
         # Получаем период из callback_data
         period = callback.data.split(":")[1]
         
-        # Вычисляем даты в зависимости от периода
-        now = datetime.utcnow()
+        from datetime import datetime, timedelta
+        now = datetime.now()
         
         if period == "today":
             start_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
-            end_date = now
+            end_date = now.replace(hour=23, minute=59, second=59, microsecond=999999)
         elif period == "yesterday":
-            start_date = (now - timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-            end_date = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            yesterday = now - timedelta(days=1)
+            start_date = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_date = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
         elif period == "week":
-            start_date = (now - timedelta(days=7)).replace(hour=0, minute=0, second=0, microsecond=0)
+            start_date = now - timedelta(days=7)
             end_date = now
         elif period == "month":
-            start_date = (now - timedelta(days=30)).replace(hour=0, minute=0, second=0, microsecond=0)
+            start_date = now - timedelta(days=30)
             end_date = now
-        elif period == "custom":
-            # Переходим в состояние выбора периода
-            await state.set_state(GalleryFilterStates.waiting_custom_date)
-            await safe_edit_callback_message(
-                callback,
-                text="Введите период в формате:\nДД.ММ.ГГГГ-ДД.ММ.ГГГГ\nНапример: 01.06.2025-15.06.2025",
-                reply_markup=InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="🔙 Отмена", callback_data="my_gallery")]
-                ])
-            )
-            return
         else:
             await callback.answer("❌ Неизвестный период", show_alert=True)
             return
@@ -182,8 +268,8 @@ async def handle_date_filter(callback: CallbackQuery, state: FSMContext):
             end_date=end_date.isoformat()
         )
         
-        # Показываем галерею без фильтров
-        await gallery_viewer.show_gallery_main(callback, state)
+        # Показываем галерею с фильтром
+        await gallery_filter_handler.show_gallery_with_date_filter(callback, state, start_date, end_date)
         
     except Exception as e:
         logger.exception(f"Ошибка при фильтрации по дате: {e}")
@@ -232,10 +318,10 @@ async def handle_custom_date_input(callback: CallbackQuery, state: FSMContext):
 # ==================== СБРОС ФИЛЬТРОВ ====================
 
 @router.callback_query(F.data == "gallery_reset_filters")
-async def reset_filters(callback: CallbackQuery, state: FSMContext):
+async def handle_reset_filters(callback: CallbackQuery, state: FSMContext):
     """Сбрасывает все фильтры"""
     try:
-        # Очищаем состояние фильтров
+        # Очищаем фильтры из состояния
         await state.update_data(
             generation_type=None,
             start_date=None,
@@ -243,8 +329,12 @@ async def reset_filters(callback: CallbackQuery, state: FSMContext):
         )
         
         # Показываем галерею без фильтров
+        from .viewer.main import GalleryViewer
+        gallery_viewer = GalleryViewer()
         await gallery_viewer.show_gallery_main(callback, state)
         
+        await callback.answer("✅ Фильтры сброшены")
+        
     except Exception as e:
-        logger.exception(f"Ошибка при сбросе фильтров: {e}")
+        logger.exception(f"Ошибка сброса фильтров: {e}")
         await callback.answer("❌ Произошла ошибка", show_alert=True) 

@@ -58,7 +58,17 @@ class CinematicPromptService:
             else:
                 translated_prompt = user_prompt
             
-            # 2. Проверяем, нужно ли улучшение
+            # 2. Проверяем длину промпта и нужно ли улучшение
+            if len(translated_prompt) > 300:
+                logger.info(f"[Cinematic] Промпт длинный ({len(translated_prompt)} символов), пропускаем оптимизацию")
+                final_prompt = self._ensure_tok_prefix(translated_prompt, avatar_type)
+                return {
+                    "original": user_prompt,
+                    "processed": final_prompt,
+                    "enhancement_applied": False,
+                    "style": "long_prompt_no_optimization"
+                }
+            
             if self._is_already_cinematic(translated_prompt):
                 logger.info(f"[Cinematic] Промпт уже детальный, добавляем только TOK")
                 final_prompt = self._ensure_tok_prefix(translated_prompt, avatar_type)

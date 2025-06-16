@@ -257,18 +257,5 @@ class GalleryStateManager:
 # Глобальный менеджер состояний
 gallery_state_manager = GalleryStateManager()
 
-# Для обратной совместимости - deprecated
-user_filters: Dict[int, GalleryFilterData] = {}  # DEPRECATED: использовать gallery_state_manager
-gallery_data_storage: Dict[str, GalleryData] = {}  # DEPRECATED: использовать gallery_state_manager
-
-class GalleryFilterData(BaseModel):
-    """Данные фильтров галереи"""
-    generation_type: Optional[str] = None  # avatar или imagen4
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
-
-class GalleryData(BaseModel):
-    """Данные галереи"""
-    current_page: int = 1
-    items_per_page: int = 10
-    filters: GalleryFilterData = GalleryFilterData() 
+# LEGACY: Удалено. Используйте gallery_state_manager для всех операций с состоянием галереи
+# Deprecated переменные удалены в пользу Redis-based решения 

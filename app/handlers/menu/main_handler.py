@@ -6,7 +6,7 @@
 """
 import logging
 from aiogram import Router, F
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, FSInputFile
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 
@@ -114,13 +114,13 @@ class MainMenuHandler(BaseHandler):
 
             # Отправляем фото с приветствием
             try:
-                with open(avatar_path, 'rb') as photo:
-                    await message.answer_photo(
-                        photo=photo,
-                        caption=welcome_text,
-                        reply_markup=get_main_menu(balance=user_balance),
-                        parse_mode="HTML"
-                    )
+                photo_file = FSInputFile(avatar_path)
+                await message.answer_photo(
+                    photo=photo_file,
+                    caption=welcome_text,
+                    reply_markup=get_main_menu(balance=user_balance),
+                    parse_mode="HTML"
+                )
             except Exception as photo_error:
                 logger.warning(f"Не удалось отправить фото Aisha: {photo_error}")
                 # Fallback: отправляем только текст

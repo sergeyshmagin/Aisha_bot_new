@@ -136,7 +136,8 @@ class GalleryViewer(BaseHandler):
             img_idx=img_idx,
             total_images=len(images),
             generation_id=str(generation.id),
-            is_favorite=getattr(generation, 'is_favorite', False)
+            is_favorite=getattr(generation, 'is_favorite', False),
+            filters=filters
         )
         
         # ⚡ ПРЯМАЯ загрузка из кэша (БЕЗ лишних проверок)
@@ -195,6 +196,37 @@ class GalleryViewer(BaseHandler):
                     .limit(150)
                 )
                 
+                # Фильтр по типу генерации
+                if filters.get('generation_type'):
+                    generation_type = filters['generation_type']
+                    if generation_type == 'avatar':
+                        # Изображения с аватарами (по умолчанию или явно указано)
+                        stmt = stmt.where(
+                            or_(
+                                ImageGeneration.generation_type == 'avatar',
+                                ImageGeneration.generation_type.is_(None)  # Старые записи без типа
+                            )
+                        )
+                    elif generation_type == 'imagen4':
+                        # Изображения Imagen4 - проверяем по типу генерации
+                        stmt = stmt.where(ImageGeneration.generation_type == 'imagen4')
+                    elif generation_type == 'video':
+                        # Видео (пока заглушка)
+                        stmt = stmt.where(ImageGeneration.generation_type == 'video')
+                
+                # Фильтр по дате
+                if filters.get('start_date') and filters.get('end_date'):
+                    start_date = datetime.fromisoformat(filters['start_date'])
+                    end_date = datetime.fromisoformat(filters['end_date'])
+                    stmt = stmt.where(
+                        and_(
+                            ImageGeneration.created_at >= start_date,
+                            ImageGeneration.created_at <= end_date
+                        )
+                    )
+                
+                stmt = stmt.order_by(ImageGeneration.created_at.desc()).limit(150)
+                
                 result = await session.execute(stmt)
                 generations = result.scalars().all()
                 
@@ -217,7 +249,7 @@ class GalleryViewer(BaseHandler):
     async def _get_filtered_images_from_db(self, user_id: UUID, filters: dict) -> List[ImageGeneration]:
         """Получает отфильтрованные изображения из БД с кешированием"""
         from app.core.database import get_session
-        from sqlalchemy import select, and_
+        from sqlalchemy import select, and_, or_
         from sqlalchemy.orm import selectinload
         from datetime import datetime
         import json
@@ -283,14 +315,19 @@ class GalleryViewer(BaseHandler):
                 if filters.get('generation_type'):
                     generation_type = filters['generation_type']
                     if generation_type == 'avatar':
-                        # Изображения с аватарами
-                        stmt = stmt.where(ImageGeneration.avatar_id.isnot(None))
+                        # Изображения с аватарами (по умолчанию или явно указано)
+                        stmt = stmt.where(
+                            or_(
+                                ImageGeneration.generation_type == 'avatar',
+                                ImageGeneration.generation_type.is_(None)  # Старые записи без типа
+                            )
+                        )
                     elif generation_type == 'imagen4':
-                        # Изображения Imagen4 (без аватаров)
-                        stmt = stmt.where(ImageGeneration.avatar_id.is_(None))
+                        # Изображения Imagen4 - проверяем по типу генерации
+                        stmt = stmt.where(ImageGeneration.generation_type == 'imagen4')
                     elif generation_type == 'video':
-                        # Видео (пока заглушка, можно добавить поле video_url)
-                        stmt = stmt.where(ImageGeneration.id == None)  # Пустой результат
+                        # Видео (пока заглушка)
+                        stmt = stmt.where(ImageGeneration.generation_type == 'video')
                 
                 # Фильтр по дате
                 if filters.get('start_date') and filters.get('end_date'):
@@ -344,15 +381,31 @@ class GalleryViewer(BaseHandler):
         img_idx: int, 
         total_images: int, 
         generation_id: str,
-        is_favorite: bool = False
+        is_favorite: bool = False,
+        filters: dict = None
     ):
-        """🔥 Оптимизированная ПОЛНАЯ клавиатура галереи"""
+        """🔥 Оптимизированная ПОЛНАЯ клавиатура галереи с отображением фильтров"""
         
         buttons = []
         
-        # 🔝 БЛОК 1: Фильтры и статистика
+        # 🔝 БЛОК 1: Фильтры и статистика с индикаторами
+        filters_text = "🔍 Фильтры"
+        if filters and any(filters.values()):
+            # Показываем что фильтры активны
+            active_filters = []
+            if filters.get('generation_type'):
+                if filters['generation_type'] == 'avatar':
+                    active_filters.append("👤")
+                elif filters['generation_type'] == 'imagen4':
+                    active_filters.append("🎨")
+            if filters.get('start_date') or filters.get('end_date'):
+                active_filters.append("📅")
+            
+            if active_filters:
+                filters_text = f"🔍 Фильтры ({' '.join(active_filters)})"
+        
         top_row = [
-            InlineKeyboardButton(text="🔍 Фильтры", callback_data="gallery_filters"),
+            InlineKeyboardButton(text=filters_text, callback_data="gallery_filters"),
             InlineKeyboardButton(text="📊 Статистика", callback_data="gallery_stats")
         ]
         buttons.append(top_row)
@@ -390,9 +443,9 @@ class GalleryViewer(BaseHandler):
         
         buttons.append(action_row)
         
-        # 🔙 БЛОК 5: Навигация назад - ОБНОВЛЕНО
+        # 🔙 БЛОК 5: Навигация назад - ИСПРАВЛЕНО
         back_row = [
-            InlineKeyboardButton(text="◀️ Назад", callback_data="gallery_all"),
+            InlineKeyboardButton(text="◀️ Назад", callback_data="all_photos"),  # Возвращаемся к меню фото
             InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")
         ]
         buttons.append(back_row)

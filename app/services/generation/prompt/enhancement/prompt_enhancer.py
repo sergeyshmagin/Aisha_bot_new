@@ -28,11 +28,19 @@ class PromptEnhancer:
         """
         prompt_lower = base_prompt.lower()
         
-        # Проверяем: если промпт уже очень детальный - возвращаем как есть
-        if len(base_prompt) > 400 and self.analyzer.is_already_detailed(base_prompt):
-            logger.info(f"[Detailed Mode] Промпт уже детальный ({len(base_prompt)} символов) - возвращаем как есть")
+        # Проверяем длину промпта - если больше 300 символов, пропускаем оптимизацию
+        if len(base_prompt) > 300:
+            logger.info(f"[Enhanced Prompt] Промпт длинный ({len(base_prompt)} символов), пропускаем улучшение")
             # Добавляем только TOK если его нет
-            if not base_prompt.startswith("TOK"):
+            if avatar_type == "portrait" and not base_prompt.startswith("TOK"):
+                return f"TOK, {base_prompt}"
+            return base_prompt
+        
+        # Проверяем: если промпт уже очень детальный - возвращаем как есть
+        if len(base_prompt) > 200 and self.analyzer.is_already_detailed(base_prompt):
+            logger.info(f"[Enhanced Prompt] Промпт уже детальный ({len(base_prompt)} символов) - возвращаем как есть")
+            # Добавляем только TOK если его нет
+            if avatar_type == "portrait" and not base_prompt.startswith("TOK"):
                 return f"TOK, {base_prompt}"
             return base_prompt
         

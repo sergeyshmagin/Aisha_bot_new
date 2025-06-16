@@ -46,10 +46,12 @@ class ImageStorage:
             logger.info(f"[MinIO] Начинаем сохранение {len(fal_urls)} изображений для генерации {generation.id}")
             
             # Определяем bucket в зависимости от типа генерации
+            from app.core.config import settings
+            
             if generation.generation_type == "imagen4":
-                bucket = "imagen4"  # Отдельный bucket для Imagen4
+                bucket = settings.MINIO_BUCKET_IMAGEN4 or "imagen4"  # Отдельный bucket для Imagen4
             else:
-                bucket = "generated"  # Общий bucket для остальных типов
+                bucket = settings.MINIO_BUCKET_PHOTOS or "generated"  # Общий bucket для остальных типов
             
             for i, fal_url in enumerate(fal_urls):
                 try:
@@ -180,7 +182,7 @@ class ImageStorage:
         """
         date_str = datetime.now().strftime("%Y/%m/%d")
         filename = f"{generation_id}_{image_index:02d}.jpg"
-        return f"{date_str}/{filename}"
+        return f"generated/{date_str}/{filename}"
     
     def _extract_object_name_from_url(self, url: str) -> Optional[str]:
         """

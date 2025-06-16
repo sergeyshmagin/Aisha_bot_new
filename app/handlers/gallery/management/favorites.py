@@ -78,14 +78,14 @@ class FavoritesManager(BaseHandler):
             from ..viewer import GalleryViewer
             gallery_viewer = GalleryViewer()
             
-            images = await gallery_viewer.get_user_completed_images_ultra_fast(user_id)
+            # Получаем изображения без фильтров (общая галерея)
+            images = await gallery_viewer.get_user_completed_images_ultra_fast(user_id, {})
             if not images:
                 return
             
-            # Находим текущий индекс из callback
+            # Находим текущий индекс из callback или используем 0
+            current_idx = 0
             try:
-                # Попробуем извлечь индекс из существующей клавиатуры
-                current_idx = 0
                 if callback.message and callback.message.reply_markup:
                     for row in callback.message.reply_markup.inline_keyboard:
                         for button in row:
@@ -97,8 +97,8 @@ class FavoritesManager(BaseHandler):
             except:
                 current_idx = 0
             
-            # Обновляем карточку
-            await gallery_viewer.send_image_card_ultra_fast(callback, images, current_idx, user_id)
+            # Обновляем карточку с пустыми фильтрами
+            await gallery_viewer.send_image_card_ultra_fast(callback, images, current_idx, user_id, {})
             
         except Exception as e:
             logger.debug(f"Ошибка обновления галереи после favorites: {e}")

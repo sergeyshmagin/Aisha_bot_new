@@ -4,7 +4,7 @@
 """
 import asyncio
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, List
 from uuid import UUID
 
 from aiogram.types import CallbackQuery
@@ -23,7 +23,7 @@ class NavigationHandler(BaseHandler):
         self.image_cache_manager = ImageCacheManager()
     
     async def handle_image_navigation(self, callback: CallbackQuery, direction: str):
-        """⚡ БЫСТРАЯ навигация с надежными fallback"""
+        """⚡ БЫСТРАЯ навигация с сохранением фильтров"""
         
         try:
             # Извлекаем данные из callback_data
@@ -40,8 +40,47 @@ class NavigationHandler(BaseHandler):
                     await callback.answer("🔄 Пожалуйста, перезайдите в галерею", show_alert=True)
                     return
             
-            # 🔥 УРОВЕНЬ 3: Получаем изображения (кэш или SQL fallback)
-            images = await self._get_user_images_with_fallback(user_id, callback)
+            # 🎯 ПОЛУЧАЕМ ФИЛЬТРЫ ИЗ СОСТОЯНИЯ FSM
+            from aiogram.fsm.context import FSMContext
+            from aiogram.fsm.storage.base import StorageKey
+            
+            # Создаем ключ для получения состояния
+            storage_key = StorageKey(
+                bot_id=callback.bot.id,
+                chat_id=callback.message.chat.id,
+                user_id=callback.from_user.id
+            )
+            
+            # Получаем состояние через FSMContext
+            try:
+                from app.core.di import get_state_storage
+                storage = get_state_storage()
+                state_data = await storage.get_data(storage_key)
+                
+                logger.debug(f"🔍 Данные состояния: {state_data}")
+                
+                # Извлекаем фильтры из состояния
+                if state_data:
+                    filters = {
+                        'generation_type': state_data.get('generation_type'),
+                        'start_date': state_data.get('start_date'),
+                        'end_date': state_data.get('end_date')
+                    }
+                else:
+                    # Если состояния нет, используем fallback
+                    logger.warning("🔍 Состояние пустое - ищем в кэше текущие фильтры...")
+                    filters = await self._get_filters_from_cache(user_id)
+                
+                logger.info(f"🔍 Навигация с фильтрами: {filters}")
+                
+            except Exception as state_error:
+                logger.warning(f"Ошибка получения фильтров из состояния: {state_error}")
+                # Fallback - пытаемся получить из кэша
+                filters = await self._get_filters_from_cache(user_id)
+                logger.info(f"🔍 Fallback фильтры из кэша: {filters}")
+            
+            # 🔥 УРОВЕНЬ 3: Получаем изображения с фильтрами
+            images = await self._get_user_images_with_filters(user_id, callback, filters)
             if not images:
                 return
             
@@ -58,18 +97,16 @@ class NavigationHandler(BaseHandler):
                 self.image_cache_manager.prefetch_adjacent_images(images, new_idx)
             )
             
-            # ⚡ ПОКАЗЫВАЕМ новое изображение быстро
+            # ⚡ ПОКАЗЫВАЕМ новое изображение быстро С ФИЛЬТРАМИ
             from .main import GalleryViewer
             gallery_viewer = GalleryViewer()
-            # Передаем пустые фильтры для навигации
-            filters = {'generation_type': None, 'start_date': None, 'end_date': None}
             await gallery_viewer.send_image_card_ultra_fast(callback, images, new_idx, user_id, filters)
             
-            logger.debug(f"⚡ Navigation: {current_idx} → {new_idx}")
+            await callback.answer()
             
         except Exception as e:
             logger.exception(f"❌ Ошибка навигации: {e}")
-            await callback.answer("❌ Произошла ошибка", show_alert=True)
+            await callback.answer("❌ Ошибка навигации", show_alert=True)
     
     async def _get_user_id_from_session_cache(self, telegram_id: int) -> Optional[UUID]:
         """Быстрый поиск user_id в сессионном кэше Redis"""
@@ -142,6 +179,50 @@ class NavigationHandler(BaseHandler):
                 return None
         
         return images
+    
+    async def _get_filters_from_cache(self, user_id: UUID) -> dict:
+        """Получает фильтры из кэша галереи"""
+        try:
+            from app.core.di import get_redis
+            redis = await get_redis()
+            
+            # Ищем активные фильтры в кэше галереи
+            cache_key = f"gallery:active_filters:{user_id}"
+            filters_json = await redis.get(cache_key)
+            
+            if filters_json:
+                import json
+                filters = json.loads(filters_json)
+                logger.debug(f"🔍 Фильтры найдены в кэше: {filters}")
+                return filters
+            else:
+                logger.debug(f"🔍 Фильтры в кэше не найдены")
+                return {'generation_type': None, 'start_date': None, 'end_date': None}
+                
+        except Exception as e:
+            logger.exception(f"Ошибка получения фильтров из кэша: {e}")
+            return {'generation_type': None, 'start_date': None, 'end_date': None}
+
+    async def _get_user_images_with_filters(self, user_id: UUID, callback: CallbackQuery, filters: dict) -> List:
+        """Получает изображения пользователя с учетом фильтров"""
+        try:
+            from .main import GalleryViewer
+            gallery_viewer = GalleryViewer()
+            
+            # Получаем изображения с фильтрами
+            images = await gallery_viewer.get_user_completed_images_ultra_fast(user_id, filters)
+            
+            if not images:
+                await callback.answer("📭 Изображения не найдены", show_alert=True)
+                return []
+            
+            logger.debug(f"🖼️ Получено {len(images)} изображений с фильтрами: {filters}")
+            return images
+            
+        except Exception as e:
+            logger.exception(f"Ошибка получения изображений с фильтрами: {e}")
+            await callback.answer("❌ Ошибка загрузки изображений", show_alert=True)
+            return []
     
     @staticmethod
     def _calculate_new_index(current_idx: int, direction: str, total_images: int) -> int:

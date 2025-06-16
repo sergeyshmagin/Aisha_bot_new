@@ -161,7 +161,7 @@ def get_avatar_generation_menu() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text="🎨 Выбрать стиль",
-                callback_data="avatar_styles"
+                callback_data="avatar_styles_stub"
             )
         ],
         [
@@ -199,7 +199,7 @@ def get_video_menu() -> InlineKeyboardMarkup:
         ],
         [
             InlineKeyboardButton(
-                text="📂 Мои видео",
+                text="📁 Мои видео",
                 callback_data="my_videos"
             )
         ],

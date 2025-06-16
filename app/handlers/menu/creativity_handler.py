@@ -12,7 +12,7 @@ from aiogram import Router, F
 from aiogram.types import CallbackQuery
 from aiogram.fsm.context import FSMContext
 
-from app.keyboards.menu.creativity import get_creativity_menu, get_photo_menu, get_video_menu_v2
+from app.keyboards.menu.creativity import get_creativity_menu, get_photo_menu, get_video_menu
 from app.core.logger import get_logger
 from app.shared.handlers.base_handler import BaseHandler
 from app.core.di import get_user_service
@@ -102,17 +102,24 @@ class CreativityHandler(BaseHandler):
             logger.exception(f"Ошибка получения количества видео пользователя {user_id}: {e}")
             return 0
     
-    async def show_creativity_menu(self, call: CallbackQuery, state: FSMContext):
+    async def show_creativity_menu(self, callback: CallbackQuery, state: FSMContext):
         """
-        🎨 Показывает меню творчества
+        Показывает меню творчества
         
-        Основные направления:
-        - Фото (создание изображений)
-        - Видео (создание видеороликов)
+        🎨 AI Творчество - создание контента
         """
-        await state.clear()
-        
-        menu_text = """🎨 **Творчество**
+        try:
+            # ✅ БЫСТРЫЙ ОТВЕТ НА CALLBACK - предотвращаем таймауты
+            await callback.answer()
+            
+            # Получаем пользователя
+            user = await self.get_user_from_callback(callback)
+            if not user:
+                return
+            
+            await state.clear()
+            
+            menu_text = """🎨 **Творчество**
 
 Создавайте уникальный контент с помощью ИИ:
 
@@ -127,10 +134,9 @@ class CreativityHandler(BaseHandler):
    • Weo3 - анимация изображений
 
 Выберите направление:"""
-        
-        try:
+            
             await self.safe_edit_message(
-                call,
+                callback,
                 menu_text,
                 reply_markup=get_creativity_menu(),
                 parse_mode="Markdown"
@@ -139,112 +145,86 @@ class CreativityHandler(BaseHandler):
             
         except Exception as e:
             logger.exception(f"Ошибка показа меню творчества: {e}")
-            await call.answer("❌ Ошибка загрузки меню", show_alert=True)
-        
-        await call.answer()
+            await callback.answer("❌ Ошибка загрузки меню", show_alert=True)
     
     async def show_photo_menu(self, call: CallbackQuery, state: FSMContext):
         """
-        📷 Показывает меню фото
+        Показывает меню фото
         
-        Переиспользует существующую логику images_menu
-        с обновленной навигацией
+        🖼️ Изображения - создание картинок
         """
-        await state.clear()
-        
-        # Получаем пользователя
-        user = await self.get_user_from_callback(call)
-        if not user:
-            return
-        
-        # Получаем количества разных типов фото и аватаров
-        avatar_photos_count = await self.get_user_avatar_photos_count(user.id)
-        imagen_photos_count = await self.get_user_imagen_photos_count(user.id)
-        avatars_count = await self.get_user_avatars_count(user.id)
-        
-        menu_text = """📷 **Фото**
-
-🎭 **Доступные технологии:**
-
-📷 **Фото с аватаром** - используйте обученную на ваших фото модель
-📝 **По описанию** - создание любых картинок через Imagen 4
-🎭 **Мои аватары** - управление созданными образами
-🖼️ **Мои фото** - все созданные изображения
-
-Создавайте профессиональные снимки и художественные изображения!
-
-Что выберете?"""
-        
         try:
+            # ✅ БЫСТРЫЙ ОТВЕТ НА CALLBACK - предотвращаем таймауты
+            await call.answer()
+            
+            await state.clear()
+            
+            menu_text = """🖼️ <b>Изображения</b>
+
+Создавайте потрясающие изображения с помощью ИИ:
+
+🎭 <b>Аватары</b> - фото с вашим лицом
+🎨 <b>Imagen 4 Pro</b> - любые изображения по описанию
+
+Выберите тип генерации:"""
+
             await self.safe_edit_message(
                 call,
                 menu_text,
-                reply_markup=get_photo_menu(
-                    avatar_photos_count=avatar_photos_count,
-                    imagen_photos_count=imagen_photos_count,
-                    avatars_count=avatars_count
-                ),
-                parse_mode="Markdown"
+                reply_markup=get_photo_menu(),
+                parse_mode="HTML"
             )
-            logger.debug("✅ Показано меню фото")
             
         except Exception as e:
             logger.exception(f"Ошибка показа меню фото: {e}")
             await call.answer("❌ Ошибка загрузки меню", show_alert=True)
-        
-        await call.answer()
     
     async def show_video_menu(self, call: CallbackQuery, state: FSMContext):
         """
-        🎬 Показывает меню видео
+        Показывает меню видео
         
-        Переиспользует существующую логику video_menu
-        с обновленной навигацией
+        🎬 Видео - создание видеороликов
         """
-        await state.clear()
-        
-        # Получаем пользователя
-        user = await self.get_user_from_callback(call)
-        if not user:
-            return
-        
-        # Получаем количество видео пользователя
-        videos_count = await self.get_user_videos_count(user.id)
-        
-        menu_text = """🎬 **Видео**
+        try:
+            # ✅ БЫСТРЫЙ ОТВЕТ НА CALLBACK - предотвращаем таймауты
+            await call.answer()
+            
+            await state.clear()
+            
+            menu_text = """🎬 <b>Видео</b>
 
-🎭 **Доступные платформы:**
+Создавайте видеоролики с помощью ИИ:
 
-🎭 **Hedra AI** - создание говорящих портретов
-🌟 **Kling** - генерация креативных роликов  
-🎪 **Weo3** - анимация ваших изображений
+🎭 <b>Hedra AI</b> - анимация лиц и персонажей
+🌟 <b>Kling</b> - кинематографические видео
+🎪 <b>Weo3</b> - креативные эффекты
 
-Оживите ваши идеи с помощью ИИ!
+📂 <b>Мои видео</b> - управление созданными роликами
 
 Выберите платформу:"""
-        
-        try:
+
             await self.safe_edit_message(
                 call,
                 menu_text,
-                reply_markup=get_video_menu_v2(videos_count=videos_count),
-                parse_mode="Markdown"
+                reply_markup=get_video_menu(),
+                parse_mode="HTML"
             )
-            logger.debug("✅ Показано меню видео")
             
         except Exception as e:
             logger.exception(f"Ошибка показа меню видео: {e}")
             await call.answer("❌ Ошибка загрузки меню", show_alert=True)
-        
-        await call.answer()
     
     async def show_avatar_generation_menu(self, call: CallbackQuery, state: FSMContext):
         """📷 Показывает меню генерации с аватаром"""
-        from app.keyboards.main import get_avatar_generation_menu
-        
-        await state.clear()
-        
-        menu_text = """📷 **Фото со мной**
+        try:
+            # ✅ БЫСТРЫЙ ОТВЕТ НА CALLBACK - предотвращаем таймауты
+            await call.answer()
+            
+            from app.keyboards.main import get_avatar_generation_menu
+            
+            await state.clear()
+            
+            menu_text = """📷 **Фото со мной**
 
 🎭 **Создавайте фото с вашим лицом:**
 
@@ -256,7 +236,6 @@ class CreativityHandler(BaseHandler):
 
 Выберите способ создания:"""
 
-        try:
             await self.safe_edit_message(
                 call,
                 menu_text,
@@ -266,12 +245,13 @@ class CreativityHandler(BaseHandler):
         except Exception as e:
             logger.exception(f"Ошибка меню аватара: {e}")
             await call.answer("❌ Ошибка загрузки меню", show_alert=True)
-        
-        await call.answer()
     
     async def start_imagen4_generation(self, call: CallbackQuery, state: FSMContext):
         """🎨 Imagen 4 Pro - генерация через Google Imagen4"""
         try:
+            # ✅ БЫСТРЫЙ ОТВЕТ НА CALLBACK - предотвращаем таймауты
+            await call.answer()
+            
             # Импортируем обработчик Imagen4
             from app.handlers.imagen4.imagen4_handler import imagen4_handler
             await imagen4_handler.show_prompt_input(call, state)
@@ -283,9 +263,13 @@ class CreativityHandler(BaseHandler):
     
     async def show_video_generation_stub(self, call: CallbackQuery, state: FSMContext):
         """🎬 Заглушка для генерации видео"""
-        await state.clear()
-        
-        stub_text = """🎬 **Видео генерация**
+        try:
+            # ✅ БЫСТРЫЙ ОТВЕТ НА CALLBACK - предотвращаем таймауты
+            await call.answer()
+            
+            await state.clear()
+            
+            stub_text = """🎬 **Видео генерация**
 
 🚧 **В разработке**
 
@@ -300,16 +284,15 @@ class CreativityHandler(BaseHandler):
 • Создавать изображения с вашим образом
 • Генерировать картинки по описанию"""
 
-        from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-        
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [
-                InlineKeyboardButton(text="◀️ Назад", callback_data="photo_menu"),
-                InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")
-            ]
-        ])
+            from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+            
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="◀️ Назад", callback_data="photo_menu"),
+                    InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")
+                ]
+            ])
 
-        try:
             await self.safe_edit_message(
                 call,
                 stub_text,
@@ -319,8 +302,6 @@ class CreativityHandler(BaseHandler):
         except Exception as e:
             logger.exception(f"Ошибка заглушки видео: {e}")
             await call.answer("❌ Ошибка загрузки", show_alert=True)
-        
-        await call.answer()
     
     async def start_hedra_video(self, call: CallbackQuery, state: FSMContext):
         """🎭 Hedra AI - говорящие портреты"""

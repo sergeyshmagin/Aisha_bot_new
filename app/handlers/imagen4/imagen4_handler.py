@@ -186,6 +186,75 @@ class Imagen4Handler(BaseHandler):
             logger.exception(f"Ошибка показа выбора соотношения сторон: {e}")
             await message.reply("❌ Произошла ошибка")
     
+    async def show_generation_status(self, callback: CallbackQuery, state: FSMContext, prompt: str, aspect_ratio: str):
+        """Показывает статус генерации вместо меню выбора"""
+        try:
+            # Получаем название формата для отображения
+            from app.database.models import UserSettings
+            aspect_options = UserSettings.get_aspect_ratio_options()
+            aspect_name = aspect_options.get(aspect_ratio, {}).get("name", aspect_ratio)
+            
+            # Показываем статус генерации
+            status_text = f"""🎨 <b>Создаю изображение через Imagen 4...</b>
+
+📝 <b>Промпт:</b> {prompt[:80]}{'...' if len(prompt) > 80 else ''}
+📐 <b>Формат:</b> {aspect_name} ({aspect_ratio})
+⚡ <b>Модель:</b> Google Imagen 4 (высочайшее качество)
+💰 <b>Стоимость:</b> {IMAGEN4_GENERATION_COST:.0f} кредитов
+
+⏳ <b>Процесс:</b>
+• 💰 Списание баланса...
+• 🚀 Отправка в Google AI...
+• 🎨 Генерация изображения...
+
+💡 Обычно занимает 20-40 секунд"""
+
+            await callback.message.edit_text(
+                text=status_text,
+                parse_mode="HTML"
+            )
+            
+            await callback.answer()
+            
+        except Exception as e:
+            logger.exception(f"Ошибка показа статуса генерации: {e}")
+
+    def build_imagen4_result_keyboard(self, generation_id, user_balance: float):
+        """Создает клавиатуру для результата генерации Imagen 4"""
+        from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
+        
+        buttons = []
+        
+        # Основные действия
+        buttons.append([
+            InlineKeyboardButton(text="🔄 Еще раз", callback_data=f"imagen4_regenerate:{generation_id}"),
+            InlineKeyboardButton(text="📋 Промпт", callback_data=f"show_full_prompt:{generation_id}")
+        ])
+        
+        # Избранное и действия
+        buttons.append([
+            InlineKeyboardButton(text="🤍 В избранное", callback_data=f"gallery_favorite:{generation_id}"),
+            InlineKeyboardButton(text="🖼️ В галерею", callback_data="my_gallery")
+        ])
+        
+        # Навигация
+        if user_balance >= IMAGEN4_GENERATION_COST:
+            buttons.append([
+                InlineKeyboardButton(text="🎨 Imagen 4", callback_data="imagen4_menu"),
+                InlineKeyboardButton(text="📸 Генерация", callback_data="generation_menu")
+            ])
+        else:
+            buttons.append([
+                InlineKeyboardButton(text="💰 Пополнить", callback_data="balance_topup"),
+                InlineKeyboardButton(text="📸 Генерация", callback_data="generation_menu")
+            ])
+        
+        buttons.append([
+            InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")
+        ])
+        
+        return InlineKeyboardMarkup(inline_keyboard=buttons)
+
     async def process_aspect_ratio_selection(self, callback: CallbackQuery, state: FSMContext):
         """Обработать выбор соотношения сторон и запустить генерацию"""
         try:
@@ -211,6 +280,9 @@ class Imagen4Handler(BaseHandler):
                 await callback.answer("❌ Промпт не найден, начните заново", show_alert=True)
                 await state.clear()
                 return
+            
+            # Удаляем меню выбора и показываем статус генерации
+            await self.show_generation_status(callback, state, prompt, aspect_ratio)
             
             # Запускаем генерацию
             await self.start_generation(callback, state, prompt, aspect_ratio)
@@ -264,154 +336,162 @@ class Imagen4Handler(BaseHandler):
                     await callback.answer()
                     return
                 
-                    # Запускаем генерацию в фоне
-                    try:
-                        from app.services.generation.imagen4.models import Imagen4Request, AspectRatio
-                        
-                        # Создаем запрос
-                        request = Imagen4Request(
-                            prompt=prompt,
-                            aspect_ratio=AspectRatio(aspect_ratio),
-                            num_images=1,
-                            negative_prompt=None,
-                            seed=None
-                        )
-                        
-                        # Генерируем изображение
-                        generation_result = await imagen4_service.generate_image(request)
-                        
-                        # Проверяем результат
-                        if generation_result.status == "failed":
-                            raise Exception(generation_result.error_message)
-                        
-                        # Списываем кредиты
-                        async with get_session() as session:
-                            balance_service = BalanceService(session)
-                            charge_result = await balance_service.charge_balance(
-                                user_id=user.id,
-                                amount=generation_result.cost_credits,
-                                description=f"Генерация изображения Imagen 4: {prompt[:50]}..."
-                            )
-                            
-                            if not charge_result["success"]:
-                                raise Exception(f"Ошибка списания баланса: {charge_result['error']}")
-                                
-                            user_balance = charge_result["new_balance"]
-                        
-                        # Создаем запись в базе
-                        generation = await self.create_generation(
+                # Запускаем генерацию в фоне
+                try:
+                    from app.services.generation.imagen4.models import Imagen4Request, AspectRatio
+                    
+                    # Получаем название формата для отображения
+                    from app.database.models import UserSettings
+                    aspect_options = UserSettings.get_aspect_ratio_options()
+                    aspect_name = aspect_options.get(aspect_ratio, {}).get("name", aspect_ratio)
+                    
+                    # Создаем запрос
+                    request = Imagen4Request(
+                        prompt=prompt,
+                        aspect_ratio=AspectRatio(aspect_ratio),
+                        num_images=1,
+                        negative_prompt=None,
+                        seed=None
+                    )
+                    
+                    # Генерируем изображение
+                    generation_result = await imagen4_service.generate_image(request)
+                    
+                    # Проверяем результат
+                    if generation_result.status == "failed":
+                        raise Exception(generation_result.error_message)
+                    
+                    # Списываем кредиты
+                    async with get_session() as session:
+                        balance_service = BalanceService(session)
+                        charge_result = await balance_service.charge_balance(
                             user_id=user.id,
-                            prompt=prompt,
-                            aspect_ratio=aspect_ratio
+                            amount=generation_result.cost_credits,
+                            description=f"Генерация изображения Imagen 4: {prompt[:50]}..."
                         )
                         
-                        # Сохраняем изображения в MinIO
-                        logger.info(f"[Imagen4] Сохраняем {len(generation_result.response.images)} изображений в MinIO")
-                        
-                        from app.services.generation.storage.image_storage import ImageStorage
-                        image_storage = ImageStorage()
-                        
-                        # Получаем URL изображений от FAL
-                        fal_urls = [img.url for img in generation_result.response.images]
-                        
-                        # Сохраняем в MinIO
-                        minio_urls = await image_storage.save_images_to_minio(generation, fal_urls)
-                        
-                        # Используем MinIO URL если удалось сохранить, иначе fallback к FAL URL
-                        final_urls = minio_urls if minio_urls else fal_urls
-                        
-                        # Обновляем запись результатами
-                        async with get_session() as session:
-                            generation.status = "completed"
-                            generation.result_urls = final_urls
-                            generation.generation_time = generation_result.generation_time
-                            generation.source_model = "fal-ai/imagen4/preview"
-                            generation.completed_at = now_utc().replace(tzinfo=None)
-                            await session.commit()
-                        
-                        # Кешируем результат в Redis для быстрого доступа
-                        await self._cache_generation_result(generation, user.id)
-                        
-                        # Показываем результат
-                        result_text = (
-                            f"✅ <b>Изображение готово!</b>\n\n"
-                            f"📝 <b>Описание:</b> {prompt[:100]}{'...' if len(prompt) > 100 else ''}\n"
-                            f"📐 <b>Формат:</b> {aspect_name} ({aspect_ratio})\n"
-                            f"⏱ <b>Время:</b> {generation_result.generation_time:.1f}с\n"
-                            f"💎 <b>Стоимость:</b> {generation_result.cost_credits} кредитов\n"
-                            f"💾 <b>Сохранено в:</b> {'MinIO' if minio_urls else 'FAL (временно)'}\n\n"
-                            f"🖼 <b>Результат:</b>"
+                        if not charge_result["success"]:
+                            raise Exception(f"Ошибка списания баланса: {charge_result['error']}")
+                            
+                        user_balance = charge_result["new_balance"]
+                    
+                    # Создаем запись в базе
+                    generation = await self.create_generation(
+                        user_id=user.id,
+                        prompt=prompt,
+                        aspect_ratio=aspect_ratio
+                    )
+                    
+                    # Сохраняем изображения в MinIO
+                    logger.info(f"[Imagen4] Сохраняем {len(generation_result.response.images)} изображений в MinIO")
+                    
+                    from app.services.generation.storage.image_storage import ImageStorage
+                    image_storage = ImageStorage()
+                    
+                    # Получаем URL изображений от FAL
+                    fal_urls = [img.url for img in generation_result.response.images]
+                    
+                    # Сохраняем в MinIO
+                    minio_urls = await image_storage.save_images_to_minio(generation, fal_urls)
+                    
+                    # Используем MinIO URL если удалось сохранить, иначе fallback к FAL URL
+                    final_urls = minio_urls if minio_urls else fal_urls
+                    
+                    # Обновляем запись результатами
+                    async with get_session() as session:
+                        generation.status = "completed"
+                        generation.result_urls = final_urls
+                        generation.generation_time = generation_result.generation_time
+                        generation.source_model = "fal-ai/imagen4/preview"
+                        generation.completed_at = now_utc().replace(tzinfo=None)
+                        await session.commit()
+                    
+                    # Кешируем результат в Redis для быстрого доступа
+                    await self._cache_generation_result(generation, user.id)
+                    
+                    # Показываем результат
+                    result_text = (
+                        f"✅ <b>Изображение готово!</b>\n\n"
+                        f"📝 <b>Описание:</b> {prompt[:100]}{'...' if len(prompt) > 100 else ''}\n"
+                        f"📐 <b>Формат:</b> {aspect_name} ({aspect_ratio})\n"
+                        f"⏱ <b>Время:</b> {generation_result.generation_time:.1f}с\n"
+                        f"💎 <b>Стоимость:</b> {generation_result.cost_credits} кредитов\n"
+                        f"💾 <b>Сохранено в:</b> {'MinIO' if minio_urls else 'FAL (временно)'}\n\n"
+                        f"🖼 <b>Результат:</b>"
+                    )
+                    
+                    # Создаем клавиатуру для результата
+                    result_keyboard = self.build_imagen4_result_keyboard(generation.id, user_balance)
+                    
+                    # Отправляем изображение с клавиатурой
+                    await callback.message.answer_photo(
+                        photo=generation_result.response.images[0].url,
+                        caption=result_text,
+                        reply_markup=result_keyboard,
+                        parse_mode="HTML"
+                    )
+                    
+                    # Удаляем сообщение со статусом генерации
+                    try:
+                        await callback.message.delete()
+                    except Exception:
+                        pass
+                    
+                    # Очищаем состояние
+                    await state.clear()
+                    
+                except Exception as gen_error:
+                    logger.exception(f"Ошибка генерации: {gen_error}")
+                    
+                    # Определяем тип ошибки для более понятного сообщения
+                    error_message = str(gen_error)
+                    
+                    if "filtered by safety checks" in error_message.lower():
+                        error_text = (
+                            "🚫 <b>Контент заблокирован</b>\n\n"
+                            "Ваш запрос был заблокирован системой безопасности, "
+                            "так как может содержать неподходящий контент.\n\n"
+                            "💡 <b>Попробуйте:</b>\n"
+                            "• Изменить формулировку\n"
+                            "• Убрать спорные детали\n"
+                            "• Использовать более нейтральные термины\n\n"
+                            "💰 Кредиты не были списаны"
                         )
-                        
-                        # Отправляем изображение
-                        await callback.message.answer_photo(
-                            photo=generation_result.response.images[0].url,
-                            caption=result_text,
-                            parse_mode="HTML"
+                    elif "insufficient balance" in error_message.lower():
+                        error_text = (
+                            "💳 <b>Недостаточно кредитов</b>\n\n"
+                            "На вашем балансе недостаточно кредитов для генерации.\n\n"
+                            "💡 Пополните баланс и попробуйте снова"
                         )
-                        
-                        # Показываем меню
-                        await callback.message.answer(
-                            text="�� <b>Меню Imagen 4</b>\n\nВыберите действие:",
+                    elif "timeout" in error_message.lower():
+                        error_text = (
+                            "⏱ <b>Превышено время ожидания</b>\n\n"
+                            "Генерация заняла слишком много времени. "
+                            "Попробуйте еще раз.\n\n"
+                            "💰 Кредиты не были списаны"
+                        )
+                    else:
+                        error_text = (
+                            "❌ <b>Ошибка генерации</b>\n\n"
+                            "Произошла ошибка при создании изображения. "
+                            "Попробуйте еще раз или обратитесь в поддержку.\n\n"
+                            "💰 Кредиты не были списаны"
+                        )
+                    
+                    try:
+                        await callback.message.edit_text(
+                            text=error_text,
                             parse_mode="HTML",
                             reply_markup=build_imagen4_menu_keyboard(user_balance, settings.IMAGEN4_GENERATION_COST)
                         )
-                        
-                        # Очищаем состояние
-                        await state.clear()
-                        
-                    except Exception as gen_error:
-                        logger.exception(f"Ошибка генерации: {gen_error}")
-                        
-                        # Определяем тип ошибки для более понятного сообщения
-                        error_message = str(gen_error)
-                        
-                        if "filtered by safety checks" in error_message.lower():
-                            error_text = (
-                                "🚫 <b>Контент заблокирован</b>\n\n"
-                                "Ваш запрос был заблокирован системой безопасности, "
-                                "так как может содержать неподходящий контент.\n\n"
-                                "💡 <b>Попробуйте:</b>\n"
-                                "• Изменить формулировку\n"
-                                "• Убрать спорные детали\n"
-                                "• Использовать более нейтральные термины\n\n"
-                                "💰 Кредиты не были списаны"
-                            )
-                        elif "insufficient balance" in error_message.lower():
-                            error_text = (
-                                "💳 <b>Недостаточно кредитов</b>\n\n"
-                                "На вашем балансе недостаточно кредитов для генерации.\n\n"
-                                "💡 Пополните баланс и попробуйте снова"
-                            )
-                        elif "timeout" in error_message.lower():
-                            error_text = (
-                                "⏱ <b>Превышено время ожидания</b>\n\n"
-                                "Генерация заняла слишком много времени. "
-                                "Попробуйте еще раз.\n\n"
-                                "💰 Кредиты не были списаны"
-                            )
-                        else:
-                            error_text = (
-                                "❌ <b>Ошибка генерации</b>\n\n"
-                                "Произошла ошибка при создании изображения. "
-                                "Попробуйте еще раз или обратитесь в поддержку.\n\n"
-                                "💰 Кредиты не были списаны"
-                            )
-                        
-                        try:
-                            await callback.message.edit_text(
-                                text=error_text,
-                                parse_mode="HTML",
-                                reply_markup=build_imagen4_menu_keyboard(user_balance, settings.IMAGEN4_GENERATION_COST)
-                            )
-                        except Exception:
-                            await callback.message.answer(
-                                text=error_text,
-                                parse_mode="HTML",
-                                reply_markup=build_imagen4_menu_keyboard(user_balance, settings.IMAGEN4_GENERATION_COST)
-                            )
-                        
-                        await state.clear()
+                    except Exception:
+                        await callback.message.answer(
+                            text=error_text,
+                            parse_mode="HTML",
+                            reply_markup=build_imagen4_menu_keyboard(user_balance, settings.IMAGEN4_GENERATION_COST)
+                        )
+                    
+                    await state.clear()
             
         except Exception as e:
             logger.exception(f"Ошибка запуска генерации: {e}")
@@ -537,4 +617,50 @@ async def handle_text_instead_of_aspect_ratio(message: Message, state: FSMContex
         "📐 Пожалуйста, выберите размер изображения из предложенных вариантов.\n\n"
         "💡 Используйте кнопки выше для выбора соотношения сторон.",
         parse_mode="HTML"
-    ) 
+    )
+
+
+@imagen4_router.callback_query(F.data.startswith("imagen4_regenerate:"))
+async def handle_imagen4_regenerate(callback: CallbackQuery, state: FSMContext):
+    """Обработчик повторной генерации Imagen 4"""
+    try:
+        # Извлекаем generation_id из callback_data
+        generation_id = callback.data.split(":")[1]
+        
+        # Получаем оригинальную генерацию
+        from uuid import UUID
+        from app.core.database import get_session
+        from sqlalchemy import select
+        from app.database.models import ImageGeneration
+        
+        async with get_session() as session:
+            stmt = select(ImageGeneration).where(ImageGeneration.id == UUID(generation_id))
+            result = await session.execute(stmt)
+            original_generation = result.scalar_one_or_none()
+        
+        if not original_generation:
+            await callback.answer("❌ Генерация не найдена", show_alert=True)
+            return
+        
+        # Проверяем пользователя
+        user = await imagen4_handler.get_user_from_callback(callback, show_error=False)
+        if not user or str(user.id) != str(original_generation.user_id):
+            await callback.answer("❌ Доступ запрещен", show_alert=True)
+            return
+        
+        # Получаем промпт и соотношение из оригинальной генерации
+        prompt = original_generation.original_prompt
+        aspect_ratio = original_generation.aspect_ratio
+        
+        # Сохраняем данные в состояние для повторной генерации
+        await state.update_data(imagen4_prompt=prompt)
+        
+        # Показываем статус генерации
+        await imagen4_handler.show_generation_status(callback, state, prompt, aspect_ratio)
+        
+        # Запускаем генерацию
+        await imagen4_handler.start_generation(callback, state, prompt, aspect_ratio)
+        
+    except Exception as e:
+        logger.exception(f"Ошибка повторной генерации Imagen 4: {e}")
+        await callback.answer("❌ Произошла ошибка", show_alert=True) 

@@ -80,7 +80,7 @@ def build_gallery_keyboard(
     
     # 🔙 БЛОК 5: Навигация назад
     back_row = [
-        InlineKeyboardButton(text="◀️ Назад", callback_data=back_callback),
+        InlineKeyboardButton(text="◀️ Назад", callback_data="all_photos"),
         InlineKeyboardButton(text="🏠 Главное меню", callback_data="main_menu")
     ]
     buttons.append(back_row)
