@@ -63,7 +63,7 @@ class ImageStorage:
                         continue
                     
                     # Генерируем путь для сохранения в MinIO
-                    object_path = self._generate_storage_path(generation.id, i + 1)
+                    object_path = self._generate_storage_path(generation.id, i + 1, generation.generation_type)
                     
                     # Сохраняем в MinIO
                     logger.info(f"[MinIO] Загружаем в MinIO: bucket={bucket}, path={object_path}")
@@ -169,20 +169,26 @@ class ImageStorage:
             logger.exception(f"[MinIO] Ошибка скачивания изображения {url}: {e}")
             return None
     
-    def _generate_storage_path(self, generation_id: UUID, image_index: int) -> str:
+    def _generate_storage_path(self, generation_id: UUID, image_index: int, generation_type: str = "avatar") -> str:
         """
         Генерирует путь для сохранения изображения
         
         Args:
             generation_id: ID генерации
             image_index: Индекс изображения
+            generation_type: Тип генерации (avatar, imagen4, etc.)
             
         Returns:
             str: Путь для сохранения
         """
         date_str = datetime.now().strftime("%Y/%m/%d")
         filename = f"{generation_id}_{image_index:02d}.jpg"
-        return f"generated/{date_str}/{filename}"
+        
+        # Для Imagen4 используем другую структуру путей
+        if generation_type == "imagen4":
+            return f"{date_str}/{filename}"
+        else:
+            return f"generated/{date_str}/{filename}"
     
     def _extract_object_name_from_url(self, url: str) -> Optional[str]:
         """

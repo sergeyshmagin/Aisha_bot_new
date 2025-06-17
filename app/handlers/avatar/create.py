@@ -292,7 +292,17 @@ async def process_avatar_name(message: Message, state: FSMContext):
         
     except Exception as e:
         logger.exception(f"Ошибка при создании аватара: {e}")
-        await message.answer("❌ Произошла ошибка при создании аватара. Попробуйте еще раз.")
+        
+        # Показываем информацию об ошибке пользователю если она короткая и понятная
+        error_message = str(e)
+        error_details = ""
+        if len(error_message) < 150 and not any(word in error_message.lower() for word in ['traceback', 'exception', 'error:']):
+            error_details = f"\n\n<i>Причина: {error_message}</i>"
+        
+        await message.answer(
+            f"❌ Произошла ошибка при создании аватара. Попробуйте еще раз.{error_details}",
+            parse_mode="HTML"
+        )
 
 @router.callback_query(F.data == "explain_gender_choice")
 async def explain_gender_choice(callback: CallbackQuery, state: FSMContext):

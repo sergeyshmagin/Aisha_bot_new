@@ -393,18 +393,30 @@ class Imagen4Handler(BaseHandler):
                     
                     # Сохраняем в MinIO
                     minio_urls = await image_storage.save_images_to_minio(generation, fal_urls)
+                    logger.info(f"[Imagen4] MinIO URLs: {minio_urls}")
+                    logger.info(f"[Imagen4] FAL URLs: {fal_urls}")
                     
                     # Используем MinIO URL если удалось сохранить, иначе fallback к FAL URL
                     final_urls = minio_urls if minio_urls else fal_urls
+                    logger.info(f"[Imagen4] Final URLs: {final_urls}")
                     
                     # Обновляем запись результатами
+                    logger.info(f"[Imagen4] Обновляем генерацию {generation.id} с {len(final_urls)} URLs")
                     async with get_session() as session:
-                        generation.status = "completed"
-                        generation.result_urls = final_urls
-                        generation.generation_time = generation_result.generation_time
-                        generation.source_model = "fal-ai/imagen4/preview"
-                        generation.completed_at = now_utc().replace(tzinfo=None)
+                        # Перезагружаем объект в текущей сессии
+                        from sqlalchemy import select
+                        stmt = select(ImageGeneration).where(ImageGeneration.id == generation.id)
+                        result = await session.execute(stmt)
+                        generation_db = result.scalar_one()
+                        
+                        generation_db.status = "completed"
+                        generation_db.result_urls = final_urls
+                        generation_db.generation_time = generation_result.generation_time
+                        generation_db.source_model = "fal-ai/imagen4/preview"
+                        generation_db.completed_at = now_utc().replace(tzinfo=None)
+                        
                         await session.commit()
+                        logger.info(f"[Imagen4] ✅ Генерация {generation.id} обновлена в БД")
                     
                     # Кешируем результат в Redis для быстрого доступа
                     await self._cache_generation_result(generation, user.id)
@@ -446,7 +458,9 @@ class Imagen4Handler(BaseHandler):
                     # Определяем тип ошибки для более понятного сообщения
                     error_message = str(gen_error)
                     
-                    if "filtered by safety checks" in error_message.lower():
+                    if ("filtered by safety checks" in error_message.lower() or 
+                        "контент заблокирован системой безопасности" in error_message.lower() or
+                        "измените формулировку запроса" in error_message.lower()):
                         error_text = (
                             "🚫 <b>Контент заблокирован</b>\n\n"
                             "Ваш запрос был заблокирован системой безопасности, "
@@ -471,10 +485,15 @@ class Imagen4Handler(BaseHandler):
                             "💰 Кредиты не были списаны"
                         )
                     else:
+                        # Показываем краткую информацию об ошибке
+                        error_details = ""
+                        if len(error_message) < 200:  # Если сообщение короткое, показываем его
+                            error_details = f"\n\n<i>Детали: {error_message}</i>"
+                        
                         error_text = (
                             "❌ <b>Ошибка генерации</b>\n\n"
                             "Произошла ошибка при создании изображения. "
-                            "Попробуйте еще раз или обратитесь в поддержку.\n\n"
+                            f"Попробуйте еще раз или обратитесь в поддержку.{error_details}\n\n"
                             "💰 Кредиты не были списаны"
                         )
                     
