@@ -30,18 +30,28 @@ class Imagen4Service:
     
     def __init__(self):
         self.config = self._load_config()
+        self._setup_fal_environment()
         self._validate_dependencies()
     
     def _load_config(self) -> Imagen4Config:
         """Загружает конфигурацию из настроек приложения"""
         return Imagen4Config(
-            api_key=getattr(settings, 'FAL_API_KEY', ''),
+            api_key=settings.effective_fal_api_key,
             enabled=getattr(settings, 'IMAGEN4_ENABLED', True),
             default_aspect_ratio=getattr(settings, 'IMAGEN4_DEFAULT_ASPECT_RATIO', '1:1'),
             max_images=getattr(settings, 'IMAGEN4_MAX_IMAGES', 4),
             generation_cost=settings.IMAGEN4_GENERATION_COST,
             timeout_seconds=getattr(settings, 'IMAGEN4_TIMEOUT', 300)
         )
+    
+    def _setup_fal_environment(self):
+        """Настраивает переменные окружения для FAL клиента"""
+        import os
+        
+        # Устанавливаем FAL_KEY для совместимости с fal_client, если она не установлена
+        if not os.getenv('FAL_KEY') and self.config.api_key:
+            os.environ['FAL_KEY'] = self.config.api_key
+            logger.debug(f"FAL_KEY установлен для совместимости с fal_client")
     
     def _validate_dependencies(self):
         """Проверяет доступность необходимых зависимостей"""
